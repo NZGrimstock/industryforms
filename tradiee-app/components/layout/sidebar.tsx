@@ -6,7 +6,8 @@ import { useSidebar } from './sidebar-context'
 import {
   LayoutDashboard, Users, FileText, Briefcase, Calendar,
   Clock, Receipt, BarChart3, Settings, Wrench, Package,
-  MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight
+  MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight,
+  Truck, ShoppingCart
 } from 'lucide-react'
 
 const nav = [
@@ -19,6 +20,8 @@ const nav = [
   { href: '/schedule', label: 'Schedule', icon: Calendar },
   { href: '/timesheets', label: 'Timesheets', icon: Clock },
   { href: '/invoices', label: 'Invoices', icon: Receipt },
+  { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart },
+  { href: '/suppliers', label: 'Suppliers', icon: Truck },
   { href: '/price-list', label: 'Price List', icon: Package },
   { href: '/forms', label: 'Forms', icon: ClipboardList },
   { href: '/todos', label: 'To-Do', icon: CheckSquare },
