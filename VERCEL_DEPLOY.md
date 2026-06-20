@@ -27,7 +27,7 @@ Add these under Project → Settings → Environment Variables (Production + Pre
 | `R2_PRIVATE_ACCESS_KEY_ID` | private-bucket token id | **secret** |
 | `R2_PRIVATE_SECRET_ACCESS_KEY` | private-bucket token secret | **secret** |
 | `NEXT_PUBLIC_R2_PUBLIC_BASE_URL` | `https://cdn.industryforms.app` | public |
-| `NEXT_PUBLIC_APP_URL` | your Vercel/prod URL (e.g. `https://app.industryforms.app`) | public |
+| `NEXT_PUBLIC_APP_URL` | `https://app.industryforms.app` | public |
 | `CRON_SECRET` | a long random string | **secret** |
 
 ### Optional (feature-gated — add when you enable each)
