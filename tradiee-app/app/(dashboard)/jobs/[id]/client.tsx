@@ -11,7 +11,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, MessageSquare, Clock, Receipt, Settings2 } from 'lucide-react'
+import { Plus, MessageSquare, Clock, Receipt, Settings2, UserCog } from 'lucide-react'
 
 interface Props {
   job: { id: string; job_number: string; status: string; customer_id: string; title: string; description: string | null; tags: string[] | null; assigned_to: string | null }
@@ -34,8 +34,9 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
   const db = useContext(PowerSyncContext)
   const router = useRouter()
   const { toast } = useToast()
-  const [activeDialog, setActiveDialog] = useState<'visit' | 'note' | 'timesheet' | 'invoice' | 'status' | null>(null)
+  const [activeDialog, setActiveDialog] = useState<'visit' | 'note' | 'timesheet' | 'invoice' | 'status' | 'assign' | null>(null)
   const [loading, setLoading] = useState(false)
+  const [newAssignee, setNewAssignee] = useState(job.assigned_to ?? '')
 
   const [visitForm, setVisitForm] = useState({ start: '', end: '', assignedTo: '', notes: '' })
   const [noteBody, setNoteBody] = useState('')
@@ -320,12 +321,33 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
     setLoading(false)
   }
 
+  async function updateAssignment() {
+    setLoading(true)
+    const value = newAssignee || null
+    if (db) {
+      await db.execute('UPDATE jobs SET assigned_to = ? WHERE id = ?', [value, job.id])
+    }
+    if (navigator.onLine) {
+      const { error } = await supabase.from('jobs').update({ assigned_to: value }).eq('id', job.id)
+      if (error) { toast(error.message, 'error'); setLoading(false); return }
+      toast(value ? 'Job assigned' : 'Job unassigned')
+      router.refresh()
+    } else {
+      toast('Assignment updated — will sync when back online')
+    }
+    setActiveDialog(null)
+    setLoading(false)
+  }
+
+  const assigneeName = team.find(t => t.id === job.assigned_to)?.full_name
+
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('visit')}><Plus className="h-4 w-4" /> Schedule visit</Button>
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('note')}><MessageSquare className="h-4 w-4" /> Add note</Button>
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('timesheet')}><Clock className="h-4 w-4" /> Log time</Button>
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('invoice')}><Receipt className="h-4 w-4" /> Create invoice</Button>
+      <Button variant="outline" size="sm" onClick={() => { setNewAssignee(job.assigned_to ?? ''); setActiveDialog('assign') }}><UserCog className="h-4 w-4" /> {assigneeName ? `Assigned: ${assigneeName.split(' ')[0]}` : 'Assign'}</Button>
       <Button variant="secondary" size="sm" onClick={() => setActiveDialog('status')}><Settings2 className="h-4 w-4" /> Status</Button>
 
       {/* Schedule visit */}
@@ -440,6 +462,23 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
         <div className="space-y-4">
           <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} options={JOB_STATUSES.map(s => ({ value: s, label: s.replace(/_/g, ' ') }))} />
           <div className="flex gap-3"><Button loading={loading} onClick={updateStatus}>Update</Button><Button variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
+        </div>
+      </Dialog>
+
+      {/* Assign to team member */}
+      <Dialog open={activeDialog === 'assign'} onClose={() => setActiveDialog(null)} title="Assign job">
+        <div className="space-y-4">
+          <div>
+            <Label>Team member</Label>
+            <Select
+              value={newAssignee}
+              onChange={e => setNewAssignee(e.target.value)}
+              placeholder="Unassigned"
+              options={team.map(t => ({ value: t.id, label: t.full_name }))}
+            />
+            <p className="text-xs text-gray-400 mt-1">The assigned member sees this job on their phone and on the job map.</p>
+          </div>
+          <div className="flex gap-3"><Button loading={loading} onClick={updateAssignment}>Save</Button><Button variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
         </div>
       </Dialog>
     </div>

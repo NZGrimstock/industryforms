@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
+import { geocodeAddress } from '@/lib/geocode'
 
 interface Props {
   customerId: string
@@ -23,14 +24,19 @@ export function SiteForm({ customerId, onSuccess }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    // Geocode once, here, and store the result — the map then reads lat/lng directly
+    // instead of geocoding every load.
+    const coords = await geocodeAddress(form.address)
     const { error } = await supabase.from('customer_sites').insert({
       customer_id: customerId,
       label: form.label || null,
       address: form.address,
       access_notes: form.access_notes || null,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
     })
     if (error) toast(error.message, 'error')
-    else { toast('Site added'); onSuccess?.() }
+    else { toast(coords ? 'Site added' : 'Site added (address couldn’t be mapped)'); onSuccess?.() }
     setLoading(false)
   }
 
