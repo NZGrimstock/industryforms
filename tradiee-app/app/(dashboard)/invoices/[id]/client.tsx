@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw } from 'lucide-react'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare } from 'lucide-react'
 
 interface Props {
   invoice: {
@@ -21,6 +21,7 @@ interface Props {
     subtotal: number
     gst_amount: number
     customer_email?: string | null
+    customer_phone?: string | null
     external_id?: string | null
   }
   companyId: string
@@ -124,6 +125,15 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
     setLoading(false)
   }
 
+  async function sendText() {
+    setLoading(true)
+    const res = await fetch('/api/sms/invoice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id }) })
+    const data = await res.json()
+    if (!res.ok) toast(data.error ?? 'Failed to send text', 'error')
+    else toast('Invoice texted to customer')
+    setLoading(false)
+  }
+
   async function deleteInvoice() {
     if (!confirm('Delete this invoice?')) return
     setLoading(true)
@@ -136,12 +146,14 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
 
   const isDraft = invoice.status === 'draft'
   const canSendEmail = ['draft', 'sent', 'overdue'].includes(invoice.status) && !!invoice.customer_email
+  const canSendText = ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoice.status) && !!invoice.customer_phone
   const canPay = ['sent', 'partially_paid', 'overdue'].includes(invoice.status)
 
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('line')}><Plus className="h-4 w-4" /> Add line</Button>
       {canSendEmail && <Button size="sm" loading={loading} onClick={sendEmail}><Mail className="h-4 w-4" /> Send email</Button>}
+      {canSendText && <Button variant="outline" size="sm" loading={loading} onClick={sendText}><MessageSquare className="h-4 w-4" /> Text</Button>}
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
       {isDraft && <Button variant="outline" size="sm" onClick={markSent}><Send className="h-4 w-4" /> Mark sent</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}

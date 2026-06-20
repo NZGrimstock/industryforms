@@ -8,7 +8,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, CheckCircle, XCircle, Briefcase, Trash2, Mail, Pencil } from 'lucide-react'
+import { Send, CheckCircle, XCircle, Briefcase, Trash2, Mail, Pencil, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
     customer_id: string
     converted_to_job_id: string | null
     title: string
-    customers: {name: string; email?: string | null} | null
+    customers: {name: string; email?: string | null; phone?: string | null} | null
   }
   companyId: string
   nextJobNumber: string
@@ -95,9 +95,19 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
     setLoading('')
   }
 
+  async function sendText() {
+    setLoading('sms')
+    const res = await fetch('/api/sms/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: quote.id }) })
+    const data = await res.json()
+    if (!res.ok) toast(data.error ?? 'Failed to send text', 'error')
+    else { toast('Quote texted to customer'); router.refresh() }
+    setLoading('')
+  }
+
   const isDraft = quote.status === 'draft'
   const canSend = ['draft', 'sent'].includes(quote.status)
-  const hasCustomerEmail = !!(quote.customers as {name: string; email?: string | null} | null)?.email
+  const hasCustomerEmail = !!quote.customers?.email
+  const hasCustomerPhone = !!quote.customers?.phone
   const canAccept = ['draft', 'sent'].includes(quote.status)
   const canConvert = quote.status === 'accepted' && !quote.converted_to_job_id
   const canDelete = !quote.converted_to_job_id
@@ -110,6 +120,7 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
         </Link>
       )}
       {canSend && hasCustomerEmail && <Button size="sm" loading={loading === 'email'} onClick={sendEmail}><Mail className="h-4 w-4" /> Send email</Button>}
+      {canSend && hasCustomerPhone && <Button variant="outline" size="sm" loading={loading === 'sms'} onClick={sendText}><MessageSquare className="h-4 w-4" /> Text</Button>}
       {canSend && <Button variant="outline" size="sm" loading={loading === 'sent'} onClick={markSent}><Send className="h-4 w-4" /> Mark sent</Button>}
       {canAccept && <Button variant="secondary" size="sm" loading={loading === 'accepted'} onClick={markAccepted}><CheckCircle className="h-4 w-4" /> Accept</Button>}
       {canAccept && <Button variant="outline" size="sm" loading={loading === 'declined'} onClick={markDeclined}><XCircle className="h-4 w-4" /> Decline</Button>}

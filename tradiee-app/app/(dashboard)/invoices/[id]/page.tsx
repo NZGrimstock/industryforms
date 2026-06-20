@@ -15,7 +15,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   const { data: invoice } = await supabase
     .from('invoices')
-    .select('*, customers(name, email, billing_address), jobs(job_number, title), invoice_line_items(*), payments(*)')
+    .select('*, customers(name, email, phone, billing_address), jobs(job_number, title), invoice_line_items(*), payments(*)')
     .eq('id', id)
     .eq('company_id', profile!.company_id)
     .single()
@@ -48,7 +48,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             {invoice.sent_at && <p className="text-xs text-gray-400 mt-1">Sent {formatDateTime(invoice.sent_at)}{invoice.viewed_at && ` · Viewed ${formatDateTime(invoice.viewed_at)}`}</p>}
           </div>
           <InvoiceDetailClient
-            invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null} | null)?.email }}
+            invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null} | null)?.email, customer_phone: (invoice.customers as {phone: string | null} | null)?.phone }}
             companyId={profile!.company_id}
             gstRate={gstRate}
             xeroConnected={xeroConnected}
