@@ -1,12 +1,11 @@
 import { AbstractPowerSyncDatabase, PowerSyncBackendConnector, UpdateType } from '@powersync/web'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/browser'
 
 export class SupabaseConnector implements PowerSyncBackendConnector {
-  readonly supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    { auth: { persistSession: true } }
-  )
+  // Reuse the app's browser client (cookie-based @supabase/ssr session) so the
+  // connector shares the logged-in session — a separate supabase-js client would
+  // have no session and fail with "Not signed in".
+  readonly supabase = createClient()
 
   async fetchCredentials() {
     const { data: { session } } = await this.supabase.auth.getSession()
