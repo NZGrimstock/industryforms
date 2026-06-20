@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { MapPin, Loader2, AlertCircle } from 'lucide-react'
+import { MapPin, Loader2, AlertCircle, Phone } from 'lucide-react'
 
 type MapJob = {
   id: string
@@ -9,6 +9,7 @@ type MapJob = {
   title: string
   status: string
   customer_name: string
+  customer_phone: string | null
   address: string
   site_label: string | null
 }
@@ -210,11 +211,27 @@ export function JobMap({ jobs }: { jobs: MapJob[] }) {
                 <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                   <MapPin className="h-3 w-3" />{selected.address}
                 </p>
+                {selected.customer_phone && (
+                  <p className="text-xs mt-1 flex items-center gap-1">
+                    <Phone className="h-3 w-3 text-gray-400" />
+                    <a href={`tel:${selected.customer_phone.replace(/[^+\d]/g, '')}`} className="text-orange-500 hover:text-orange-600 font-medium">
+                      {selected.customer_phone}
+                    </a>
+                  </p>
+                )}
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
             </div>
-            <div className="mt-3">
-              <Link href={`/jobs/${selected.id}`} className="text-xs text-orange-500 hover:text-orange-600 font-medium">
+            <div className="mt-3 flex items-center gap-2">
+              {selected.customer_phone && (
+                <a
+                  href={`tel:${selected.customer_phone.replace(/[^+\d]/g, '')}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-medium"
+                >
+                  <Phone className="h-3.5 w-3.5" /> Call customer
+                </a>
+              )}
+              <Link href={`/jobs/${selected.id}`} className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-medium">
                 Open job →
               </Link>
             </div>

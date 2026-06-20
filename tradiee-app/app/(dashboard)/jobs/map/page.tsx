@@ -9,7 +9,7 @@ export default async function JobMapPage() {
 
   const { data: jobs, error: jobsError } = await supabase
     .from('jobs')
-    .select('id, job_number, title, status, customer_sites!site_id(address, label), customers(name)')
+    .select('id, job_number, title, status, customer_sites!site_id(address, label), customers(name, phone)')
     .eq('company_id', profile!.company_id)
     .not('site_id', 'is', null)
     .in('status', ['scheduled', 'in_progress', 'unscheduled'])
@@ -18,7 +18,7 @@ export default async function JobMapPage() {
   if (jobsError) console.error('[job map] query failed:', jobsError.message)
 
   type SiteRow = { address: string; label: string | null }
-  type CustomerRow = { name: string }
+  type CustomerRow = { name: string; phone: string | null }
 
   const mapJobs = (jobs ?? [])
     .filter(j => (j.customer_sites as unknown as SiteRow | null)?.address)
@@ -28,6 +28,7 @@ export default async function JobMapPage() {
       title: j.title,
       status: j.status,
       customer_name: (j.customers as unknown as CustomerRow | null)?.name ?? '',
+      customer_phone: (j.customers as unknown as CustomerRow | null)?.phone ?? null,
       address: (j.customer_sites as unknown as SiteRow | null)?.address ?? '',
       site_label: (j.customer_sites as unknown as SiteRow | null)?.label ?? null,
     }))
