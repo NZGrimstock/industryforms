@@ -7,13 +7,15 @@ export default async function JobMapPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
 
-  const { data: jobs } = await supabase
+  const { data: jobs, error: jobsError } = await supabase
     .from('jobs')
-    .select('id, job_number, title, status, customer_sites(address, label), customers(name)')
+    .select('id, job_number, title, status, customer_sites!site_id(address, label), customers(name)')
     .eq('company_id', profile!.company_id)
-    .not('customer_site_id', 'is', null)
+    .not('site_id', 'is', null)
     .in('status', ['scheduled', 'in_progress', 'unscheduled'])
     .order('created_at', { ascending: false })
+
+  if (jobsError) console.error('[job map] query failed:', jobsError.message)
 
   type SiteRow = { address: string; label: string | null }
   type CustomerRow = { name: string }
