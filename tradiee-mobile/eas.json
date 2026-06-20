@@ -1,0 +1,41 @@
+{
+  "cli": {
+    "version": ">= 20.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://cfltbpwrojtlpkjvresd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_r6oE2gTIFjwpQ5ZfYUglng_-HSytJOY",
+        "EXPO_PUBLIC_POWERSYNC_URL": "https://your-project.powersync.journeyapps.com",
+        "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
+        "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://cfltbpwrojtlpkjvresd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_r6oE2gTIFjwpQ5ZfYUglng_-HSytJOY",
+        "EXPO_PUBLIC_POWERSYNC_URL": "https://your-project.powersync.journeyapps.com",
+        "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
+        "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

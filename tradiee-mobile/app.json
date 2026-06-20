@@ -27,12 +27,13 @@
         "backgroundColor": "#f97316"
       },
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "ACCESS_BACKGROUND_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -40,7 +41,9 @@
       "expo-secure-store",
       [
         "@journeyapps/react-native-quick-sqlite",
-        { "enableSQLCipher": false }
+        {
+          "enableSQLCipher": false
+        }
       ],
       [
         "expo-location",
@@ -61,6 +64,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "915226c0-d94f-4554-a829-a17fe93c5748"
+      }
+    },
+    "owner": "grimstock"
   }
 }
