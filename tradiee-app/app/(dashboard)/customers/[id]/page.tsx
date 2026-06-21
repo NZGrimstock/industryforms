@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency, formatDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { CustomerDetailClient } from './client'
 
@@ -22,10 +22,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   if (!customer) notFound()
 
-  const [quotesRes, jobsRes, invoicesRes] = await Promise.all([
+  const [quotesRes, jobsRes, invoicesRes, commsRes] = await Promise.all([
     supabase.from('quotes').select('id, quote_number, status, total, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
     supabase.from('jobs').select('id, job_number, title, status, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
     supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, due_date').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
+    supabase.from('communications').select('id, channel, direction, subject, summary, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(20),
   ])
 
   return (
@@ -125,6 +126,29 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             </CardContent>
           </Card>
         </div>
+
+        {/* Communications history */}
+        <Card>
+          <CardHeader><CardTitle>Communications</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            {(commsRes.data ?? []).length === 0 ? (
+              <p className="px-6 py-4 text-sm text-gray-400">No emails or texts logged yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-50">
+                {(commsRes.data ?? []).map((c: { id: string; channel: string; direction: string; subject: string | null; summary: string | null; created_at: string }) => (
+                  <li key={c.id} className="px-6 py-3 flex items-center gap-3 text-sm">
+                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${c.channel === 'sms' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>{c.channel}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-700 truncate">{c.subject ?? c.summary}</p>
+                      {c.subject && c.summary && <p className="text-xs text-gray-400 truncate">{c.summary}</p>}
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">{formatDateTime(c.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   )

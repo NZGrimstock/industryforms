@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendSms } from '@/lib/sms'
+import { logCommunication } from '@/lib/comms'
 import { formatCurrency } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('invoice_number, total, amount_paid, public_token, customers(name, phone), companies(name, country)')
+    .select('company_id, customer_id, invoice_number, total, amount_paid, public_token, customers(name, phone), companies(name, country)')
     .eq('id', invoiceId)
     .single()
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
@@ -28,5 +29,10 @@ export async function POST(req: NextRequest) {
 
   const result = await sendSms({ to: customer.phone, body, country: (company?.country as 'NZ' | 'AU') ?? 'NZ' })
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+  await logCommunication(service, {
+    companyId: invoice.company_id, customerId: invoice.customer_id, channel: 'sms',
+    subject: `Invoice ${invoice.invoice_number} texted`, summary: `Texted to ${customer.phone}`,
+    relatedType: 'invoice', relatedId: invoiceId,
+  })
   return NextResponse.json({ ok: true })
 }

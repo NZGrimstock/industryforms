@@ -45,7 +45,10 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
               </Link>
             ))}
           </div>
-          <p className="text-sm text-gray-500 shrink-0 ml-4">Outstanding: <strong className="text-gray-900">{formatCurrency(totalOutstanding)}</strong></p>
+          <div className="flex items-center gap-3 shrink-0 ml-4">
+            <Link href="/invoices/bulk" className="text-sm font-medium text-orange-600 hover:underline whitespace-nowrap">Bulk invoice</Link>
+            <p className="text-sm text-gray-500">Outstanding: <strong className="text-gray-900">{formatCurrency(totalOutstanding)}</strong></p>
+          </div>
         </div>
 
         <ListSearch placeholder="Search invoices by number or reference…" basePath="/invoices" status={sp.status} defaultValue={sp.q} />

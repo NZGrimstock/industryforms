@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail, quoteEmailHtml } from '@/lib/email'
+import { logCommunication } from '@/lib/comms'
 import { formatCurrency } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
@@ -52,6 +53,11 @@ export async function POST(req: NextRequest) {
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
 
   await service.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
+  await logCommunication(service, {
+    companyId: quote.company_id, customerId: quote.customer_id, channel: 'email',
+    subject: `Quote ${quote.quote_number} sent`, summary: `Emailed to ${customer.email}`,
+    relatedType: 'quote', relatedId: quoteId,
+  })
 
   return NextResponse.json({ ok: true })
 }

@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ListSearch } from '@/components/ui/list-search'
 import { SortHeader } from '@/components/ui/sort-header'
+import { TemplateMenu } from './template-menu'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { FileText, Plus } from 'lucide-react'
@@ -26,6 +27,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   if (sp.status) query = query.eq('status', sp.status)
   if (sp.q) query = query.or(`quote_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
   const { data: quotes } = await query.order(sortCol, { ascending: asc })
+  const { data: templates } = await supabase.from('document_templates').select('id, name').eq('company_id', profile!.company_id).eq('kind', 'quote').order('name')
 
   return (
     <>
@@ -40,9 +42,12 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
               </Link>
             ))}
           </div>
-          <Link href="/quotes/new" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0">
-            <Plus className="h-4 w-4" /> New quote
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <TemplateMenu templates={templates ?? []} />
+            <Link href="/quotes/new" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <Plus className="h-4 w-4" /> New quote
+            </Link>
+          </div>
         </div>
 
         <ListSearch placeholder="Search quotes by number, title or reference…" basePath="/quotes" status={sp.status} defaultValue={sp.q} />

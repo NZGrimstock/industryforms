@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/header'
 import { QuoteBuilder } from '@/components/forms/quote-builder'
 import { nextDocNumber } from '@/lib/numbering'
 
-export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
+export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string; templateId?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -17,6 +17,12 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
     supabase.from('billing_rates').select('id, name, rate').eq('company_id', profile!.company_id).order('name'),
   ])
   const { data: taxRatesData } = await supabase.from('tax_rates').select('id, name, rate').eq('company_id', profile!.company_id).eq('is_active', true).order('sort_order')
+
+  let templateData
+  if (sp.templateId) {
+    const { data: tpl } = await supabase.from('document_templates').select('data').eq('id', sp.templateId).eq('company_id', profile!.company_id).maybeSingle()
+    if (tpl) templateData = tpl.data as Parameters<typeof QuoteBuilder>[0]['templateData']
+  }
 
   const nextNumber = await nextDocNumber(supabase, profile!.company_id, 'quote')
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
@@ -37,6 +43,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         taxRates={(taxRatesData ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         pricesIncludeTax={!!(profile?.companies as { prices_include_tax?: boolean } | null)?.prices_include_tax}
+        templateData={templateData}
       />
     </>
   )

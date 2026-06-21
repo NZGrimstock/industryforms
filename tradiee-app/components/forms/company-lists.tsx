@@ -4,7 +4,42 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Trash2, Star, Percent } from 'lucide-react'
+import { Plus, Trash2, Star, Percent, Inbox, RefreshCw } from 'lucide-react'
+
+// ── Enquiry email inbox ──────────────────────────────────────────────────────
+export function EnquiryInboxManager({ companyId, initialToken }: { companyId: string; initialToken: string | null }) {
+  const supabase = createClient()
+  const { toast } = useToast()
+  const [token, setToken] = useState(initialToken)
+  const [busy, setBusy] = useState(false)
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/^https?:\/\//, '').replace(/^app\./, '') || 'industryforms.app'
+  const address = token ? `${token}@inbound.${base}` : null
+
+  async function generate() {
+    setBusy(true)
+    const t = `co-${Math.random().toString(36).slice(2, 10)}`
+    const { error } = await supabase.from('companies').update({ inbound_email_token: t }).eq('id', companyId)
+    setBusy(false)
+    if (error) { toast(error.message, 'error'); return }
+    setToken(t)
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5"><Inbox className="h-4 w-4 text-gray-400" /> Enquiry email inbox</p>
+      <p className="text-xs text-gray-400 mb-3">Forward customer emails to this address and they become enquiries automatically. (Requires the inbound-email webhook configured on the domain — see setup docs.)</p>
+      {address ? (
+        <div className="flex items-center gap-2">
+          <code className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 break-all">{address}</code>
+          <Button type="button" size="sm" variant="outline" onClick={() => { navigator.clipboard?.writeText(address); toast('Copied') }}>Copy</Button>
+          <button type="button" onClick={generate} disabled={busy} className="text-gray-300 hover:text-gray-600" title="Regenerate"><RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} /></button>
+        </div>
+      ) : (
+        <Button type="button" size="sm" onClick={generate} loading={busy}>Generate inbox address</Button>
+      )}
+    </div>
+  )
+}
 
 // ── Tax rates ────────────────────────────────────────────────────────────────
 type TR = { id: string; name: string; rate: number; is_default: boolean }

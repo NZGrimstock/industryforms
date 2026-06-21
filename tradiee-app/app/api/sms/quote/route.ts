@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendSms } from '@/lib/sms'
+import { logCommunication } from '@/lib/comms'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
 
   const { data: quote } = await service
     .from('quotes')
-    .select('quote_number, title, public_token, customers(name, phone), companies(name, country)')
+    .select('company_id, customer_id, quote_number, title, public_token, customers(name, phone), companies(name, country)')
     .eq('id', quoteId)
     .single()
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
@@ -28,5 +29,10 @@ export async function POST(req: NextRequest) {
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
 
   await service.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId).eq('status', 'draft')
+  await logCommunication(service, {
+    companyId: quote.company_id, customerId: quote.customer_id, channel: 'sms',
+    subject: `Quote ${quote.quote_number} texted`, summary: `Texted to ${customer.phone}`,
+    relatedType: 'quote', relatedId: quoteId,
+  })
   return NextResponse.json({ ok: true })
 }

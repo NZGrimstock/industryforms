@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { QuoteActions } from './client'
+import { SaveTemplateButton } from './save-template'
 import Link from 'next/link'
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -58,7 +59,10 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
               </Link>
             )}
           </div>
-          <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} />
+          <div className="flex flex-wrap items-center gap-2">
+            <SaveTemplateButton quoteId={quote.id} defaultName={quote.title} />
+            <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} />
+          </div>
         </div>
 
         {/* Line items */}

@@ -63,6 +63,11 @@ interface Props {
   billingRates?: { id: string; name: string; rate: number }[]
   taxRates?: { id: string; name: string; rate: number }[]
   pricesIncludeTax?: boolean
+  templateData?: {
+    title?: string
+    terms?: string
+    sections: Array<{ title: string; is_optional?: boolean; lines: Array<{ description?: string; quantity?: number; unit?: string; unit_cost?: number; unit_price?: number; type?: string; discount_type?: string | null; discount_value?: number | null; tax_rate?: number | null }> }>
+  }
   editQuote?: EditQuoteData
 }
 
@@ -136,7 +141,7 @@ function CustomerCombobox({ customers, value, onChange }: {
   )
 }
 
-export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, editQuote }: Props) {
+export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, templateData, editQuote }: Props) {
   const rateOf = (l: { tax_rate: number | null }) => l.tax_rate ?? gstRate
   const netOf = (qty: number, price: number, dType: DiscountType, dVal: number, rate: number) => lineNet(qty, price, dType, dVal, rate, pricesIncludeTax)
   // Tax options for the per-line picker — fall back to a standard GST + GST-free pair.
@@ -151,10 +156,10 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const [meta, setMeta] = useState({
     customerId: editQuote?.customer_id ?? defaultCustomerId ?? '',
     siteId: editQuote?.site_id ?? '',
-    title: editQuote?.title ?? '',
+    title: editQuote?.title ?? templateData?.title ?? '',
     notes: editQuote?.notes ?? '',
     customer_message: editQuote?.customer_message ?? '',
-    terms: editQuote?.terms ?? defaultTerms ?? '',
+    terms: editQuote?.terms ?? templateData?.terms ?? defaultTerms ?? '',
     expires_at: editQuote?.expires_at?.slice(0, 10) ?? '',
     reference: editQuote?.reference ?? '',
   })
@@ -186,6 +191,22 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                 line_total: Number(l.line_total),
               })),
           }))
+      : templateData?.sections?.length
+      ? templateData.sections.map((s, i) => ({
+          id: newId(), quote_id: '', title: s.title, is_optional: !!s.is_optional, customer_selected: null, sort_order: i,
+          lines: (s.lines ?? []).map(l => emptyLine({
+            type: (l.type as DraftLine['type']) ?? 'material',
+            description: l.description ?? '',
+            quantity: Number(l.quantity ?? 1),
+            unit: l.unit ?? 'each',
+            unit_cost: Number(l.unit_cost ?? 0),
+            unit_price: Number(l.unit_price ?? 0),
+            discount_type: (l.discount_type as DiscountType) ?? null,
+            discount_value: Number(l.discount_value ?? 0),
+            tax_rate: l.tax_rate != null ? Number(l.tax_rate) : null,
+            line_total: netOf(Number(l.quantity ?? 1), Number(l.unit_price ?? 0), (l.discount_type as DiscountType) ?? null, Number(l.discount_value ?? 0), l.tax_rate ?? gstRate),
+          })),
+        }))
       : [{ id: 'main', quote_id: '', title: 'Scope of work', is_optional: false, customer_selected: null, sort_order: 0, lines: [emptyLine()] }]
   )
 
