@@ -14,10 +14,20 @@ export function discountAmount(base: number, type: DiscountType, value: number):
   return round2(Math.min(Math.max(raw, 0), base))
 }
 
-// Net total for a single line after its own discount.
-export function lineNet(quantity: number, unitPrice: number, type: DiscountType, value: number): number {
+// Pre-tax net for a single line after its own discount. When `inclusive` is set
+// the entered unit price already includes tax, so the tax portion is removed
+// using the line's `taxRate` (fraction) to get the pre-tax net.
+export function lineNet(
+  quantity: number,
+  unitPrice: number,
+  type: DiscountType,
+  value: number,
+  taxRate = 0,
+  inclusive = false,
+): number {
   const gross = (Number(quantity) || 0) * (Number(unitPrice) || 0)
-  return round2(gross - discountAmount(gross, type, value))
+  const afterDiscount = gross - discountAmount(gross, type, value)
+  return round2(inclusive ? afterDiscount / (1 + (Number(taxRate) || 0)) : afterDiscount)
 }
 
 // Roll up document totals. `lineNets` are already net of per-line discounts.

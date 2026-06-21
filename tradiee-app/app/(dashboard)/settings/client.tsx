@@ -53,6 +53,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     invoice_prefix: (company as Company & { invoice_prefix?: string }).invoice_prefix ?? 'INV-',
     job_prefix: (company as Company & { job_prefix?: string }).job_prefix ?? 'J-',
     po_prefix: (company as Company & { po_prefix?: string }).po_prefix ?? 'PO-',
+    prices_include_tax: (company as Company & { prices_include_tax?: boolean }).prices_include_tax ?? false,
     payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
     invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
     quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
@@ -328,6 +329,10 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 <Textarea value={companyForm.default_terms} onChange={e => setC('default_terms', e.target.value)} rows={6} placeholder="Enter your standard payment terms, warranty clauses, or any default conditions that appear on quotes..." />
                 <p className="text-xs text-gray-400 mt-1">Auto-populated on new quotes. Can be edited per quote.</p>
               </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={companyForm.prices_include_tax} onChange={e => setCompanyForm(f => ({ ...f, prices_include_tax: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
+                Prices include GST (tax-inclusive entry on quotes &amp; invoices)
+              </label>
               <div>
                 <Label>Document number prefixes</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -7,7 +7,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate, prices_include_tax)').eq('id', user!.id).single()
 
   const [customersRes, priceItemsRes, kitsRes, companyRes, ratesRes] = await Promise.all([
     supabase.from('customers').select('id, name, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
@@ -36,6 +36,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         defaultTerms={companyRes.data?.default_terms ?? undefined}
         billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         taxRates={(taxRatesData ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
+        pricesIncludeTax={!!(profile?.companies as { prices_include_tax?: boolean } | null)?.prices_include_tax}
       />
     </>
   )

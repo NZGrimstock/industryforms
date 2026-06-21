@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { presignedDownload } from '@/lib/r2'
 import { nextDocNumber } from '@/lib/numbering'
 import { RecurringJobCard } from './recurring-card'
+import { JobTasksCard } from './tasks-card'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
@@ -251,6 +252,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             </CardContent>
           </Card>
         )}
+
+        {/* Tasks */}
+        <JobTasksCard jobId={job.id} companyId={profile!.company_id} />
 
         {/* Recurring */}
         <RecurringJobCard

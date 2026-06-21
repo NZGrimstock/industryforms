@@ -30,12 +30,13 @@ interface Props {
   }
   companyId: string
   gstRate: number
+  pricesIncludeTax?: boolean
   xeroConnected?: boolean
 }
 
 type Dialog = 'line' | 'payment' | 'discount' | null
 
-export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected }: Props) {
+export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -78,7 +79,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
     const price = parseFloat(lineForm.unit_price) || 0
     const lineDiscVal = parseFloat(lineForm.discount_value) || 0
     const lineDiscType: DiscountType = lineDiscVal > 0 ? lineForm.discount_type : null
-    const lineTotal = lineNet(qty, price, lineDiscType, lineDiscVal)
+    const lineTotal = lineNet(qty, price, lineDiscType, lineDiscVal, parseFloat(lineForm.tax_rate), pricesIncludeTax)
 
     const { error } = await supabase.from('invoice_line_items').insert({
       invoice_id: invoice.id,

@@ -62,6 +62,7 @@ interface Props {
   defaultTerms?: string
   billingRates?: { id: string; name: string; rate: number }[]
   taxRates?: { id: string; name: string; rate: number }[]
+  pricesIncludeTax?: boolean
   editQuote?: EditQuoteData
 }
 
@@ -135,7 +136,9 @@ function CustomerCombobox({ customers, value, onChange }: {
   )
 }
 
-export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], editQuote }: Props) {
+export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, editQuote }: Props) {
+  const rateOf = (l: { tax_rate: number | null }) => l.tax_rate ?? gstRate
+  const netOf = (qty: number, price: number, dType: DiscountType, dVal: number, rate: number) => lineNet(qty, price, dType, dVal, rate, pricesIncludeTax)
   // Tax options for the per-line picker — fall back to a standard GST + GST-free pair.
   const taxOptions = taxRates.length > 0 ? taxRates : [{ id: 'std', name: 'GST', rate: gstRate }, { id: 'free', name: 'GST Free', rate: 0 }]
   const router = useRouter()
@@ -205,7 +208,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
         if (l.id !== lineId) return l
         const updated = { ...l, [k]: v }
         if (k === 'discount_value' && Number(v) > 0 && !updated.discount_type) updated.discount_type = 'amount'
-        updated.line_total = lineNet(Number(updated.quantity), Number(updated.unit_price), updated.discount_type as DiscountType, Number(updated.discount_value))
+        updated.line_total = netOf(Number(updated.quantity), Number(updated.unit_price), updated.discount_type as DiscountType, Number(updated.discount_value), rateOf(updated))
         return updated
       }),
     }))
@@ -246,7 +249,8 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     setSections(ss => ss.map(s => s.id !== sectionId ? s : {
       ...s, lines: [...s.lines, emptyLine({
         price_list_item_id: item.id, type: item.type, description: item.name,
-        unit: item.unit, unit_cost: item.cost_price, unit_price: item.sell_price, line_total: item.sell_price,
+        unit: item.unit, unit_cost: item.cost_price, unit_price: item.sell_price,
+        line_total: netOf(1, item.sell_price, null, 0, gstRate),
       })]
     }))
     setAddItemOpen(null)
@@ -260,7 +264,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
         price_list_item_id: ki.price_list_item_id, type: ki.price_list_items!.type,
         description: ki.price_list_items!.name, unit: ki.price_list_items!.unit,
         unit_cost: ki.price_list_items!.cost_price, unit_price: ki.price_list_items!.sell_price,
-        quantity: ki.quantity, line_total: ki.price_list_items!.sell_price * ki.quantity,
+        quantity: ki.quantity, line_total: netOf(ki.quantity, ki.price_list_items!.sell_price, null, 0, gstRate),
       }))
     setSections(ss => ss.map(s => s.id !== sectionId ? s : { ...s, lines: [...s.lines, ...newLines] }))
     setAddItemOpen(null)
@@ -521,6 +525,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
           <CardHeader className="font-semibold text-sm text-gray-900">{quoteNumber}</CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5 text-sm">
+              {pricesIncludeTax && <p className="text-xs text-gray-400 -mt-1 mb-1">Unit prices include GST</p>}
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
               <div>
                 <div className="flex items-center justify-between gap-2">

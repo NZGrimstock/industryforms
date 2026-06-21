@@ -7,7 +7,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate, prices_include_tax)').eq('id', user!.id).single()
 
   const { data: quote } = await supabase
     .from('quotes')
@@ -86,6 +86,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         kits={kitsRes.data ?? []}
         billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         taxRates={(taxRatesData ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
+        pricesIncludeTax={!!(profile?.companies as { prices_include_tax?: boolean } | null)?.prices_include_tax}
         editQuote={editQuote}
       />
     </>
