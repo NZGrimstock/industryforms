@@ -2,9 +2,9 @@
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { StatusBadge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
-import { User, Calendar, AlertCircle } from 'lucide-react'
+import { type JobStatus, jobStatusBoardBg, jobStatusBoardText } from '@/lib/job-statuses'
+import { User, Calendar } from 'lucide-react'
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
   PointerSensor, useSensor, useSensors,
@@ -22,13 +22,7 @@ type Job = {
   customer_sites: { address: string } | null
 }
 
-const COLUMNS: { key: string; label: string; color: string; bg: string }[] = [
-  { key: 'unscheduled', label: 'Unscheduled', color: 'text-gray-500', bg: 'bg-gray-50' },
-  { key: 'scheduled', label: 'Scheduled', color: 'text-blue-600', bg: 'bg-blue-50' },
-  { key: 'in_progress', label: 'In Progress', color: 'text-orange-600', bg: 'bg-orange-50' },
-  { key: 'on_hold', label: 'On Hold', color: 'text-yellow-600', bg: 'bg-yellow-50' },
-  { key: 'completed', label: 'Completed', color: 'text-green-600', bg: 'bg-green-50' },
-]
+type Column = { key: string; label: string; color: string; bg: string }
 
 function JobCard({ job, isDragging = false }: { job: Job; isDragging?: boolean }) {
   return (
@@ -65,7 +59,7 @@ function DraggableJobCard({ job }: { job: Job }) {
   )
 }
 
-function BoardColumn({ column, jobs }: { column: typeof COLUMNS[0]; jobs: Job[] }) {
+function BoardColumn({ column, jobs }: { column: Column; jobs: Job[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.key })
   return (
     <div className="flex-1 min-w-[200px]">
@@ -88,10 +82,12 @@ function BoardColumn({ column, jobs }: { column: typeof COLUMNS[0]; jobs: Job[] 
   )
 }
 
-export function JobBoard({ initialJobs }: { initialJobs: Job[] }) {
+export function JobBoard({ initialJobs, statuses }: { initialJobs: Job[]; statuses: JobStatus[] }) {
   const [jobs, setJobs] = useState<Job[]>(initialJobs)
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const supabase = createClient()
+
+  const columns: Column[] = statuses.map(s => ({ key: s.key, label: s.label, color: jobStatusBoardText(s.color), bg: jobStatusBoardBg(s.color) }))
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -111,7 +107,7 @@ export function JobBoard({ initialJobs }: { initialJobs: Job[] }) {
     await supabase.from('jobs').update({ status: newStatus }).eq('id', job.id)
   }, [supabase])
 
-  const visibleCols = COLUMNS.filter(c => c.key !== 'cancelled')
+  const visibleCols = columns.filter(c => c.key !== 'cancelled')
   const cancelledCount = jobs.filter(j => j.status === 'cancelled').length
 
   return (

@@ -1,9 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { Card } from '@/components/ui/card'
-import { StatusBadge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatDate } from '@/lib/utils'
+import { getJobStatuses, jobStatusBadgeClass } from '@/lib/job-statuses'
 import Link from 'next/link'
 import { Briefcase, List, LayoutGrid, Map } from 'lucide-react'
 import React from 'react'
@@ -41,7 +41,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
   const { data: jobs } = await query.order(sortCol, { ascending: asc })
 
-  const statuses = ['unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled']
+  const jobStatuses = await getJobStatuses(supabase, profile!.company_id)
+  const statusMap: Record<string, { label: string; color: string }> = Object.fromEntries(jobStatuses.map(s => [s.key, s]))
   const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
@@ -74,9 +75,9 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           {view === 'list' && (
             <div className="flex gap-1 overflow-x-auto">
               <Link href="/jobs?view=list" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
-              {statuses.map(s => (
-                <Link key={s} href={`/jobs?view=list&status=${s}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === s ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  {s.replace(/_/g, ' ')}
+              {jobStatuses.map(s => (
+                <Link key={s.key} href={`/jobs?view=list&status=${s.key}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === s.key ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  {s.label}
                 </Link>
               ))}
             </div>
@@ -101,7 +102,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         </div>
 
         {view === 'board' && (
-          <JobBoard initialJobs={(jobs ?? []) as Parameters<typeof JobBoard>[0]['initialJobs']} />
+          <JobBoard initialJobs={(jobs ?? []) as Parameters<typeof JobBoard>[0]['initialJobs']} statuses={jobStatuses} />
         )}
 
         {view === 'list' && (
@@ -134,7 +135,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-700 max-w-[200px] truncate">{j.title}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-600">{(j.customers as {name: string} | null)?.name ?? '—'}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{j.reference ?? '—'}</Link></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3"><StatusBadge status={j.status} /></Link></td>
+                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${jobStatusBadgeClass(statusMap[j.status]?.color ?? 'gray')}`}>{statusMap[j.status]?.label ?? j.status}</span></Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-500">{(j.profiles as {full_name: string} | null)?.full_name ?? '—'}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{formatDate(j.created_at)}</Link></td>
                     </tr>

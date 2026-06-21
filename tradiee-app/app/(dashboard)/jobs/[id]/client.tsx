@@ -25,11 +25,10 @@ interface Props {
   alreadyInvoiced: number
   actualLines: { description: string; quantity: number; unit: string; unit_price: number; type: 'material' | 'labour' }[]
   actualTotal: number
+  jobStatuses: { key: string; label: string }[]
 }
 
-const JOB_STATUSES = ['unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled']
-
-export function JobDetailClient({ job, companyId, profileId, team, gstRate, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, actualLines, actualTotal }: Props) {
+export function JobDetailClient({ job, companyId, profileId, team, gstRate, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, actualLines, actualTotal, jobStatuses }: Props) {
   const supabase = createClient()
   const db = useContext(PowerSyncContext)
   const router = useRouter()
@@ -461,7 +460,7 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
       {/* Update status */}
       <Dialog open={activeDialog === 'status'} onClose={() => setActiveDialog(null)} title="Update status">
         <div className="space-y-4">
-          <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} options={JOB_STATUSES.map(s => ({ value: s, label: s.replace(/_/g, ' ') }))} />
+          <Select value={newStatus} onChange={e => setNewStatus(e.target.value)} options={jobStatuses.map(s => ({ value: s.key, label: s.label }))} />
           <div className="flex gap-3"><Button loading={loading} onClick={updateStatus}>Update</Button><Button variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
         </div>
       </Dialog>

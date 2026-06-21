@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { presignedDownload } from '@/lib/r2'
 import { nextDocNumber } from '@/lib/numbering'
+import { getJobStatuses } from '@/lib/job-statuses'
 import { RecurringJobCard } from './recurring-card'
 import { JobTasksCard } from './tasks-card'
 import { Header } from '@/components/layout/header'
@@ -241,6 +242,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               alreadyInvoiced={alreadyInvoiced}
               actualLines={actualLines}
               actualTotal={actualTotal}
+              jobStatuses={await getJobStatuses(supabase, profile!.company_id)}
             />
           </div>
         </div>

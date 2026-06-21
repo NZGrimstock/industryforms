@@ -4,7 +4,86 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Trash2, Star, Percent, Inbox, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Star, Percent, Inbox, RefreshCw, GripVertical } from 'lucide-react'
+import { DEFAULT_JOB_STATUSES, STATUS_COLOR_TOKENS, jobStatusBadgeClass } from '@/lib/job-statuses'
+
+// ── Custom job statuses ──────────────────────────────────────────────────────
+type JS = { id: string; key: string; label: string; color: string; sort_order: number; is_terminal: boolean }
+
+function slugifyKey(s: string) {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'status'
+}
+
+export function JobStatusesManager({ companyId }: { companyId: string }) {
+  const supabase = createClient()
+  const { toast } = useToast()
+  const [rows, setRows] = useState<JS[]>([])
+  const [form, setForm] = useState({ label: '', color: 'gray' })
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('job_statuses').select('*').eq('company_id', companyId).order('sort_order')
+    if (data && data.length) { setRows(data as JS[]); return }
+    // Seed defaults the first time the company opens this.
+    await supabase.from('job_statuses').insert(DEFAULT_JOB_STATUSES.map(s => ({ company_id: companyId, ...s })))
+    const { data: seeded } = await supabase.from('job_statuses').select('*').eq('company_id', companyId).order('sort_order')
+    setRows((seeded ?? []) as JS[])
+  }, [supabase, companyId])
+  useEffect(() => { load() }, [load])
+
+  async function patch(id: string, fields: Partial<JS>) {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, ...fields } : r))
+    await supabase.from('job_statuses').update(fields).eq('id', id)
+  }
+  async function add() {
+    if (!form.label.trim()) return
+    const key = slugifyKey(form.label)
+    if (rows.some(r => r.key === key)) { toast('A status with that name already exists', 'error'); return }
+    const { error } = await supabase.from('job_statuses').insert({ company_id: companyId, key, label: form.label.trim(), color: form.color, sort_order: rows.length })
+    if (error) { toast(error.message, 'error'); return }
+    setForm({ label: '', color: 'gray' }); load()
+  }
+  async function remove(id: string) {
+    if (rows.length <= 1) return
+    if (!confirm('Delete this status? Jobs currently using it will keep the value but it won’t be selectable.')) return
+    await supabase.from('job_statuses').delete().eq('id', id); load()
+  }
+  async function move(i: number, dir: -1 | 1) {
+    const j = i + dir
+    if (j < 0 || j >= rows.length) return
+    const a = rows[i], b = rows[j]
+    await Promise.all([patch(a.id, { sort_order: b.sort_order }), patch(b.id, { sort_order: a.sort_order })])
+    load()
+  }
+
+  return (
+    <div className="md:col-span-2">
+      <p className="text-sm font-medium text-gray-700 mb-2">Job statuses</p>
+      <p className="text-xs text-gray-400 mb-3">Rename, recolour, reorder or add your own job statuses. They drive the job board columns, filters and the status picker.</p>
+      <div className="space-y-2 mb-3">
+        {rows.map((r, i) => (
+          <div key={r.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5">
+            <div className="flex flex-col">
+              <button onClick={() => move(i, -1)} disabled={i === 0} className="text-gray-300 hover:text-gray-600 disabled:opacity-30 leading-none"><GripVertical className="h-3.5 w-3.5" /></button>
+            </div>
+            <input value={r.label} onChange={e => setRows(prev => prev.map(x => x.id === r.id ? { ...x, label: e.target.value } : x))} onBlur={e => patch(r.id, { label: e.target.value })} className="flex-1 bg-transparent text-sm text-gray-800 focus:outline-none" />
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${jobStatusBadgeClass(r.color)}`}>{r.label || r.key}</span>
+            <select value={r.color} onChange={e => patch(r.id, { color: e.target.value })} className="text-xs border border-gray-200 rounded px-1 py-1 bg-white">
+              {STATUS_COLOR_TOKENS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <button onClick={() => remove(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="Add status (e.g. Awaiting parts)" />
+        <select value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} className="text-sm border border-gray-200 rounded-lg px-2 bg-white">
+          {STATUS_COLOR_TOKENS.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <Button type="button" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add</Button>
+      </div>
+    </div>
+  )
+}
 
 // ── Enquiry email inbox ──────────────────────────────────────────────────────
 export function EnquiryInboxManager({ companyId, initialToken }: { companyId: string; initialToken: string | null }) {

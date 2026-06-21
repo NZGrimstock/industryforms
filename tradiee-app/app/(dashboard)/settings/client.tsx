@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager } from '@/components/forms/company-lists'
+import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager } from '@/components/forms/company-lists'
 import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2 } from 'lucide-react'
 
 interface Props {
@@ -356,6 +356,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             </form>
 
             <div className="mt-8 pt-6 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <JobStatusesManager companyId={company.id} />
               <TaxRatesManager companyId={company.id} />
               <BillingRatesManager companyId={company.id} />
               <PaymentMethodsManager companyId={company.id} />
