@@ -52,8 +52,17 @@ export async function POST(req: NextRequest) {
       const sub = event.data.object as Stripe.Subscription
       const stripeCustomerId = sub.customer as string
       const status = sub.status
-      const plan = (sub.items.data[0]?.price?.lookup_key ?? 'solo').split('_')[0]
 
+      // The Website add-on is a separate subscription — gate publishing, don't
+      // touch the company's main plan.
+      if (sub.metadata?.addon === 'website') {
+        const active = status === 'active' || status === 'trialing'
+        await service.from('company_websites').update({ subscription_active: active })
+          .eq('company_id', sub.metadata.company_id)
+        break
+      }
+
+      const plan = (sub.items.data[0]?.price?.lookup_key ?? 'solo').split('_')[0]
       await service.from('companies').update({
         subscription_status: status,
         subscription_plan: plan,
@@ -64,6 +73,11 @@ export async function POST(req: NextRequest) {
 
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription
+      if (sub.metadata?.addon === 'website') {
+        await service.from('company_websites').update({ subscription_active: false })
+          .eq('company_id', sub.metadata.company_id)
+        break
+      }
       await service.from('companies').update({
         subscription_status: 'canceled',
         subscription_plan: 'trial',

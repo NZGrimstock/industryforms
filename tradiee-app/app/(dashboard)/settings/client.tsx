@@ -48,6 +48,10 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     default_gst_rate: ((company.default_gst_rate ?? 0.15) * 100).toString(),
     country: company.country ?? 'NZ',
     default_terms: (company as Company & { default_terms?: string }).default_terms ?? '',
+    quote_prefix: (company as Company & { quote_prefix?: string }).quote_prefix ?? 'Q-',
+    invoice_prefix: (company as Company & { invoice_prefix?: string }).invoice_prefix ?? 'INV-',
+    job_prefix: (company as Company & { job_prefix?: string }).job_prefix ?? 'J-',
+    po_prefix: (company as Company & { po_prefix?: string }).po_prefix ?? 'PO-',
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -319,6 +323,16 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 <Label>Default terms & conditions</Label>
                 <Textarea value={companyForm.default_terms} onChange={e => setC('default_terms', e.target.value)} rows={6} placeholder="Enter your standard payment terms, warranty clauses, or any default conditions that appear on quotes..." />
                 <p className="text-xs text-gray-400 mt-1">Auto-populated on new quotes. Can be edited per quote.</p>
+              </div>
+              <div>
+                <Label>Document number prefixes</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div><span className="text-xs text-gray-400">Quotes</span><Input value={companyForm.quote_prefix} onChange={e => setC('quote_prefix', e.target.value)} /></div>
+                  <div><span className="text-xs text-gray-400">Invoices</span><Input value={companyForm.invoice_prefix} onChange={e => setC('invoice_prefix', e.target.value)} /></div>
+                  <div><span className="text-xs text-gray-400">Jobs</span><Input value={companyForm.job_prefix} onChange={e => setC('job_prefix', e.target.value)} /></div>
+                  <div><span className="text-xs text-gray-400">Purchase orders</span><Input value={companyForm.po_prefix} onChange={e => setC('po_prefix', e.target.value)} /></div>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Applied to newly created documents, e.g. {companyForm.quote_prefix}0001.</p>
               </div>
               <Button type="submit" loading={loading}>Save settings</Button>
             </form>

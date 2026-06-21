@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Briefcase, Calendar, Receipt, MoreHorizontal,
   Users, FileText, Clock, Package, ClipboardList, CheckSquare,
-  BarChart3, Settings, MessageSquare, Map, Wrench, X
+  BarChart3, Settings, MessageSquare, Map, Wrench, X, Globe
 } from 'lucide-react'
 
 const primary = [
@@ -26,12 +26,20 @@ const more = [
   { href: '/forms', label: 'Forms', icon: ClipboardList },
   { href: '/todos', label: 'To-Do', icon: CheckSquare },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/website', label: 'Website', icon: Globe },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 
-export function MobileNav() {
+const STAFF_HREFS = new Set(['/dashboard', '/jobs', '/jobs/map', '/schedule', '/timesheets', '/forms', '/todos', '/settings'])
+
+export function MobileNav({ isStaff = false }: { isStaff?: boolean }) {
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const moreItems = isStaff ? more.filter(i => STAFF_HREFS.has(i.href)) : more
+  // Staff don't see Invoices — swap it for Timesheets in the bottom bar.
+  const primaryItems = isStaff
+    ? [primary[0], primary[1], primary[2], { href: '/timesheets', label: 'Time', icon: Clock }]
+    : primary
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === href
@@ -44,7 +52,7 @@ export function MobileNav() {
       {/* Bottom tab bar */}
       <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-50 md:hidden safe-area-pb">
         <div className="flex">
-          {primary.map(({ href, label, icon: Icon }) => (
+          {primaryItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -90,7 +98,7 @@ export function MobileNav() {
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {more.map(({ href, label, icon: Icon }) => (
+              {moreItems.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

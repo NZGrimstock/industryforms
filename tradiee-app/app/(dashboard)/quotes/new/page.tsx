@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { QuoteBuilder } from '@/components/forms/quote-builder'
+import { nextDocNumber } from '@/lib/numbering'
 
 export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string }> }) {
   const sp = await searchParams
@@ -15,9 +16,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
     supabase.from('companies').select('default_terms').eq('id', profile!.company_id).single(),
   ])
 
-  // Next quote number
-  const { count } = await supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextNumber = `Q-${String((count ?? 0) + 1).padStart(4, '0')}`
+  const nextNumber = await nextDocNumber(supabase, profile!.company_id, 'quote')
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
 
   return (

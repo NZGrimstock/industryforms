@@ -93,6 +93,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
             </tbody>
             <tfoot className="bg-gray-50 border-t border-gray-100">
               <tr><td colSpan={3} className="px-6 py-2 text-right text-sm text-gray-600">Subtotal</td><td className="px-6 py-2 text-right text-sm text-gray-900 font-medium">{formatCurrency(invoice.subtotal)}</td></tr>
+              {Number(invoice.discount_amount) > 0 && <tr><td colSpan={3} className="px-6 py-2 text-right text-sm text-green-600">Discount{invoice.discount_type === 'percent' ? ` (${Number(invoice.discount_value)}%)` : ''}</td><td className="px-6 py-2 text-right text-sm font-medium text-green-600">−{formatCurrency(invoice.discount_amount)}</td></tr>}
               <tr><td colSpan={3} className="px-6 py-2 text-right text-sm text-gray-600">GST</td><td className="px-6 py-2 text-right text-sm text-gray-900 font-medium">{formatCurrency(invoice.gst_amount)}</td></tr>
               <tr className="border-t border-gray-200"><td colSpan={3} className="px-6 py-3 text-right font-semibold text-gray-900">Total</td><td className="px-6 py-3 text-right font-bold text-xl text-gray-900">{formatCurrency(invoice.total)}</td></tr>
               {invoice.amount_paid > 0 && <tr><td colSpan={3} className="px-6 py-2 text-right text-sm text-green-600">Paid</td><td className="px-6 py-2 text-right text-sm font-medium text-green-600">-{formatCurrency(invoice.amount_paid)}</td></tr>}

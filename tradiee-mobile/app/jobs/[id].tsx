@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Alert, ActivityIndicator, Modal, Image,
+  TextInput, Alert, ActivityIndicator, Modal, Image, Linking, Platform,
 } from 'react-native'
 import { useLocalSearchParams, router, Stack, useFocusEffect } from 'expo-router'
 import { useQuery } from '@powersync/react'
@@ -48,6 +48,10 @@ type Job = {
   status: string
   customer_name: string | null
   customer_phone: string | null
+  customer_billing_address: string | null
+  site_address: string | null
+  site_lat: number | null
+  site_lng: number | null
   assigned_to: string | null
   created_at: string
 }
@@ -127,13 +131,41 @@ export default function JobDetailScreen() {
 
   const { data: jobs, isLoading } = useQuery<Job>(
     `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at,
-            c.name AS customer_name, c.phone AS customer_phone
+            c.name AS customer_name, c.phone AS customer_phone,
+            c.billing_address AS customer_billing_address,
+            s.address AS site_address, s.lat AS site_lat, s.lng AS site_lng
      FROM jobs j
      LEFT JOIN customers c ON c.id = j.customer_id
+     LEFT JOIN customer_sites s ON s.id = j.site_id
      WHERE j.id = ?`,
     [id]
   )
   const job = jobs?.[0]
+  const jobAddress = job?.site_address ?? job?.customer_billing_address ?? null
+
+  function callPhone(phone: string) {
+    Linking.openURL(`tel:${phone.replace(/[^+\d]/g, '')}`).catch(() =>
+      Alert.alert('Could not place call', phone)
+    )
+  }
+
+  function openInMaps() {
+    // Prefer exact coordinates when geocoded; otherwise hand the address string to
+    // the platform's default maps app (Apple Maps on iOS, Google Maps on Android).
+    const hasCoords = job?.site_lat != null && job?.site_lng != null
+    const label = encodeURIComponent(jobAddress ?? job?.customer_name ?? 'Job')
+    let url: string
+    if (Platform.OS === 'ios') {
+      url = hasCoords
+        ? `http://maps.apple.com/?ll=${job!.site_lat},${job!.site_lng}&q=${label}`
+        : `http://maps.apple.com/?q=${encodeURIComponent(jobAddress ?? '')}`
+    } else {
+      url = hasCoords
+        ? `geo:${job!.site_lat},${job!.site_lng}?q=${job!.site_lat},${job!.site_lng}(${label})`
+        : `geo:0,0?q=${encodeURIComponent(jobAddress ?? '')}`
+    }
+    Linking.openURL(url).catch(() => Alert.alert('Could not open maps', jobAddress ?? ''))
+  }
 
   const { data: notes } = useQuery<Note>(
     `SELECT id, body, author_id, created_at FROM job_notes
@@ -305,10 +337,16 @@ export default function JobDetailScreen() {
             <Text style={styles.metaValue}>{job.customer_name ?? '—'}</Text>
           </View>
           {job.customer_phone && (
-            <View style={styles.metaRow}>
+            <TouchableOpacity style={styles.metaRow} onPress={() => callPhone(job.customer_phone!)} activeOpacity={0.6}>
               <Text style={styles.metaLabel}>Phone</Text>
-              <Text style={styles.metaValue}>{job.customer_phone}</Text>
-            </View>
+              <Text style={[styles.metaValue, styles.metaLink]}>{job.customer_phone}</Text>
+            </TouchableOpacity>
+          )}
+          {jobAddress && (
+            <TouchableOpacity style={styles.metaRow} onPress={openInMaps} activeOpacity={0.6}>
+              <Text style={styles.metaLabel}>Address</Text>
+              <Text style={[styles.metaValue, styles.metaLink]}>{jobAddress}</Text>
+            </TouchableOpacity>
           )}
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Created</Text>
@@ -484,6 +522,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#f9fafb' },
   metaLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
   metaValue: { fontSize: 13, color: '#374151', fontWeight: '500', flex: 1, textAlign: 'right' },
+  metaLink: { color: '#f97316', textDecorationLine: 'underline' },
   section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },

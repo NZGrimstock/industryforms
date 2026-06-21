@@ -7,32 +7,62 @@ import {
   LayoutDashboard, Users, FileText, Briefcase, Calendar,
   Clock, Receipt, BarChart3, Settings, Wrench, Package,
   MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight,
-  Truck, ShoppingCart, FileMinus
+  Truck, ShoppingCart, FileMinus, Globe
 } from 'lucide-react'
 
-const nav = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
-  { href: '/customers', label: 'Customers', icon: Users },
-  { href: '/quotes', label: 'Quotes', icon: FileText },
-  { href: '/jobs', label: 'Jobs', icon: Briefcase },
-  { href: '/jobs/map', label: 'Job Map', icon: Map },
-  { href: '/schedule', label: 'Schedule', icon: Calendar },
-  { href: '/timesheets', label: 'Timesheets', icon: Clock },
-  { href: '/invoices', label: 'Invoices', icon: Receipt },
-  { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart },
-  { href: '/bills', label: 'Bills', icon: FileMinus },
-  { href: '/suppliers', label: 'Suppliers', icon: Truck },
-  { href: '/price-list', label: 'Price List', icon: Package },
-  { href: '/forms', label: 'Forms', icon: ClipboardList },
-  { href: '/todos', label: 'To-Do', icon: CheckSquare },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/settings', label: 'Settings', icon: Settings },
+// Top-level item shown above the groups
+const home = { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }
+
+const groups = [
+  {
+    label: 'Customers & Jobs',
+    items: [
+      { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
+      { href: '/customers', label: 'Customers', icon: Users },
+      { href: '/quotes', label: 'Quotes', icon: FileText },
+      { href: '/jobs', label: 'Jobs', icon: Briefcase },
+      { href: '/jobs/map', label: 'Job Map', icon: Map },
+      { href: '/schedule', label: 'Schedule', icon: Calendar },
+      { href: '/timesheets', label: 'Timesheets', icon: Clock },
+      { href: '/invoices', label: 'Invoices', icon: Receipt },
+      { href: '/forms', label: 'Forms', icon: ClipboardList },
+      { href: '/todos', label: 'To-Do', icon: CheckSquare },
+    ],
+  },
+  {
+    label: 'Suppliers & Orders',
+    items: [
+      { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart },
+      { href: '/bills', label: 'Bills', icon: FileMinus },
+      { href: '/suppliers', label: 'Suppliers', icon: Truck },
+      { href: '/price-list', label: 'Price List', icon: Package },
+    ],
+  },
+  {
+    label: 'Admin',
+    items: [
+      { href: '/reports', label: 'Reports', icon: BarChart3 },
+      { href: '/website', label: 'Website', icon: Globe },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ]
 
-export function Sidebar() {
+function isActive(pathname: string, href: string) {
+  if (href === '/dashboard') return pathname === href
+  if (href === '/jobs') return pathname === '/jobs' || (pathname.startsWith('/jobs/') && !pathname.startsWith('/jobs/map'))
+  return pathname.startsWith(href)
+}
+
+// Field staff get a focused nav — no sales/financial/procurement pages.
+const STAFF_HREFS = new Set(['/dashboard', '/jobs', '/jobs/map', '/schedule', '/timesheets', '/forms', '/todos', '/settings'])
+
+export function Sidebar({ isStaff = false }: { isStaff?: boolean }) {
   const pathname = usePathname()
   const { collapsed, setCollapsed } = useSidebar()
+  const visibleGroups = isStaff
+    ? groups.map(g => ({ ...g, items: g.items.filter(i => STAFF_HREFS.has(i.href)) })).filter(g => g.items.length > 0)
+    : groups
 
   return (
     // Hidden on mobile; icon-only on md (tablet); full on lg (desktop) unless toggled
@@ -70,13 +100,9 @@ export function Sidebar() {
 
       {/* Nav links */}
       <nav className="flex-1 overflow-y-auto py-4 px-2">
-        <ul className="space-y-0.5">
-          {nav.map(({ href, label, icon: Icon }) => {
-            const active = href === '/dashboard'
-              ? pathname === href
-              : href === '/jobs'
-              ? pathname === '/jobs' || (pathname.startsWith('/jobs/') && !pathname.startsWith('/jobs/map'))
-              : pathname.startsWith(href)
+        {(() => {
+          const renderLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: typeof LayoutDashboard }) => {
+            const active = isActive(pathname, href)
             return (
               <li key={href}>
                 <Link
@@ -95,8 +121,22 @@ export function Sidebar() {
                 </Link>
               </li>
             )
-          })}
-        </ul>
+          }
+          return (
+            <>
+              <ul className="space-y-0.5">{renderLink(home)}</ul>
+              {visibleGroups.map(group => (
+                <div key={group.label} className="mt-4">
+                  {collapsed
+                    ? <div className="mx-2 mb-1.5 border-t border-gray-800" />
+                    : <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{group.label}</p>
+                  }
+                  <ul className="space-y-0.5">{group.items.map(renderLink)}</ul>
+                </div>
+              ))}
+            </>
+          )
+        })()}
       </nav>
 
       {/* Expand button when collapsed */}

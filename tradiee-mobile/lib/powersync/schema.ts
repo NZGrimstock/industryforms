@@ -9,6 +9,7 @@ const jobs = new Table({
   description: column.text,
   status: column.text,
   assigned_to: column.text,
+  site_id: column.text,
   created_at: column.text,
   updated_at: column.text,
 })

@@ -122,6 +122,9 @@ export interface Quote {
   title: string
   status: QuoteStatus
   subtotal: number
+  discount_type: 'amount' | 'percent' | null
+  discount_value: number
+  discount_amount: number
   gst_amount: number
   total: number
   notes: string | null
@@ -161,6 +164,8 @@ export interface QuoteLineItem {
   unit: string
   unit_cost: number
   unit_price: number
+  discount_type: 'amount' | 'percent' | null
+  discount_value: number
   line_total: number
   sort_order: number
   created_at: string
@@ -250,6 +255,9 @@ export interface Invoice {
   is_progress_invoice: boolean
   progress_sequence: number | null
   subtotal: number
+  discount_type: 'amount' | 'percent' | null
+  discount_value: number
+  discount_amount: number
   gst_amount: number
   total: number
   amount_paid: number
@@ -279,6 +287,8 @@ export interface InvoiceLineItem {
   quantity: number
   unit: string
   unit_price: number
+  discount_type: 'amount' | 'percent' | null
+  discount_value: number
   line_total: number
   sort_order: number
   created_at: string

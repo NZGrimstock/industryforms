@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
+import { nextDocNumber } from '@/lib/numbering'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatDate, formatDateTime } from '@/lib/utils'
@@ -26,11 +27,8 @@ export default async function EnquiryDetailPage({ params }: { params: Promise<{ 
   const { data: team } = await supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true)
   const { data: customers } = await supabase.from('customers').select('id, name').eq('company_id', profile!.company_id).order('name')
 
-  // Count next quote number
-  const { count: qCount } = await supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextQuoteNumber = `Q-${String((qCount ?? 0) + 1).padStart(4, '0')}`
-  const { count: jCount } = await supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextJobNumber = `J-${String((jCount ?? 0) + 1).padStart(4, '0')}`
+  const nextQuoteNumber = await nextDocNumber(supabase, profile!.company_id, 'quote')
+  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   return (
     <>

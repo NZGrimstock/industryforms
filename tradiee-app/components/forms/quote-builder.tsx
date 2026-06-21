@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatCurrency } from '@/lib/utils'
+import { lineNet, computeTotals, type DiscountType } from '@/lib/pricing'
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Package, Clock } from 'lucide-react'
 
 type DraftSection = Omit<QuoteSection, 'id'> & { id: string; lines: DraftLine[] }
@@ -25,6 +26,7 @@ interface EditQuoteData {
   customer_message: string | null
   terms: string | null
   expires_at: string | null
+  reference: string | null
   sections: Array<{
     title: string
     is_optional: boolean
@@ -35,12 +37,16 @@ interface EditQuoteData {
       unit: string | null
       unit_cost: number | null
       unit_price: number
+      discount_type: string | null
+      discount_value: number | null
       line_total: number
       type: string
       price_list_item_id: string | null
       sort_order: number
     }>
   }>
+  discount_type: string | null
+  discount_value: number | null
 }
 
 interface Props {
@@ -60,7 +66,7 @@ let idSeq = 0
 function newId() { return `new-${++idSeq}` }
 
 function emptyLine(overrides: Partial<DraftLine> = {}): DraftLine {
-  return { id: newId(), price_list_item_id: null, type: 'material', description: '', quantity: 1, unit: 'each', unit_cost: 0, unit_price: 0, line_total: 0, sort_order: 0, ...overrides }
+  return { id: newId(), price_list_item_id: null, type: 'material', description: '', quantity: 1, unit: 'each', unit_cost: 0, unit_price: 0, discount_type: null, discount_value: 0, line_total: 0, sort_order: 0, ...overrides }
 }
 
 function labourLine(): DraftLine {
@@ -142,6 +148,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     customer_message: editQuote?.customer_message ?? '',
     terms: editQuote?.terms ?? defaultTerms ?? '',
     expires_at: editQuote?.expires_at?.slice(0, 10) ?? '',
+    reference: editQuote?.reference ?? '',
   })
 
   const [sections, setSections] = useState<DraftSection[]>(
@@ -165,11 +172,16 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                 unit: l.unit ?? 'each',
                 unit_cost: Number(l.unit_cost ?? 0),
                 unit_price: Number(l.unit_price),
+                discount_type: (l.discount_type as DiscountType) ?? null,
+                discount_value: Number(l.discount_value ?? 0),
                 line_total: Number(l.line_total),
               })),
           }))
       : [{ id: 'main', quote_id: '', title: 'Scope of work', is_optional: false, customer_selected: null, sort_order: 0, lines: [emptyLine()] }]
   )
+
+  const [docDiscountType, setDocDiscountType] = useState<DiscountType>((editQuote?.discount_type as DiscountType) ?? null)
+  const [docDiscountValue, setDocDiscountValue] = useState<number>(Number(editQuote?.discount_value ?? 0))
 
   const selectedCustomer = customers.find(c => c.id === meta.customerId)
 
@@ -186,7 +198,8 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
       lines: s.lines.map(l => {
         if (l.id !== lineId) return l
         const updated = { ...l, [k]: v }
-        updated.line_total = Number(updated.quantity) * Number(updated.unit_price)
+        if (k === 'discount_value' && Number(v) > 0 && !updated.discount_type) updated.discount_type = 'amount'
+        updated.line_total = lineNet(Number(updated.quantity), Number(updated.unit_price), updated.discount_type as DiscountType, Number(updated.discount_value))
         return updated
       }),
     }))
@@ -247,9 +260,11 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     setAddItemOpen(null)
   }
 
-  const subtotal = sections.flatMap(s => s.lines).reduce((sum, l) => sum + l.line_total, 0)
-  const gstAmount = subtotal * gstRate
-  const total = subtotal + gstAmount
+  const totals = computeTotals(
+    sections.flatMap(s => s.lines).map(l => l.line_total),
+    docDiscountType, docDiscountValue, gstRate,
+  )
+  const { subtotal, discount: docDiscountAmount, gst: gstAmount, total } = totals
 
   const save = useCallback(async (status: 'draft' | 'sent') => {
     if (!meta.customerId) { toast('Select a customer first', 'error'); return }
@@ -259,6 +274,10 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     const quotePayload = {
       customer_id: meta.customerId, site_id: meta.siteId || null,
       title: meta.title, status, subtotal, gst_amount: gstAmount, total,
+      reference: meta.reference || null,
+      discount_type: docDiscountValue > 0 ? docDiscountType : null,
+      discount_value: docDiscountValue > 0 ? docDiscountValue : 0,
+      discount_amount: docDiscountAmount,
       notes: meta.notes || null, customer_message: meta.customer_message || null,
       terms: meta.terms || null, expires_at: meta.expires_at || null,
     }
@@ -292,14 +311,17 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
       const lineInserts = s.lines.filter(l => l.description).map((l, li) => ({
         quote_id: quoteId, section_id: sec.id, price_list_item_id: l.price_list_item_id,
         type: l.type, description: l.description, quantity: l.quantity, unit: l.unit,
-        unit_cost: l.unit_cost, unit_price: l.unit_price, line_total: l.line_total, sort_order: li,
+        unit_cost: l.unit_cost, unit_price: l.unit_price,
+        discount_type: Number(l.discount_value) > 0 ? l.discount_type : null,
+        discount_value: Number(l.discount_value) > 0 ? l.discount_value : 0,
+        line_total: l.line_total, sort_order: li,
       }))
       if (lineInserts.length > 0) await supabase.from('quote_line_items').insert(lineInserts)
     }
 
     toast(editQuote ? 'Quote updated' : 'Quote saved')
     router.push(`/quotes/${quoteId}`)
-  }, [meta, sections, subtotal, gstAmount, total, companyId, profileId, quoteNumber, supabase, toast, router, editQuote])
+  }, [meta, sections, subtotal, gstAmount, total, docDiscountType, docDiscountValue, docDiscountAmount, companyId, profileId, quoteNumber, supabase, toast, router, editQuote])
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-6 min-h-screen">
@@ -330,9 +352,13 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                 ))}
               </select>
             </div>
-            <div className="md:col-span-2">
+            <div>
               <Label>Title <span className="text-red-400">*</span></Label>
               <Input value={meta.title} onChange={e => updateMeta('title', e.target.value)} placeholder="e.g. Electrical work at 12 Main St" />
+            </div>
+            <div>
+              <Label>Reference</Label>
+              <Input value={meta.reference} onChange={e => updateMeta('reference', e.target.value)} placeholder="Customer PO / your ref" />
             </div>
             <div>
               <Label>Expires</Label>
@@ -375,6 +401,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                       <th className="text-right px-3 py-2 font-medium w-24">Qty</th>
                       <th className="text-left px-3 py-2 font-medium w-16">Unit</th>
                       <th className="text-right px-3 py-2 font-medium w-28">Unit price</th>
+                      <th className="text-right px-3 py-2 font-medium w-28">Discount</th>
                       <th className="text-right px-3 py-2 font-medium w-28">Total</th>
                       <th className="w-8"></th>
                     </tr>
@@ -403,6 +430,14 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                         </td>
                         <td className="px-3 py-2">
                           <Input type="number" step="0.01" value={l.unit_price} onChange={e => updateLine(s.id, l.id, 'unit_price', parseFloat(e.target.value) || 0)} className="h-7 text-sm text-right" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1">
+                            <Input type="number" min="0" step="any" value={l.discount_value || ''} placeholder="0" onChange={e => updateLine(s.id, l.id, 'discount_value', parseFloat(e.target.value) || 0)} className="h-7 text-sm text-right" />
+                            <button type="button" onClick={() => updateLine(s.id, l.id, 'discount_type', l.discount_type === 'percent' ? 'amount' : 'percent')} className="h-7 px-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded hover:bg-gray-200 shrink-0" title="Toggle $ / %">
+                              {l.discount_type === 'percent' ? '%' : '$'}
+                            </button>
+                          </div>
                         </td>
                         <td className="px-3 py-2 text-right font-medium text-gray-700 text-sm whitespace-nowrap">
                           {formatCurrency(l.line_total)}
@@ -459,6 +494,22 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
           <CardContent className="space-y-3">
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-gray-600">Discount</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number" min="0" step="any" value={docDiscountValue || ''} placeholder="0"
+                      onChange={e => { const v = parseFloat(e.target.value) || 0; setDocDiscountValue(v); if (v > 0 && !docDiscountType) setDocDiscountType('amount') }}
+                      className="w-20 h-7 border border-gray-200 rounded-lg px-2 text-sm text-right focus:outline-none focus:border-orange-400"
+                    />
+                    <button type="button" onClick={() => setDocDiscountType(docDiscountType === 'percent' ? 'amount' : 'percent')} className="h-7 px-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded hover:bg-gray-200" title="Toggle $ / %">
+                      {docDiscountType === 'percent' ? '%' : '$'}
+                    </button>
+                  </div>
+                </div>
+                {docDiscountAmount > 0 && <div className="flex justify-between text-green-600 text-xs mt-0.5"><span>Applied</span><span>−{formatCurrency(docDiscountAmount)}</span></div>}
+              </div>
               <div className="flex justify-between text-gray-600"><span>GST ({Math.round(gstRate * 100)}%)</span><span>{formatCurrency(gstAmount)}</span></div>
               <div className="flex justify-between font-semibold text-gray-900 text-base border-t border-gray-100 pt-2 mt-2">
                 <span>Total</span><span>{formatCurrency(total)}</span>

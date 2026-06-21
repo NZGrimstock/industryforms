@@ -90,6 +90,11 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
             <div className="flex justify-end gap-12 text-gray-600">
               <span>Subtotal</span><span>{formatCurrency(quote.subtotal)}</span>
             </div>
+            {Number(quote.discount_amount) > 0 && (
+              <div className="flex justify-end gap-12 text-green-600">
+                <span>Discount{quote.discount_type === 'percent' ? ` (${Number(quote.discount_value)}%)` : ''}</span><span>−{formatCurrency(quote.discount_amount)}</span>
+              </div>
+            )}
             <div className="flex justify-end gap-12 text-gray-600">
               <span>GST</span><span>{formatCurrency(quote.gst_amount)}</span>
             </div>

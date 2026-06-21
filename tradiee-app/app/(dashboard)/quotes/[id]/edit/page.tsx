@@ -35,11 +35,15 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
     customer_message: quote.customer_message ?? null,
     terms: quote.terms ?? null,
     expires_at: quote.expires_at ?? null,
+    reference: quote.reference ?? null,
+    discount_type: quote.discount_type ?? null,
+    discount_value: quote.discount_value != null ? Number(quote.discount_value) : null,
     sections: ((quote.quote_sections ?? []) as Array<{
       title: string; is_optional: boolean; sort_order: number
       quote_line_items: Array<{
         description: string | null; quantity: number; unit: string | null
         unit_cost: number | null; unit_price: number; line_total: number
+        discount_type: string | null; discount_value: number | null
         type: string; price_list_item_id: string | null; sort_order: number
       }>
     }>)
@@ -56,6 +60,8 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
             unit: l.unit,
             unit_cost: l.unit_cost != null ? Number(l.unit_cost) : null,
             unit_price: Number(l.unit_price),
+            discount_type: l.discount_type ?? null,
+            discount_value: l.discount_value != null ? Number(l.discount_value) : null,
             line_total: Number(l.line_total),
             type: l.type,
             price_list_item_id: l.price_list_item_id,

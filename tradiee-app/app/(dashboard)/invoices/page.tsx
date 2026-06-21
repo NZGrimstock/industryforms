@@ -3,11 +3,12 @@ import { Header } from '@/components/layout/header'
 import { Card } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ListSearch } from '@/components/ui/list-search'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Receipt } from 'lucide-react'
 
-export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,6 +16,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
   let query = supabase.from('invoices').select('*, customers(name)').eq('company_id', profile!.company_id)
   if (sp.status) query = query.eq('status', sp.status)
+  if (sp.q) query = query.or(`invoice_number.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
   const { data: invoices } = await query.order('created_at', { ascending: false })
 
   const statuses = ['draft', 'sent', 'partially_paid', 'paid', 'overdue', 'void']
@@ -39,6 +41,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
           <p className="text-sm text-gray-500 shrink-0 ml-4">Outstanding: <strong className="text-gray-900">{formatCurrency(totalOutstanding)}</strong></p>
         </div>
 
+        <ListSearch placeholder="Search invoices by number or reference…" basePath="/invoices" status={sp.status} defaultValue={sp.q} />
+
         {!invoices?.length ? (
           <EmptyState icon={Receipt} title="No invoices" description="Create invoices from completed jobs" />
         ) : (
@@ -48,6 +52,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Invoice #</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Customer</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500">Reference</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
                   <th className="text-right px-6 py-3 font-medium text-gray-500">Total</th>
                   <th className="text-right px-6 py-3 font-medium text-gray-500">Outstanding</th>
@@ -59,6 +64,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   <tr key={i.id} className="hover:bg-gray-50 cursor-pointer">
                     <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3 font-medium text-gray-900">{i.invoice_number}</Link></td>
                     <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3 text-gray-700">{(i.customers as {name: string} | null)?.name ?? '—'}</Link></td>
+                    <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3 text-gray-400">{i.reference ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3"><StatusBadge status={i.status} /></Link></td>
                     <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3 text-right font-medium text-gray-900">{formatCurrency(i.total)}</Link></td>
                     <td className="p-0"><Link href={`/invoices/${i.id}`} className="block px-6 py-3 text-right text-gray-600">

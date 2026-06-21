@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/utils'
 import { FileText, Briefcase, Receipt, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { getProfitabilityStatus } from '@/components/ui/profitability-badge'
+import { OnboardingChecklist } from '@/components/ui/onboarding-checklist'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -31,6 +32,22 @@ export default async function DashboardPage() {
   const quotes = quotesRes.data ?? []
   const jobs = jobsRes.data ?? []
   const invoices = invoicesRes.data ?? []
+
+  // Onboarding checklist signals
+  const [{ count: customerCount }, { count: staffCount }] = await Promise.all([
+    supabase.from('customers').select('id', { count: 'exact', head: true }).eq('company_id', profile?.company_id),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('company_id', profile?.company_id),
+  ])
+  const co = (profile?.companies ?? {}) as { logo_url?: string | null; gst_number?: string | null }
+  const onboardingSteps = [
+    { label: 'Add your company logo', done: !!co.logo_url, href: '/settings' },
+    { label: 'Add your GST number', done: !!co.gst_number, href: '/settings' },
+    { label: 'Add a customer', done: (customerCount ?? 0) > 0, href: '/customers' },
+    { label: 'Create a quote', done: quotes.length > 0, href: '/quotes/new' },
+    { label: 'Create a job', done: jobs.length > 0, href: '/jobs' },
+    { label: 'Send an invoice', done: invoices.length > 0, href: '/invoices' },
+    { label: 'Invite a staff member', done: (staffCount ?? 0) > 1, href: '/settings' },
+  ]
 
   const openQuotes = quotes.filter(q => ['draft', 'sent'].includes(q.status)).length
   const activeJobs = jobs.filter(j => ['scheduled', 'in_progress'].includes(j.status)).length
@@ -84,6 +101,8 @@ export default async function DashboardPage() {
     <>
       <Header title={`Good ${getGreeting()}, ${profile?.full_name?.split(' ')[0] ?? 'there'}`} profile={profile} />
       <div className="p-6 space-y-6">
+        <OnboardingChecklist steps={onboardingSteps} />
+
         {/* Trial banner */}
         {profile?.companies && (profile.companies as {subscription_plan: string}).subscription_plan === 'trial' && (
           <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-800 flex items-center justify-between">

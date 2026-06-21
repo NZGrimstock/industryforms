@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import { discountLabel } from '@/lib/pricing'
 import { InvoiceDetailClient } from './client'
 import Link from 'next/link'
 
@@ -66,6 +67,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                   <th className="text-left px-6 py-2 font-medium">Description</th>
                   <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
                   <th className="text-right px-3 py-2 font-medium w-28">Unit price</th>
+                  <th className="text-right px-3 py-2 font-medium w-20">Disc.</th>
                   <th className="text-right px-6 py-2 font-medium w-28">Total</th>
                 </tr>
               </thead>
@@ -75,31 +77,38 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
                     <td className="px-6 py-3 text-gray-700">{l.description}</td>
                     <td className="px-3 py-3 text-right text-gray-500">{l.quantity} {l.unit}</td>
                     <td className="px-3 py-3 text-right text-gray-500">{formatCurrency(l.unit_price)}</td>
+                    <td className="px-3 py-3 text-right text-gray-400">{discountLabel(l.discount_type, Number(l.discount_value)) || '—'}</td>
                     <td className="px-6 py-3 text-right font-medium text-gray-900">{formatCurrency(l.line_total)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 border-t border-gray-100">
                 <tr>
-                  <td colSpan={3} className="px-6 py-3 text-right text-sm text-gray-600">Subtotal</td>
+                  <td colSpan={4} className="px-6 py-3 text-right text-sm text-gray-600">Subtotal</td>
                   <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(invoice.subtotal)}</td>
                 </tr>
+                {Number(invoice.discount_amount) > 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-2 text-right text-sm text-green-600">Discount{invoice.discount_type === 'percent' ? ` (${Number(invoice.discount_value)}%)` : ''}</td>
+                    <td className="px-6 py-2 text-right text-sm text-green-600">−{formatCurrency(invoice.discount_amount)}</td>
+                  </tr>
+                )}
                 <tr>
-                  <td colSpan={3} className="px-6 py-2 text-right text-sm text-gray-600">GST ({Math.round(gstRate * 100)}%)</td>
+                  <td colSpan={4} className="px-6 py-2 text-right text-sm text-gray-600">GST ({Math.round(gstRate * 100)}%)</td>
                   <td className="px-6 py-2 text-right text-sm font-medium text-gray-900">{formatCurrency(invoice.gst_amount)}</td>
                 </tr>
                 <tr className="border-t border-gray-200">
-                  <td colSpan={3} className="px-6 py-3 text-right font-semibold text-gray-900">Total</td>
+                  <td colSpan={4} className="px-6 py-3 text-right font-semibold text-gray-900">Total</td>
                   <td className="px-6 py-3 text-right font-bold text-gray-900 text-base">{formatCurrency(invoice.total)}</td>
                 </tr>
                 {invoice.amount_paid > 0 && (
                   <>
                     <tr>
-                      <td colSpan={3} className="px-6 py-2 text-right text-sm text-green-600">Paid</td>
+                      <td colSpan={4} className="px-6 py-2 text-right text-sm text-green-600">Paid</td>
                       <td className="px-6 py-2 text-right text-sm text-green-600">-{formatCurrency(invoice.amount_paid)}</td>
                     </tr>
                     <tr>
-                      <td colSpan={3} className="px-6 py-2 text-right font-semibold text-gray-900">Balance due</td>
+                      <td colSpan={4} className="px-6 py-2 text-right font-semibold text-gray-900">Balance due</td>
                       <td className="px-6 py-2 text-right font-bold text-gray-900">{formatCurrency(invoice.total - invoice.amount_paid)}</td>
                     </tr>
                   </>

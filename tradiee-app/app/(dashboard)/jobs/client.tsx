@@ -31,14 +31,17 @@ interface Props {
   customers: { id: string; name: string }[]
   nextJobNumber: string
   priceItems?: PriceItem[]
+  initialOpen?: boolean
+  initialTitle?: string
+  initialDescription?: string
 }
 
 const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [] }: Props) {
-  const [open, setOpen] = useState(false)
+export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '' }: Props) {
+  const [open, setOpen] = useState(initialOpen)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
   const [createdJobId, setCreatedJobId] = useState<string | null>(null)
@@ -47,7 +50,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [form, setForm] = useState({ customerId: '', title: '', description: '', status: 'unscheduled' })
+  const [form, setForm] = useState({ customerId: '', title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '' })
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing')
   const [newCust, setNewCust] = useState({ name: '', phone: '' })
 
@@ -60,7 +63,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   }
 
   function reset() {
-    setForm({ customerId: '', title: '', description: '', status: 'unscheduled' })
+    setForm({ customerId: '', title: '', description: '', status: 'unscheduled', reference: '' })
     setCustomerMode('existing')
     setNewCust({ name: '', phone: '' })
     setLines([emptyLine()])
@@ -129,6 +132,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
       title: form.title,
       description: form.description || null,
       status: form.status,
+      reference: form.reference || null,
     }).select('id').single()
     setLoading(false)
     if (error) { toast(error.message, 'error'); return }
@@ -205,6 +209,10 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
             <div>
               <Label>Title <span className="text-red-400">*</span></Label>
               <Input value={form.title} onChange={e => set('title', e.target.value)} required placeholder="e.g. Install heat pump" />
+            </div>
+            <div>
+              <Label>Reference</Label>
+              <Input value={form.reference} onChange={e => set('reference', e.target.value)} placeholder="Customer PO / your ref" />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">

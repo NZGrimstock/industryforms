@@ -2,15 +2,39 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail, reminderEmailHtml } from '@/lib/email'
 import { sendSms, smsConfigured } from '@/lib/sms'
+import { nextDocNumber } from '@/lib/numbering'
 
-// Called by a cron job (e.g. Vercel Cron, pg_cron, or external scheduler)
-// Secure with a shared secret header: x-cron-secret
+function addInterval(dateStr: string, interval: string | null): string {
+  const d = new Date(dateStr)
+  switch (interval) {
+    case 'weekly': d.setDate(d.getDate() + 7); break
+    case 'fortnightly': d.setDate(d.getDate() + 14); break
+    case 'monthly': d.setMonth(d.getMonth() + 1); break
+    case 'quarterly': d.setMonth(d.getMonth() + 3); break
+    case 'yearly': d.setFullYear(d.getFullYear() + 1); break
+    default: d.setFullYear(d.getFullYear() + 1)
+  }
+  return d.toISOString().slice(0, 10)
+}
+
+// The job loops over many records sending email/SMS — give it headroom past the
+// default serverless timeout.
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+
+// Called by a cron job (e.g. Vercel Cron, pg_cron, or external scheduler).
+// Two auth paths share one job runner:
+//  - POST with header `x-cron-secret: <CRON_SECRET>` (external scheduler / manual)
+//  - GET with `Authorization: Bearer <CRON_SECRET>` (Vercel Cron — see vercel.json;
+//    Vercel injects this header automatically when CRON_SECRET is set in the project)
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-cron-secret')
-  if (secret !== process.env.CRON_SECRET) {
+  if (req.headers.get('x-cron-secret') !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  return runReminders()
+}
 
+async function runReminders() {
   const service = createServiceClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const sent: string[] = []
@@ -128,13 +152,73 @@ export async function POST(req: NextRequest) {
     await service.from('job_visits').update({ reminder_sent_at: now.toISOString() }).eq('id', visit.id)
   }
 
+  // ── Recurring jobs ────────────────────────────────────────────────────────
+  // Clone jobs whose recurrence is due, then roll the next occurrence forward.
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: recJobs } = await service
+    .from('jobs')
+    .select('id, company_id, customer_id, site_id, title, description, reference, recurrence_rule, recurrence_next, recurrence_end')
+    .eq('is_recurring', true)
+    .not('recurrence_next', 'is', null)
+    .lte('recurrence_next', today)
+
+  for (const rj of recJobs ?? []) {
+    if (rj.recurrence_end && rj.recurrence_end < today) continue
+    try {
+      const jobNumber = await nextDocNumber(service, rj.company_id as string, 'job')
+      await service.from('jobs').insert({
+        company_id: rj.company_id, customer_id: rj.customer_id, site_id: rj.site_id,
+        job_number: jobNumber, title: rj.title, description: rj.description,
+        reference: rj.reference, status: 'unscheduled',
+      })
+      await service.from('jobs').update({
+        recurrence_next: addInterval(rj.recurrence_next as string, rj.recurrence_rule as string | null),
+      }).eq('id', rj.id)
+      sent.push(`Recurring job ${jobNumber}`)
+    } catch (e) {
+      errors.push(`Recurring job ${rj.id}: ${e instanceof Error ? e.message : 'failed'}`)
+    }
+  }
+
+  // ── Service reminders ─────────────────────────────────────────────────────
+  const { data: dueReminders } = await service
+    .from('service_reminders')
+    .select('id, due_date, interval, title, customers(name, email), companies(name, email)')
+    .eq('status', 'pending')
+    .lte('due_date', today)
+
+  for (const sr of dueReminders ?? []) {
+    const customer = sr.customers as unknown as { name: string; email: string | null } | null
+    const company = sr.companies as unknown as { name: string; email: string | null } | null
+    if (customer?.email && company) {
+      const r = await sendEmail({
+        to: customer.email,
+        subject: `${sr.title} — service due`,
+        html: `<p>Hi ${customer.name.split(' ')[0]},</p><p>This is a friendly reminder from ${company.name} that <strong>${sr.title}</strong> is now due. We'll be in touch to arrange a suitable time, or reply to this email to book.</p><p>${company.name}</p>`,
+        replyTo: company.email ?? undefined,
+      })
+      if (r.error) errors.push(`Service reminder ${sr.id}: ${r.error}`)
+      else sent.push(`Service reminder: ${sr.title}`)
+    }
+    // Roll forward if repeating, otherwise mark sent.
+    if (sr.interval) {
+      await service.from('service_reminders').update({ due_date: addInterval(sr.due_date as string, sr.interval as string), last_sent_at: new Date().toISOString() }).eq('id', sr.id)
+    } else {
+      await service.from('service_reminders').update({ status: 'sent', last_sent_at: new Date().toISOString() }).eq('id', sr.id)
+    }
+  }
+
   return NextResponse.json({ sent, errors, total: sent.length })
 }
 
-// Manual trigger / status check
-export async function GET() {
+// Vercel Cron entrypoint (authed GET) + status check (unauthed GET).
+export async function GET(req: NextRequest) {
+  const auth = req.headers.get('authorization')
+  if (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`) {
+    return runReminders()
+  }
   return NextResponse.json({
-    info: 'POST to this endpoint with x-cron-secret header to run reminders',
+    info: 'Authed GET (Vercel Cron) or POST with x-cron-secret header runs reminders',
     envVars: {
       CRON_SECRET: !!process.env.CRON_SECRET,
       RESEND_API_KEY: !!process.env.RESEND_API_KEY,

@@ -9,9 +9,13 @@ import { Briefcase, List, LayoutGrid, Map } from 'lucide-react'
 import React from 'react'
 import { NewJobButton } from './client'
 import { JobBoard } from './board'
+import { JobTemplatesPanel, ServiceRemindersPanel } from './panels'
+import { ListSearch } from '@/components/ui/list-search'
+import { nextDocNumber } from '@/lib/numbering'
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string }> }) {
+export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string }> }) {
   const sp = await searchParams
+  const tab = (sp.tab ?? 'jobs') as 'jobs' | 'recurring' | 'templates' | 'reminders'
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -25,13 +29,14 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   // Board needs all active statuses; list can be filtered
   let query = supabase.from('jobs').select('*, customers(name), profiles(full_name), customer_sites(address)').eq('company_id', profile!.company_id)
+  if (tab === 'recurring') query = query.eq('is_recurring', true)
   if (view === 'list' && sp.status) query = query.eq('status', sp.status)
-  if (view === 'board') query = query.not('status', 'in', '(cancelled)')
+  if (view === 'list' && sp.q) query = query.or(`job_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
+  if (view === 'board' && tab === 'jobs') query = query.not('status', 'in', '(cancelled)')
   const { data: jobs } = await query.order('created_at', { ascending: false })
 
   const statuses = ['unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled']
-  const { count } = await supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextJobNumber = `J-${String((count ?? 0) + 1).padStart(4, '0')}`
+  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
     { key: 'list', icon: List, label: 'List' },
@@ -43,6 +48,21 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
     <>
       <Header title="Jobs" profile={profile} />
       <div className="p-6">
+        {/* Section tabs */}
+        <div className="flex gap-1 mb-4 border-b border-gray-100">
+          {([['jobs', 'Jobs'], ['recurring', 'Recurring'], ['templates', 'Templates'], ['reminders', 'Service Reminders']] as const).map(([key, label]) => (
+            <Link key={key} href={key === 'jobs' ? '/jobs' : `/jobs?tab=${key}`}
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === key ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {label}
+            </Link>
+          ))}
+        </div>
+
+        {tab === 'templates' && <JobTemplatesPanel companyId={profile!.company_id} />}
+        {tab === 'reminders' && <ServiceRemindersPanel companyId={profile!.company_id} customers={customers ?? []} />}
+
+        {(tab === 'jobs' || tab === 'recurring') && (
+        <>
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           {/* Status filters (list view only) */}
           {view === 'list' && (
@@ -70,12 +90,16 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </Link>
               ))}
             </div>
-            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} />
+            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} />
           </div>
         </div>
 
         {view === 'board' && (
           <JobBoard initialJobs={(jobs ?? []) as Parameters<typeof JobBoard>[0]['initialJobs']} />
+        )}
+
+        {view === 'list' && (
+          <ListSearch placeholder="Search jobs by number, title or reference…" basePath="/jobs" status={sp.status} defaultValue={sp.q} />
         )}
 
         {view === 'list' && (
@@ -91,6 +115,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Job #</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Title</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Customer</th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-500">Reference</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Assigned to</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Created</th>
@@ -102,6 +127,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 font-medium text-gray-900">{j.job_number}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-700 max-w-[200px] truncate">{j.title}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-600">{(j.customers as {name: string} | null)?.name ?? '—'}</Link></td>
+                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{j.reference ?? '—'}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3"><StatusBadge status={j.status} /></Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-500">{(j.profiles as {full_name: string} | null)?.full_name ?? '—'}</Link></td>
                       <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{formatDate(j.created_at)}</Link></td>
@@ -111,6 +137,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               </table>
             </Card>
           )
+        )}
+        </>
         )}
       </div>
     </>

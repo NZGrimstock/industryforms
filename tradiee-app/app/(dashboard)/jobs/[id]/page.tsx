@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { presignedDownload } from '@/lib/r2'
+import { nextDocNumber } from '@/lib/numbering'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
@@ -67,8 +68,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const profileHasSignature = !!((profile as Record<string, unknown>).signature_base64)
 
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
-  const { count: invCount } = await supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextInvoiceNumber = `INV-${String((invCount ?? 0) + 1).padStart(4, '0')}`
+  const nextInvoiceNumber = await nextDocNumber(supabase, profile!.company_id, 'invoice')
 
   // Job costing: estimated from quote, actual from timesheets + invoices
   let estimatedSubtotal = 0

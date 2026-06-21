@@ -29,17 +29,22 @@ export async function POST(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
-  // Price lookup keys: solo_monthly, team_monthly, pro_monthly — set these up in your Stripe dashboard
+  // Price lookup keys: solo_monthly, team_monthly, pro_monthly (main plan) and
+  // website_monthly (the $15/mo Website add-on) — set these up in Stripe.
   const priceKey = `${plan}_monthly`
+  const isWebsiteAddon = plan === 'website'
+  const returnPath = isWebsiteAddon ? '/website' : '/settings'
 
   const session = await stripe.checkout.sessions.create({
     customer: stripeCustomerId,
     mode: 'subscription',
     line_items: [{ price: await getPriceId(priceKey), quantity: 1 }],
-    success_url: `${appUrl}/settings?subscribed=1`,
-    cancel_url: `${appUrl}/settings`,
+    success_url: `${appUrl}${returnPath}?subscribed=1`,
+    cancel_url: `${appUrl}${returnPath}`,
     allow_promotion_codes: true,
-    subscription_data: { metadata: { company_id: profile.company_id } },
+    // The website add-on is a separate subscription from the main plan; tag it so
+    // the webhook updates company_websites instead of the company's main plan.
+    subscription_data: { metadata: { company_id: profile.company_id, ...(isWebsiteAddon ? { addon: 'website' } : {}) } },
   })
 
   return NextResponse.json({ url: session.url })

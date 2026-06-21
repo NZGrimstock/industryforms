@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { PurchaseOrderBuilder } from '@/components/forms/purchase-order-builder'
+import { nextDocNumber } from '@/lib/numbering'
 
 export default async function NewPurchaseOrderPage({ searchParams }: { searchParams: Promise<{ supplierId?: string; jobId?: string }> }) {
   const sp = await searchParams
@@ -15,8 +16,7 @@ export default async function NewPurchaseOrderPage({ searchParams }: { searchPar
     supabase.from('price_list_items').select('id, name, unit, cost_price').eq('company_id', companyId).eq('is_active', true).order('name'),
   ])
 
-  const { count } = await supabase.from('purchase_orders').select('id', { count: 'exact', head: true }).eq('company_id', companyId)
-  const nextNumber = `PO-${String((count ?? 0) + 1).padStart(4, '0')}`
+  const nextNumber = await nextDocNumber(supabase, companyId, 'po')
   const gstRate = (profile?.companies as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15
 
   return (

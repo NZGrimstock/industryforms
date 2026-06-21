@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare } from 'lucide-react'
+import { lineNet, discountAmount, round2, type DiscountType } from '@/lib/pricing'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag } from 'lucide-react'
 
 interface Props {
   invoice: {
@@ -20,6 +21,9 @@ interface Props {
     job_id: string | null
     subtotal: number
     gst_amount: number
+    discount_type: DiscountType
+    discount_value: number
+    discount_amount: number
     customer_email?: string | null
     customer_phone?: string | null
     external_id?: string | null
@@ -29,7 +33,7 @@ interface Props {
   xeroConnected?: boolean
 }
 
-type Dialog = 'line' | 'payment' | null
+type Dialog = 'line' | 'payment' | 'discount' | null
 
 export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected }: Props) {
   const supabase = createClient()
@@ -38,20 +42,24 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
   const [activeDialog, setActiveDialog] = useState<Dialog>(null)
   const [loading, setLoading] = useState(false)
 
-  const [lineForm, setLineForm] = useState({ description: '', quantity: '1', unit: 'each', unit_price: '0' })
+  const [lineForm, setLineForm] = useState({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount' as 'amount' | 'percent' })
   const [paymentForm, setPaymentForm] = useState({ amount: (invoice.total - invoice.amount_paid).toString(), method: 'bank_transfer', notes: '' })
+  const [discountForm, setDiscountForm] = useState({ value: (invoice.discount_value || 0).toString(), type: (invoice.discount_type ?? 'amount') as 'amount' | 'percent' })
 
   async function addLine(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     const qty = parseFloat(lineForm.quantity) || 1
     const price = parseFloat(lineForm.unit_price) || 0
-    const lineTotal = qty * price
+    const lineDiscVal = parseFloat(lineForm.discount_value) || 0
+    const lineDiscType: DiscountType = lineDiscVal > 0 ? lineForm.discount_type : null
+    const lineTotal = lineNet(qty, price, lineDiscType, lineDiscVal)
 
-    // Recalculate invoice totals
-    const newSubtotal = invoice.subtotal + lineTotal
-    const newGst = newSubtotal * gstRate
-    const newTotal = newSubtotal + newGst
+    // Recalculate invoice totals, preserving any document-level discount.
+    const newSubtotal = round2(invoice.subtotal + lineTotal)
+    const docDisc = discountAmount(newSubtotal, invoice.discount_type, invoice.discount_value)
+    const newGst = round2((newSubtotal - docDisc) * gstRate)
+    const newTotal = round2(newSubtotal - docDisc + newGst)
 
     const [lineRes] = await Promise.all([
       supabase.from('invoice_line_items').insert({
@@ -61,15 +69,35 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
         quantity: qty,
         unit: lineForm.unit,
         unit_price: price,
+        discount_type: lineDiscType,
+        discount_value: lineDiscVal,
         line_total: lineTotal,
         sort_order: 99,
       }),
     ])
 
-    await supabase.from('invoices').update({ subtotal: newSubtotal, gst_amount: newGst, total: newTotal }).eq('id', invoice.id)
+    await supabase.from('invoices').update({ subtotal: newSubtotal, discount_amount: docDisc, gst_amount: newGst, total: newTotal }).eq('id', invoice.id)
 
     if (lineRes.error) toast(lineRes.error.message, 'error')
-    else { toast('Line added'); setActiveDialog(null); router.refresh() }
+    else { toast('Line added'); setActiveDialog(null); setLineForm({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount' }); router.refresh() }
+    setLoading(false)
+  }
+
+  async function saveDiscount(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    const value = parseFloat(discountForm.value) || 0
+    const type: DiscountType = value > 0 ? discountForm.type : null
+    const docDisc = discountAmount(invoice.subtotal, type, value)
+    const newGst = round2((invoice.subtotal - docDisc) * gstRate)
+    const newTotal = round2(invoice.subtotal - docDisc + newGst)
+    await supabase.from('invoices').update({
+      discount_type: type, discount_value: value, discount_amount: docDisc,
+      gst_amount: newGst, total: newTotal,
+    }).eq('id', invoice.id)
+    toast('Discount updated')
+    setActiveDialog(null)
+    router.refresh()
     setLoading(false)
   }
 
@@ -152,6 +180,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('line')}><Plus className="h-4 w-4" /> Add line</Button>
+      <Button variant="outline" size="sm" onClick={() => setActiveDialog('discount')}><Tag className="h-4 w-4" /> {invoice.discount_amount > 0 ? 'Edit discount' : 'Add discount'}</Button>
       {canSendEmail && <Button size="sm" loading={loading} onClick={sendEmail}><Mail className="h-4 w-4" /> Send email</Button>}
       {canSendText && <Button variant="outline" size="sm" loading={loading} onClick={sendText}><MessageSquare className="h-4 w-4" /> Text</Button>}
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
@@ -167,7 +196,25 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
             <div><Label>Unit</Label><Input value={lineForm.unit} onChange={e => setLineForm(f => ({ ...f, unit: e.target.value }))} /></div>
             <div><Label>Unit price</Label><Input type="number" step="0.01" value={lineForm.unit_price} onChange={e => setLineForm(f => ({ ...f, unit_price: e.target.value }))} /></div>
           </div>
+          <div>
+            <Label>Line discount (optional)</Label>
+            <div className="flex gap-2">
+              <Input type="number" min="0" step="0.01" value={lineForm.discount_value} onChange={e => setLineForm(f => ({ ...f, discount_value: e.target.value }))} className="flex-1" />
+              <Select value={lineForm.discount_type} onChange={e => setLineForm(f => ({ ...f, discount_type: e.target.value as 'amount' | 'percent' }))} options={[{ value: 'amount', label: '$ off' }, { value: 'percent', label: '% off' }]} />
+            </div>
+          </div>
           <div className="flex gap-3"><Button type="submit" loading={loading}>Add line</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
+        </form>
+      </Dialog>
+
+      <Dialog open={activeDialog === 'discount'} onClose={() => setActiveDialog(null)} title="Invoice discount">
+        <form onSubmit={saveDiscount} className="space-y-4">
+          <p className="text-sm text-gray-500">Applied to the subtotal, before GST. Set to 0 to remove.</p>
+          <div className="flex gap-2">
+            <div className="flex-1"><Label>Amount</Label><Input type="number" min="0" step="0.01" value={discountForm.value} onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))} /></div>
+            <div><Label>Type</Label><Select value={discountForm.type} onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value as 'amount' | 'percent' }))} options={[{ value: 'amount', label: '$ off' }, { value: 'percent', label: '% off' }]} /></div>
+          </div>
+          <div className="flex gap-3"><Button type="submit" loading={loading}>Save discount</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
         </form>
       </Dialog>
 
