@@ -3,6 +3,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { LogOut, User } from 'lucide-react'
+import { GlobalSearch } from './global-search'
+import { NewMenu } from './new-menu'
 
 interface HeaderProps {
   title: string
@@ -12,6 +14,7 @@ interface HeaderProps {
 export function Header({ title, profile }: HeaderProps) {
   const router = useRouter()
   const supabase = createClient()
+  const isStaff = profile?.role === 'staff'
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -20,9 +23,11 @@ export function Header({ title, profile }: HeaderProps) {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-30">
-      <h1 className="text-base font-semibold text-gray-900">{title}</h1>
-      <div className="flex items-center gap-3">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between gap-3 px-4 sm:px-6 sticky top-0 z-30">
+      <h1 className="text-base font-semibold text-gray-900 shrink-0 hidden sm:block">{title}</h1>
+      <div className="flex items-center gap-2 sm:gap-3 ml-auto">
+        <GlobalSearch />
+        <NewMenu isStaff={isStaff} />
         {profile && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">

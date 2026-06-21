@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { MessageSquare } from 'lucide-react'
 import { EnquiryActions } from './client'
 
-export default async function EnquiriesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function EnquiriesPage({ searchParams }: { searchParams: Promise<{ status?: string; new?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,7 +45,7 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
               </Link>
             ))}
           </div>
-          <EnquiryActions companyId={profile!.company_id} profileId={user!.id} team={team ?? []} mode="new" />
+          <EnquiryActions companyId={profile!.company_id} profileId={user!.id} team={team ?? []} mode="new" initialOpen={sp.new === '1'} />
         </div>
 
         {!enquiries?.length ? (

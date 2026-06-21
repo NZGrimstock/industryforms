@@ -12,12 +12,13 @@ interface Props {
   profileId: string
   team: Profile[]
   mode: 'new'
+  initialOpen?: boolean
 }
 
 const SOURCES = ['website', 'phone', 'email', 'referral', 'walk_in', 'other']
 
-export function EnquiryActions({ companyId, profileId, team, mode }: Props) {
-  const [open, setOpen] = useState(false)
+export function EnquiryActions({ companyId, profileId, team, mode, initialOpen = false }: Props) {
+  const [open, setOpen] = useState(initialOpen)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
