@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase'
 
 type FeatherName = React.ComponentProps<typeof Feather>['name']
 
+// Tabs only owners/admins should see (sales/financial). Hidden for field staff.
+const ADMIN_ONLY = new Set(['quotes', 'invoices'])
+
 const TABS: { name: string; label: string; icon: FeatherName; shortLabel?: string }[] = [
   { name: 'jobs',        label: 'Jobs',        icon: 'briefcase' },
   { name: 'map',         label: 'Map',          icon: 'map' },
@@ -19,14 +22,14 @@ const TABS: { name: string; label: string; icon: FeatherName; shortLabel?: strin
   { name: 'more',        label: 'More',         icon: 'more-horizontal' },
 ]
 
-function NavMenu({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function NavMenu({ visible, onClose, tabs }: { visible: boolean; onClose: () => void; tabs: typeof TABS }) {
   const topOffset = (Constants.statusBarHeight ?? 44) + 56
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={[styles.menu, { top: topOffset }]} onPress={() => {}}>
-          {TABS.filter(t => t.name !== 'more').map((tab, i, arr) => (
+          {tabs.filter(t => t.name !== 'more').map((tab, i, arr) => (
             <TouchableOpacity
               key={tab.name}
               style={[styles.menuItem, i < arr.length - 1 && styles.menuItemBorder]}
@@ -46,14 +49,16 @@ function NavMenu({ visible, onClose }: { visible: boolean; onClose: () => void }
 export default function TabLayout() {
   const [pendingCount, setPendingCount] = useState(0)
   const [menuVisible, setMenuVisible] = useState(false)
+  const [isStaff, setIsStaff] = useState(false)
 
   useEffect(() => {
     async function loadBadge() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
       const { data: profile } = await supabase
-        .from('profiles').select('company_id').eq('id', session.user.id).single()
+        .from('profiles').select('company_id, role').eq('id', session.user.id).single()
       if (!profile?.company_id) return
+      setIsStaff(profile.role === 'staff')
       const { count } = await supabase
         .from('job_invitations')
         .select('id', { count: 'exact', head: true })
@@ -65,6 +70,9 @@ export default function TabLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => loadBadge())
     return () => subscription.unsubscribe()
   }, [])
+
+  // Staff don't get the sales/financial tabs.
+  const visibleTabs = isStaff ? TABS.filter(t => !ADMIN_ONLY.has(t.name)) : TABS
 
   const HeaderLeft = useCallback(() => (
     <TouchableOpacity
@@ -103,11 +111,13 @@ export default function TabLayout() {
               tabBarBadge: tab.name === 'invitations' && pendingCount > 0
                 ? (pendingCount > 99 ? '99+' : pendingCount)
                 : undefined,
+              // Hide (but keep route registered) for field staff.
+              href: isStaff && ADMIN_ONLY.has(tab.name) ? null : undefined,
             }}
           />
         ))}
       </Tabs>
-      <NavMenu visible={menuVisible} onClose={() => setMenuVisible(false)} />
+      <NavMenu visible={menuVisible} onClose={() => setMenuVisible(false)} tabs={visibleTabs} />
     </>
   )
 }

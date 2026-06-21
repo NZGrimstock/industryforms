@@ -1,15 +1,21 @@
 # PowerSync sync rules for IndustryForms — upload via PowerSync Dashboard → Sync Rules.
 #
-# One bucket per company the authenticated user belongs to. The company_id is
-# resolved with a PARAMETER QUERY against profiles (no custom JWT claim needed):
-# request.user_id() is the Supabase auth user id (JWT `sub`).
+# Role-aware buckets (mirrors the web RLS from migration 031):
+#   • owner/admin  → full company dataset (company_admin bucket)
+#   • staff        → company reference data (customers, sites, price list, forms)
+#                    + only the jobs assigned to them and those jobs' children
+#                    + only their own timesheets / travel logs
+#                    NEVER quotes, invoices or their line items.
 #
-# PowerSync data queries are single-table (no joins/subqueries), so every synced
-# table carries company_id — added by migration 022_powersync_company_id.sql.
+# company_id is resolved with PARAMETER QUERIES against profiles/jobs.
+# request.user_id() is the Supabase auth user id (JWT `sub`).
+# PowerSync data queries are single-table (no joins), so every synced table
+# carries company_id — added by migration 022_powersync_company_id.sql.
 
 bucket_definitions:
-  company:
-    parameters: select company_id from profiles where id = request.user_id()
+  # ── Owners & admins: the full company dataset (unchanged behaviour) ──────────
+  company_admin:
+    parameters: select company_id from profiles where id = request.user_id() and role in ('owner', 'admin')
     data:
       - select * from jobs               where company_id = bucket.company_id
       - select * from customers          where company_id = bucket.company_id
@@ -28,3 +34,30 @@ bucket_definitions:
       - select * from invoices           where company_id = bucket.company_id
       - select * from invoice_line_items where company_id = bucket.company_id
       - select * from job_photos         where company_id = bucket.company_id
+
+  # ── Staff: company-wide reference data they need on every job ────────────────
+  staff_company:
+    parameters: select company_id from profiles where id = request.user_id() and role = 'staff'
+    data:
+      - select * from customers        where company_id = bucket.company_id
+      - select * from customer_sites   where company_id = bucket.company_id
+      - select * from price_list_items where company_id = bucket.company_id
+      - select * from form_templates   where company_id = bucket.company_id
+
+  # ── Staff: one bucket per job assigned to them (job + its children) ──────────
+  staff_jobs:
+    parameters: select id as job_id from jobs where assigned_to = request.user_id()
+    data:
+      - select * from jobs             where id = bucket.job_id
+      - select * from job_visits       where job_id = bucket.job_id
+      - select * from job_notes        where job_id = bucket.job_id
+      - select * from job_materials    where job_id = bucket.job_id
+      - select * from job_photos       where job_id = bucket.job_id
+      - select * from form_submissions where job_id = bucket.job_id
+
+  # ── Staff: only their own timesheets and travel logs ────────────────────────
+  staff_self:
+    parameters: select id as profile_id from profiles where id = request.user_id() and role = 'staff'
+    data:
+      - select * from timesheets  where profile_id = bucket.profile_id
+      - select * from travel_logs where profile_id = bucket.profile_id

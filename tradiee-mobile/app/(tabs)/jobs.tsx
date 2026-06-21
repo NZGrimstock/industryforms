@@ -6,30 +6,14 @@ import {
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
-
-const STATUS_COLOR: Record<string, string> = {
-  unscheduled: '#6b7280',
-  scheduled:   '#3b82f6',
-  in_progress: '#f97316',
-  on_hold:     '#eab308',
-  completed:   '#22c55e',
-  cancelled:   '#ef4444',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  unscheduled: 'Unscheduled',
-  scheduled:   'Scheduled',
-  in_progress: 'In progress',
-  on_hold:     'On hold',
-  completed:   'Completed',
-  cancelled:   'Cancelled',
-}
+import { getJobStatuses, resolveStatus, DEFAULT_JOB_STATUSES, type JobStatus } from '@/lib/job-statuses'
 
 type Job = { id: string; job_number: string; title: string; status: string; description: string | null }
 
 export default function JobsScreen() {
   const [search, setSearch] = useState('')
   const [jobs, setJobs] = useState<Job[]>([])
+  const [statuses, setStatuses] = useState<JobStatus[]>(DEFAULT_JOB_STATUSES)
   const [isLoading, setIsLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [scope, setScope] = useState<'mine' | 'all'>('mine')
@@ -39,6 +23,7 @@ export default function JobsScreen() {
     if (!user) return
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile) return
+    getJobStatuses(profile.company_id).then(setStatuses)
     let q = supabase
       .from('jobs')
       .select('id, job_number, title, status, description')
@@ -119,11 +104,14 @@ export default function JobsScreen() {
             >
               <View style={styles.cardHeader}>
                 <Text style={styles.jobNumber}>{job.job_number}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLOR[job.status] ?? '#9ca3af') + '20' }]}>
-                  <Text style={[styles.statusText, { color: STATUS_COLOR[job.status] ?? '#9ca3af' }]}>
-                    {STATUS_LABEL[job.status] ?? job.status}
-                  </Text>
-                </View>
+                {(() => {
+                  const { hex, label } = resolveStatus(statuses, job.status)
+                  return (
+                    <View style={[styles.statusBadge, { backgroundColor: hex + '20' }]}>
+                      <Text style={[styles.statusText, { color: hex }]}>{label}</Text>
+                    </View>
+                  )
+                })()}
               </View>
               <Text style={styles.jobTitle} numberOfLines={1}>{job.title}</Text>
               {job.description && (

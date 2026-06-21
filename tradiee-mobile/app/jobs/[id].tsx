@@ -9,35 +9,19 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '@/lib/supabase'
+import { getJobStatuses, resolveStatus, statusHex, DEFAULT_JOB_STATUSES, type JobStatus } from '@/lib/job-statuses'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 type ActiveJob = { jobId: string; timesheetId: string; startedAt: string }
 
-const STATUS_COLOR: Record<string, string> = {
+// Visit statuses are a fixed enum (not the company's custom job statuses).
+const VISIT_STATUS_COLOR: Record<string, string> = {
   unscheduled: '#6b7280',
   scheduled:   '#3b82f6',
   in_progress: '#f97316',
   on_hold:     '#eab308',
   completed:   '#22c55e',
   cancelled:   '#ef4444',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  unscheduled: 'Unscheduled',
-  scheduled:   'Scheduled',
-  in_progress: 'In progress',
-  on_hold:     'On hold',
-  completed:   'Completed',
-  cancelled:   'Cancelled',
-}
-
-const NEXT_STATUSES: Record<string, string[]> = {
-  unscheduled: ['scheduled', 'in_progress', 'cancelled'],
-  scheduled:   ['in_progress', 'on_hold', 'cancelled'],
-  in_progress: ['on_hold', 'completed', 'cancelled'],
-  on_hold:     ['in_progress', 'completed', 'cancelled'],
-  completed:   [],
-  cancelled:   [],
 }
 
 type Job = {
@@ -81,6 +65,17 @@ export default function JobDetailScreen() {
   const [elapsed, setElapsed] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
+  const [statuses, setStatuses] = useState<JobStatus[]>(DEFAULT_JOB_STATUSES)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('company_id').eq('id', user.id).single()
+        .then(({ data: profile }) => {
+          if (profile?.company_id) getJobStatuses(profile.company_id).then(setStatuses)
+        })
+    })
+  }, [])
 
   useFocusEffect(useCallback(() => {
     AsyncStorage.getItem(ACTIVE_JOB_KEY).then(raw => {
@@ -299,7 +294,8 @@ export default function JobDetailScreen() {
     )
   }
 
-  const nextStatuses = NEXT_STATUSES[job.status] ?? []
+  const otherStatuses = statuses.filter(s => s.key !== job.status)
+  const current = resolveStatus(statuses, job.status)
   const materialsTotal = (materials ?? []).reduce((sum, m) => sum + m.quantity * m.unit_price, 0)
 
   return (
@@ -315,15 +311,13 @@ export default function JobDetailScreen() {
               <Text style={styles.title}>{job.title}</Text>
             </View>
             <TouchableOpacity
-              style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[job.status] + '20' }]}
-              onPress={() => nextStatuses.length > 0 && setShowStatusPicker(true)}
-              activeOpacity={nextStatuses.length > 0 ? 0.7 : 1}
+              style={[styles.statusBadge, { backgroundColor: current.hex + '20' }]}
+              onPress={() => otherStatuses.length > 0 && setShowStatusPicker(true)}
+              activeOpacity={otherStatuses.length > 0 ? 0.7 : 1}
             >
               {updatingStatus
-                ? <ActivityIndicator size="small" color={STATUS_COLOR[job.status]} />
-                : <Text style={[styles.statusText, { color: STATUS_COLOR[job.status] }]}>
-                    {STATUS_LABEL[job.status] ?? job.status}
-                  </Text>
+                ? <ActivityIndicator size="small" color={current.hex} />
+                : <Text style={[styles.statusText, { color: current.hex }]}>{current.label}</Text>
               }
             </TouchableOpacity>
           </View>
@@ -360,10 +354,10 @@ export default function JobDetailScreen() {
             <Text style={styles.sectionTitle}>Visits</Text>
             {visits!.map(v => (
               <View key={v.id} style={styles.visitRow}>
-                <View style={[styles.dot, { backgroundColor: STATUS_COLOR[v.status] ?? '#9ca3af' }]} />
+                <View style={[styles.dot, { backgroundColor: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]} />
                 <Text style={styles.visitText}>{formatDateTime(v.scheduled_start)}</Text>
-                <View style={[styles.minibadge, { backgroundColor: (STATUS_COLOR[v.status] ?? '#9ca3af') + '20' }]}>
-                  <Text style={[styles.minibadgeText, { color: STATUS_COLOR[v.status] ?? '#9ca3af' }]}>
+                <View style={[styles.minibadge, { backgroundColor: (VISIT_STATUS_COLOR[v.status] ?? '#9ca3af') + '20' }]}>
+                  <Text style={[styles.minibadgeText, { color: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]}>
                     {v.status.replace('_', ' ')}
                   </Text>
                 </View>
@@ -497,10 +491,10 @@ export default function JobDetailScreen() {
         <TouchableOpacity style={styles.overlay} onPress={() => setShowStatusPicker(false)} activeOpacity={1}>
           <View style={styles.picker}>
             <Text style={styles.pickerTitle}>Update Status</Text>
-            {nextStatuses.map(s => (
-              <TouchableOpacity key={s} style={styles.pickerRow} onPress={() => updateStatus(s)}>
-                <View style={[styles.dot, { backgroundColor: STATUS_COLOR[s] }]} />
-                <Text style={styles.pickerLabel}>{STATUS_LABEL[s]}</Text>
+            {otherStatuses.map(s => (
+              <TouchableOpacity key={s.key} style={styles.pickerRow} onPress={() => updateStatus(s.key)}>
+                <View style={[styles.dot, { backgroundColor: statusHex(s.color) }]} />
+                <Text style={styles.pickerLabel}>{s.label}</Text>
               </TouchableOpacity>
             ))}
           </View>

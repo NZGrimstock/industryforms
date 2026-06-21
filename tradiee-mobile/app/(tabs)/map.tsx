@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { router, useFocusEffect } from 'expo-router'
 import { supabase } from '@/lib/supabase'
+import { getJobStatuses } from '@/lib/job-statuses'
 
 type MapJob = {
   id: string
@@ -18,8 +19,6 @@ type MapJob = {
   customer: string | null
   phone: string | null
 }
-
-const ACTIVE = ['unscheduled', 'scheduled', 'in_progress', 'on_hold']
 
 function hasCoords(j: MapJob) {
   return Number.isFinite(j.lat) && Number.isFinite(j.lng)
@@ -59,11 +58,15 @@ export default function MapScreen() {
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile) { setLoading(false); return }
 
+    // "Active" = any non-terminal status (respects the company's custom statuses).
+    const statuses = await getJobStatuses(profile.company_id)
+    const activeKeys = statuses.filter(s => !s.is_terminal).map(s => s.key)
+
     let q = supabase
       .from('jobs')
       .select('id, job_number, title, status, assigned_to, customer_sites!site_id(lat, lng, address), customers(name, phone)')
       .eq('company_id', profile.company_id)
-      .in('status', ACTIVE)
+      .in('status', activeKeys)
     if (mine) q = q.eq('assigned_to', user.id)
     const { data } = await q.limit(200)
 
