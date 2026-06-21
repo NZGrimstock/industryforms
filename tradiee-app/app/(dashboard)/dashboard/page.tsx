@@ -61,10 +61,10 @@ export default async function DashboardPage() {
   }, 0)
 
   const stats = [
-    { label: 'Open quotes', value: openQuotes, icon: FileText, href: '/quotes', color: 'text-blue-600 bg-blue-50' },
-    { label: 'Active jobs', value: activeJobs, icon: Briefcase, href: '/jobs', color: 'text-orange-600 bg-orange-50' },
-    { label: 'Outstanding', value: formatCurrency(outstanding), icon: Receipt, href: '/invoices', color: 'text-green-600 bg-green-50' },
-    { label: 'Hours this week', value: recentHours.toFixed(1) + 'h', icon: Clock, href: '/timesheets', color: 'text-purple-600 bg-purple-50' },
+    { label: 'Open quotes', value: openQuotes, icon: FileText, href: '/quotes', color: 'text-blue-600 bg-blue-50', ring: 'group-hover:ring-blue-200' },
+    { label: 'Active jobs', value: activeJobs, icon: Briefcase, href: '/jobs', color: 'text-orange-600 bg-orange-50', ring: 'group-hover:ring-orange-200' },
+    { label: 'Outstanding', value: formatCurrency(outstanding), icon: Receipt, href: '/invoices', color: 'text-green-600 bg-green-50', ring: 'group-hover:ring-green-200' },
+    { label: 'Hours this week', value: recentHours.toFixed(1) + 'h', icon: Clock, href: '/timesheets', color: 'text-purple-600 bg-purple-50', ring: 'group-hover:ring-purple-200' },
   ]
 
   const recentJobs = jobs.slice(0, 5)
@@ -114,16 +114,16 @@ export default async function DashboardPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map(s => (
-            <Link key={s.label} href={s.href}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardContent className="flex items-center gap-4 py-5">
-                  <div className={`rounded-xl p-3 ${s.color}`}>
-                    <s.icon className="h-5 w-5" />
+            <Link key={s.label} href={s.href} className="group">
+              <Card className={`cursor-pointer transition-all duration-150 ring-1 ring-transparent group-hover:-translate-y-0.5 group-hover:shadow-md ${s.ring}`}>
+                <CardContent className="py-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`rounded-xl p-2.5 ${s.color}`}>
+                      <s.icon className="h-5 w-5" />
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500">{s.label}</p>
-                    <p className="text-xl font-bold text-gray-900">{s.value}</p>
-                  </div>
+                  <p className="text-2xl font-bold tracking-tight text-gray-900 tabular-nums">{s.value}</p>
+                  <p className="text-xs font-medium text-gray-500 mt-0.5">{s.label}</p>
                 </CardContent>
               </Card>
             </Link>
