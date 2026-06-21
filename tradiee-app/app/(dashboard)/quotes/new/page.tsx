@@ -9,11 +9,12 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate)').eq('id', user!.id).single()
 
-  const [customersRes, priceItemsRes, kitsRes, companyRes] = await Promise.all([
+  const [customersRes, priceItemsRes, kitsRes, companyRes, ratesRes] = await Promise.all([
     supabase.from('customers').select('id, name, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('*').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('companies').select('default_terms').eq('id', profile!.company_id).single(),
+    supabase.from('billing_rates').select('id, name, rate').eq('company_id', profile!.company_id).order('name'),
   ])
 
   const nextNumber = await nextDocNumber(supabase, profile!.company_id, 'quote')
@@ -32,6 +33,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         kits={kitsRes.data ?? []}
         defaultCustomerId={sp.customerId}
         defaultTerms={companyRes.data?.default_terms ?? undefined}
+        billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
       />
     </>
   )

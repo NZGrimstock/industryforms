@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
+import { BillingRatesManager, PaymentMethodsManager } from '@/components/forms/company-lists'
 import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2 } from 'lucide-react'
 
 interface Props {
@@ -52,6 +53,9 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     invoice_prefix: (company as Company & { invoice_prefix?: string }).invoice_prefix ?? 'INV-',
     job_prefix: (company as Company & { job_prefix?: string }).job_prefix ?? 'J-',
     po_prefix: (company as Company & { po_prefix?: string }).po_prefix ?? 'PO-',
+    payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
+    invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
+    quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -334,8 +338,22 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Applied to newly created documents, e.g. {companyForm.quote_prefix}0001.</p>
               </div>
+              <div>
+                <Label>Payment instructions</Label>
+                <Textarea value={companyForm.payment_instructions} onChange={e => setC('payment_instructions', e.target.value)} rows={2} placeholder="e.g. Direct credit to 12-3456-7890123-00, reference your invoice number." />
+                <p className="text-xs text-gray-400 mt-1">Shown to customers on the online invoice.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><Label>Invoice footer</Label><Textarea value={companyForm.invoice_footer} onChange={e => setC('invoice_footer', e.target.value)} rows={2} placeholder="Thanks for your business!" /></div>
+                <div><Label>Quote footer</Label><Textarea value={companyForm.quote_footer} onChange={e => setC('quote_footer', e.target.value)} rows={2} placeholder="We look forward to working with you." /></div>
+              </div>
               <Button type="submit" loading={loading}>Save settings</Button>
             </form>
+
+            <div className="mt-8 pt-6 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-8">
+              <BillingRatesManager companyId={company.id} />
+              <PaymentMethodsManager companyId={company.id} />
+            </div>
           </CardContent>
         </Card>
       )}

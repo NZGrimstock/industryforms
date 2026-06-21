@@ -11,9 +11,12 @@ import { NewJobButton } from './client'
 import { JobBoard } from './board'
 import { JobTemplatesPanel, ServiceRemindersPanel } from './panels'
 import { ListSearch } from '@/components/ui/list-search'
+import { SortHeader } from '@/components/ui/sort-header'
 import { nextDocNumber } from '@/lib/numbering'
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string }> }) {
+const SORTABLE = ['job_number', 'title', 'status', 'created_at']
+
+export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string; sort?: string; dir?: string }> }) {
   const sp = await searchParams
   const tab = (sp.tab ?? 'jobs') as 'jobs' | 'recurring' | 'templates' | 'reminders'
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
@@ -33,7 +36,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   if (view === 'list' && sp.status) query = query.eq('status', sp.status)
   if (view === 'list' && sp.q) query = query.or(`job_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
   if (view === 'board' && tab === 'jobs') query = query.not('status', 'in', '(cancelled)')
-  const { data: jobs } = await query.order('created_at', { ascending: false })
+  const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
+  const asc = sp.sort ? sp.dir === 'asc' : false
+  const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
+  const { data: jobs } = await query.order(sortCol, { ascending: asc })
 
   const statuses = ['unscheduled', 'scheduled', 'in_progress', 'on_hold', 'completed', 'cancelled']
   const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
@@ -112,13 +118,13 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Job #</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Title</th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Job #" column="job_number" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Title" column="title" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Customer</th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Reference</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Status" column="status" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
                     <th className="text-left px-6 py-3 font-medium text-gray-500">Assigned to</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Created</th>
+                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Created" column="created_at" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">

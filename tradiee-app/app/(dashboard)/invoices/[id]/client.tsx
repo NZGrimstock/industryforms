@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -45,6 +45,17 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
   const [lineForm, setLineForm] = useState({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount' as 'amount' | 'percent' })
   const [paymentForm, setPaymentForm] = useState({ amount: (invoice.total - invoice.amount_paid).toString(), method: 'bank_transfer', notes: '' })
   const [discountForm, setDiscountForm] = useState({ value: (invoice.discount_value || 0).toString(), type: (invoice.discount_type ?? 'amount') as 'amount' | 'percent' })
+
+  // Company-configured payment methods (fall back to built-ins when none set).
+  const DEFAULT_METHODS = [
+    { value: 'bank_transfer', label: 'Bank transfer' }, { value: 'stripe', label: 'Stripe / card' },
+    { value: 'cash', label: 'Cash' }, { value: 'cheque', label: 'Cheque' }, { value: 'other', label: 'Other' },
+  ]
+  const [methodOptions, setMethodOptions] = useState(DEFAULT_METHODS)
+  useEffect(() => {
+    supabase.from('payment_methods').select('name').eq('company_id', companyId).eq('is_active', true).order('sort_order')
+      .then(({ data }) => { if (data && data.length) setMethodOptions(data.map(m => ({ value: m.name, label: m.name }))) })
+  }, [companyId, supabase])
 
   async function addLine(e: React.FormEvent) {
     e.preventDefault()
@@ -222,13 +233,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, xeroConnected
         <form onSubmit={recordPayment} className="space-y-4">
           <div><Label>Amount <span className="text-red-400">*</span></Label><Input type="number" step="0.01" value={paymentForm.amount} onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))} required /></div>
           <div><Label>Method</Label>
-            <Select value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} options={[
-              { value: 'bank_transfer', label: 'Bank transfer' },
-              { value: 'stripe', label: 'Stripe / card' },
-              { value: 'cash', label: 'Cash' },
-              { value: 'cheque', label: 'Cheque' },
-              { value: 'other', label: 'Other' },
-            ]} />
+            <Select value={paymentForm.method} onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))} options={methodOptions} />
           </div>
           <div><Label>Notes</Label><Input value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} /></div>
           <div className="flex gap-3"><Button type="submit" loading={loading}>Record payment</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>

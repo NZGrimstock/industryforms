@@ -4,22 +4,28 @@ import { Card } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ListSearch } from '@/components/ui/list-search'
+import { SortHeader } from '@/components/ui/sort-header'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { FileText, Plus } from 'lucide-react'
 
 const statuses = ['draft', 'sent', 'accepted', 'declined', 'expired']
+const SORTABLE = ['quote_number', 'status', 'total', 'created_at']
 
-export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
+export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; sort?: string; dir?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
 
+  const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
+  const asc = sp.sort ? sp.dir === 'asc' : false
+  const params = { ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
+
   let query = supabase.from('quotes').select('*, customers(name)').eq('company_id', profile!.company_id)
   if (sp.status) query = query.eq('status', sp.status)
   if (sp.q) query = query.or(`quote_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
-  const { data: quotes } = await query.order('created_at', { ascending: false })
+  const { data: quotes } = await query.order(sortCol, { ascending: asc })
 
   return (
     <>
@@ -52,13 +58,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Quote #</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Quote #" column="quote_number" basePath="/quotes" params={params} sort={sp.sort} dir={sp.dir} /></th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Customer</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Title</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Reference</th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
-                  <th className="text-right px-6 py-3 font-medium text-gray-500">Total</th>
-                  <th className="text-left px-6 py-3 font-medium text-gray-500">Date</th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Status" column="status" basePath="/quotes" params={params} sort={sp.sort} dir={sp.dir} /></th>
+                  <th className="text-right px-6 py-3 font-medium text-gray-500"><SortHeader label="Total" column="total" basePath="/quotes" params={params} sort={sp.sort} dir={sp.dir} align="right" /></th>
+                  <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Date" column="created_at" basePath="/quotes" params={params} sort={sp.sort} dir={sp.dir} /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">

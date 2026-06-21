@@ -6,6 +6,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { discountLabel } from '@/lib/pricing'
 import { InvoiceDetailClient } from './client'
+import { RecurringInvoiceCard } from './recurring-card'
 import Link from 'next/link'
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -117,6 +118,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             </table>
           )}
         </Card>
+
+        {/* Recurring */}
+        <RecurringInvoiceCard
+          invoiceId={invoice.id}
+          initial={{ isRecurring: !!invoice.is_recurring, rule: invoice.recurrence_rule ?? null, next: invoice.recurrence_next ?? null, end: invoice.recurrence_end ?? null }}
+        />
 
         {/* Payments */}
         {(invoice.payments ?? []).length > 0 && (

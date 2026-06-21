@@ -10,7 +10,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
 
   const { data: invoice } = await supabase
     .from('invoices')
-    .select('*, customers(name, email, billing_address), companies(name, email, phone, gst_number, logo_url), jobs(job_number, title), invoice_line_items(*)')
+    .select('*, customers(name, email, billing_address), companies(name, email, phone, gst_number, logo_url, payment_instructions, invoice_footer), jobs(job_number, title), invoice_line_items(*)')
     .eq('public_token', token)
     .single()
 
@@ -20,7 +20,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
     await supabase.from('invoices').update({ viewed_at: new Date().toISOString() }).eq('id', invoice.id)
   }
 
-  const company = invoice.companies as { name: string; email: string | null; phone: string | null; gst_number: string | null }
+  const company = invoice.companies as { name: string; email: string | null; phone: string | null; gst_number: string | null; payment_instructions: string | null; invoice_footer: string | null }
   const customer = invoice.customers as { name: string; email: string | null; billing_address: string | null }
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
 
@@ -129,6 +129,13 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
           </div>
         )}
 
+        {company.payment_instructions && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 text-sm">
+            <h2 className="font-semibold text-gray-700 mb-1.5">Payment instructions</h2>
+            <p className="text-gray-600 whitespace-pre-wrap">{company.payment_instructions}</p>
+          </div>
+        )}
+        {company.invoice_footer && <p className="text-center text-sm text-gray-500 whitespace-pre-wrap">{company.invoice_footer}</p>}
         <p className="text-center text-xs text-gray-300 pb-4">Powered by IndustryForms</p>
       </div>
     </div>

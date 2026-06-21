@@ -271,6 +271,7 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
       customer_id: job.customer_id,
       job_id: job.id,
       invoice_number: nextInvoiceNumber,
+      reference: (job as { reference?: string | null }).reference ?? null,
       status: 'draft',
       is_progress_invoice: isProgress,
       progress_pct: isProgress ? pct : null,

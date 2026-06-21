@@ -59,6 +59,7 @@ interface Props {
   kits: (Kit & { kit_items: ({ price_list_items: PriceListItem; quantity: number; sort_order: number; id: string; kit_id: string; price_list_item_id: string })[] })[]
   defaultCustomerId?: string
   defaultTerms?: string
+  billingRates?: { id: string; name: string; rate: number }[]
   editQuote?: EditQuoteData
 }
 
@@ -132,7 +133,7 @@ function CustomerCombobox({ customers, value, onChange }: {
   )
 }
 
-export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, editQuote }: Props) {
+export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], editQuote }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
@@ -413,6 +414,17 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                           <div className="flex items-center gap-2">
                             {l.type === 'labour' && <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
                             <Input value={l.description} onChange={e => updateLine(s.id, l.id, 'description', e.target.value)} className="h-7 text-sm" placeholder={l.type === 'labour' ? 'Labour description…' : 'Description…'} />
+                            {l.type === 'labour' && billingRates.length > 0 && (
+                              <select
+                                className="h-7 text-xs border border-gray-200 rounded px-1 text-gray-500 shrink-0"
+                                value=""
+                                onChange={e => { const r = billingRates.find(b => b.id === e.target.value); if (r) updateLine(s.id, l.id, 'unit_price', r.rate) }}
+                                title="Apply billing rate"
+                              >
+                                <option value="">Rate…</option>
+                                {billingRates.map(r => <option key={r.id} value={r.id}>{r.name} (${Number(r.rate).toFixed(0)})</option>)}
+                              </select>
+                            )}
                           </div>
                         </td>
                         <td className="px-3 py-2">

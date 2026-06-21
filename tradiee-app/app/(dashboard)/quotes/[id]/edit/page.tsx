@@ -18,10 +18,11 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
 
   if (!quote || quote.status !== 'draft') notFound()
 
-  const [customersRes, priceItemsRes, kitsRes] = await Promise.all([
+  const [customersRes, priceItemsRes, kitsRes, ratesRes] = await Promise.all([
     supabase.from('customers').select('id, name, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('*').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
+    supabase.from('billing_rates').select('id, name, rate').eq('company_id', profile!.company_id).order('name'),
   ])
 
   const gstRate = (profile?.companies as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15
@@ -81,6 +82,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         customers={(customersRes.data ?? []) as unknown as Parameters<typeof QuoteBuilder>[0]['customers']}
         priceItems={priceItemsRes.data ?? []}
         kits={kitsRes.data ?? []}
+        billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         editQuote={editQuote}
       />
     </>

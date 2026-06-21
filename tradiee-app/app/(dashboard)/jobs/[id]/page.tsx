@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { presignedDownload } from '@/lib/r2'
 import { nextDocNumber } from '@/lib/numbering'
+import { RecurringJobCard } from './recurring-card'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
@@ -250,6 +251,17 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             </CardContent>
           </Card>
         )}
+
+        {/* Recurring */}
+        <RecurringJobCard
+          jobId={job.id}
+          initial={{
+            isRecurring: !!job.is_recurring,
+            rule: job.recurrence_rule ?? null,
+            next: job.recurrence_next ?? null,
+            end: job.recurrence_end ?? null,
+          }}
+        />
 
         {/* Visits / Schedule */}
         <Card>

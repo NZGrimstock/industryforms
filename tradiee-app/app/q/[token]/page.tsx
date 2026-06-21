@@ -11,7 +11,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
   // Fetch via service role — customer has no auth.uid(), so we bypass RLS here
   const { data: quote } = await supabase
     .from('quotes')
-    .select('*, customers(name, email, phone), customer_sites(label, address), companies(name, email, phone, logo_url, gst_number), quote_sections(*, quote_line_items(*))')
+    .select('*, customers(name, email, phone), customer_sites(label, address), companies(name, email, phone, logo_url, gst_number, quote_footer), quote_sections(*, quote_line_items(*))')
     .eq('public_token', token)
     .single()
 
@@ -22,7 +22,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
     await supabase.from('quotes').update({ viewed_at: new Date().toISOString() }).eq('id', quote.id)
   }
 
-  const company = quote.companies as { name: string; email: string | null; phone: string | null; logo_url: string | null; gst_number: string | null }
+  const company = quote.companies as { name: string; email: string | null; phone: string | null; logo_url: string | null; gst_number: string | null; quote_footer: string | null }
   const customer = quote.customers as { name: string; email: string | null }
   const sections = [...(quote.quote_sections ?? [])].sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
   const canRespond = ['sent', 'draft'].includes(quote.status)
@@ -125,6 +125,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
           <div className="text-center py-6 text-gray-500">This quote was declined.</div>
         )}
 
+        {company.quote_footer && <p className="text-center text-sm text-gray-500 whitespace-pre-wrap">{company.quote_footer}</p>}
         <p className="text-center text-xs text-gray-300 pb-4">Powered by IndustryForms</p>
       </div>
     </div>

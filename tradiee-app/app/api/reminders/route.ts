@@ -180,6 +180,39 @@ async function runReminders() {
     }
   }
 
+  // ── Recurring invoices ────────────────────────────────────────────────────
+  // Clone due recurring invoices (header + line items) as fresh drafts.
+  const { data: recInvoices } = await service
+    .from('invoices')
+    .select('id, company_id, customer_id, job_id, reference, subtotal, discount_type, discount_value, discount_amount, gst_amount, total, terms, recurrence_rule, recurrence_next, recurrence_end')
+    .eq('is_recurring', true)
+    .not('recurrence_next', 'is', null)
+    .lte('recurrence_next', today)
+
+  for (const ri of recInvoices ?? []) {
+    if (ri.recurrence_end && ri.recurrence_end < today) continue
+    try {
+      const invNumber = await nextDocNumber(service, ri.company_id as string, 'invoice')
+      const { data: newInv } = await service.from('invoices').insert({
+        company_id: ri.company_id, customer_id: ri.customer_id, job_id: ri.job_id,
+        invoice_number: invNumber, reference: ri.reference, status: 'draft',
+        subtotal: ri.subtotal, discount_type: ri.discount_type, discount_value: ri.discount_value,
+        discount_amount: ri.discount_amount, gst_amount: ri.gst_amount, total: ri.total,
+        amount_paid: 0, terms: ri.terms,
+      }).select('id').single()
+      if (newInv) {
+        const { data: lines } = await service.from('invoice_line_items').select('type, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order').eq('invoice_id', ri.id)
+        if (lines && lines.length) {
+          await service.from('invoice_line_items').insert(lines.map(l => ({ ...l, invoice_id: newInv.id })))
+        }
+      }
+      await service.from('invoices').update({ recurrence_next: addInterval(ri.recurrence_next as string, ri.recurrence_rule as string | null) }).eq('id', ri.id)
+      sent.push(`Recurring invoice ${invNumber}`)
+    } catch (e) {
+      errors.push(`Recurring invoice ${ri.id}: ${e instanceof Error ? e.message : 'failed'}`)
+    }
+  }
+
   // ── Service reminders ─────────────────────────────────────────────────────
   const { data: dueReminders } = await service
     .from('service_reminders')

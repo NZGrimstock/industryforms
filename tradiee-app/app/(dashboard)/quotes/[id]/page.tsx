@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
+import { nextDocNumber } from '@/lib/numbering'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
@@ -24,9 +25,13 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
 
   const sections = (quote.quote_sections ?? []).sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
 
-  // Next job number
-  const { count } = await supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('company_id', profile!.company_id)
-  const nextJobNumber = `J-${String((count ?? 0) + 1).padStart(4, '0')}`
+  // Gross profit (internal): sell subtotal minus cost of all line items
+  const allLines = sections.flatMap((s: { quote_line_items?: { quantity: number; unit_cost: number | null }[] }) => s.quote_line_items ?? [])
+  const totalCost = allLines.reduce((sum: number, l: { quantity: number; unit_cost: number | null }) => sum + Number(l.quantity) * Number(l.unit_cost ?? 0), 0)
+  const grossProfit = Number(quote.subtotal) - totalCost
+  const margin = Number(quote.subtotal) > 0 ? (grossProfit / Number(quote.subtotal)) * 100 : 0
+
+  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   return (
     <>
@@ -100,6 +105,10 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
             </div>
             <div className="flex justify-end gap-12 font-semibold text-gray-900 text-base border-t border-gray-200 pt-2">
               <span>Total</span><span>{formatCurrency(quote.total)}</span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs text-gray-400 pt-1">
+              <span>Gross profit (internal)</span>
+              <span className={grossProfit < 0 ? 'text-red-500' : 'text-green-600'}>{formatCurrency(grossProfit)} · {margin.toFixed(0)}%</span>
             </div>
           </div>
         </Card>
