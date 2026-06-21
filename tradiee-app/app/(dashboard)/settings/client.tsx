@@ -27,7 +27,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [tab, setTab] = useState<'company' | 'profile' | 'team' | 'billing'>('company')
+  const [tab, setTab] = useState<'company' | 'profile' | 'team' | 'integrations' | 'billing'>('company')
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editMember, setEditMember] = useState<Profile | null>(null)
@@ -251,7 +251,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   return (
     <div className="p-6">
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
-        {(['company', 'profile', 'team', 'billing'] as const).map(t => (
+        {(['company', 'profile', 'team', 'integrations', 'billing'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>
             {t}
           </button>
@@ -477,9 +477,60 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         onSave={(b64) => { setSignatureB64(b64); setSigModalOpen(false) }}
       />
 
-      {tab === 'billing' && (
+      {tab === 'integrations' && (
         <div className="space-y-6 max-w-2xl">
-          <BillingTab company={company} googleConnected={googleConnected} onGoogleSync={syncGoogleCalendar} onGoogleDisconnect={disconnectGoogleCalendar} googleSyncing={googleSyncing} googleDisconnecting={googleDisconnecting} />
+          {/* Google Calendar */}
+          <Card>
+            <CardHeader><CardTitle>Google Calendar</CardTitle></CardHeader>
+            <CardContent>
+              {googleConnected ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-700">&#10003; Connected</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Upcoming visits are synced to your Google Calendar</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" loading={googleSyncing} onClick={syncGoogleCalendar}>Sync now</Button>
+                    <Button size="sm" variant="outline" loading={googleDisconnecting} onClick={disconnectGoogleCalendar}>Disconnect</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">Connect Google Calendar to sync job visits automatically</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Syncs upcoming visits (next 60 days) to your personal calendar</p>
+                  </div>
+                  <a href="/api/google/auth" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#4285F4] text-white rounded-lg hover:bg-[#3367d6] transition-colors">Connect Google Calendar</a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Xero */}
+          <Card>
+            <CardHeader><CardTitle>Xero accounting</CardTitle></CardHeader>
+            <CardContent>
+              {company.xero_tenant_id ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-700">✓ Connected to Xero</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Sync invoices from the invoice detail page</p>
+                  </div>
+                  <a href="/api/xero/auth" className="text-xs text-orange-500 hover:underline">Reconnect</a>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">Connect your Xero account to sync invoices automatically</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Requires XERO_CLIENT_ID + XERO_CLIENT_SECRET</p>
+                  </div>
+                  <a href="/api/xero/auth" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#13B5EA] text-white rounded-lg hover:bg-[#0fa0d5] transition-colors">Connect Xero</a>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Import */}
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-orange-500" />Import data</CardTitle></CardHeader>
             <CardContent>
@@ -489,6 +540,12 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </Link>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {tab === 'billing' && (
+        <div className="space-y-6 max-w-2xl">
+          <BillingTab company={company} />
         </div>
       )}
 
@@ -710,14 +767,7 @@ const PLANS = [
   { key: 'pro', label: 'Pro', price: '$149/mo', desc: 'Unlimited users + priority support' },
 ]
 
-function BillingTab({ company, googleConnected, onGoogleSync, onGoogleDisconnect, googleSyncing, googleDisconnecting }: {
-  company: Company
-  googleConnected: boolean
-  onGoogleSync: () => void
-  onGoogleDisconnect: () => void
-  googleSyncing: boolean
-  googleDisconnecting: boolean
-}) {
+function BillingTab({ company }: { company: Company }) {
   const [loading, setLoading] = useState<string>('')
   const { toast } = useToast()
 
@@ -783,65 +833,6 @@ function BillingTab({ company, googleConnected, onGoogleSync, onGoogleDisconnect
         </div>
       )}
 
-      <Card>
-        <CardHeader><CardTitle>Xero integration</CardTitle></CardHeader>
-        <CardContent>
-          {company.xero_tenant_id ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">✓ Connected to Xero</p>
-                <p className="text-xs text-gray-400 mt-0.5">Sync invoices from the invoice detail page</p>
-              </div>
-              <a href="/api/xero/auth" className="text-xs text-orange-500 hover:underline">Reconnect</a>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-700">Connect your Xero account to sync invoices automatically</p>
-                <p className="text-xs text-gray-400 mt-0.5">Required: XERO_CLIENT_ID + XERO_CLIENT_SECRET in .env.local</p>
-              </div>
-              <a href="/api/xero/auth" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#13B5EA] text-white rounded-lg hover:bg-[#0fa0d5] transition-colors">
-                Connect Xero
-              </a>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Google Calendar</CardTitle></CardHeader>
-        <CardContent>
-          {googleConnected ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-700">&#10003; Connected</p>
-                <p className="text-xs text-gray-400 mt-0.5">Upcoming visits are synced to your Google Calendar</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" loading={googleSyncing} onClick={onGoogleSync}>
-                  Sync now
-                </Button>
-                <Button size="sm" variant="outline" loading={googleDisconnecting} onClick={onGoogleDisconnect}>
-                  Disconnect
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-700">Connect Google Calendar to sync job visits automatically</p>
-                <p className="text-xs text-gray-400 mt-0.5">Syncs upcoming visits (next 60 days) to your personal calendar</p>
-              </div>
-              <a
-                href="/api/google/auth"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#4285F4] text-white rounded-lg hover:bg-[#3367d6] transition-colors"
-              >
-                Connect Google Calendar
-              </a>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

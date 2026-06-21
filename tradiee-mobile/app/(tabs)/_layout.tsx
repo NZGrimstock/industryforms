@@ -9,6 +9,7 @@ type FeatherName = React.ComponentProps<typeof Feather>['name']
 
 const TABS: { name: string; label: string; icon: FeatherName; shortLabel?: string }[] = [
   { name: 'jobs',        label: 'Jobs',        icon: 'briefcase' },
+  { name: 'map',         label: 'Map',          icon: 'map' },
   { name: 'invitations', label: 'Invitations',  icon: 'mail' },
   { name: 'schedule',    label: 'Schedule',     icon: 'calendar' },
   { name: 'quotes',      label: 'Quotes',       icon: 'file-text' },
