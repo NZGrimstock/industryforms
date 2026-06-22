@@ -33,6 +33,12 @@ export type ContactSection = {
   heading: string
   showForm: boolean
 }
+export type BookingSection = {
+  type: 'booking'
+  heading: string
+  subheading?: string
+  ctaLabel?: string
+}
 
 export type WebsiteSection =
   | HeroSection
@@ -41,6 +47,7 @@ export type WebsiteSection =
   | GallerySection
   | TestimonialsSection
   | ContactSection
+  | BookingSection
 
 export type WebsiteSectionType = WebsiteSection['type']
 
@@ -56,6 +63,7 @@ export const SECTION_LABELS: Record<WebsiteSectionType, string> = {
   gallery: 'Photo gallery',
   testimonials: 'Testimonials',
   contact: 'Contact',
+  booking: 'Book a visit',
 }
 
 export const DEFAULT_THEME: WebsiteTheme = { primary: '#f97316', font: 'sans' }
@@ -75,6 +83,8 @@ export function blankSection(type: WebsiteSectionType): WebsiteSection {
       return { type, heading: 'What customers say', items: [{ quote: '', author: '' }] }
     case 'contact':
       return { type, heading: 'Get in touch', showForm: true }
+    case 'booking':
+      return { type, heading: 'Book a visit', subheading: 'Pick a time that suits — we&apos;ll confirm by phone or email.', ctaLabel: 'Request booking' }
   }
 }
 

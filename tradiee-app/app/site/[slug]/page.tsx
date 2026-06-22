@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
 import { SectionBlock } from './sections'
 import { ContactForm } from './contact-form'
+import { BookingForm } from './booking-form'
 
 type SiteRow = {
   company_id: string
@@ -68,6 +69,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
           section={section}
           primary={theme.primary}
           ContactForm={<ContactForm slug={site.slug} primary={theme.primary} />}
+          BookingForm={<BookingForm slug={site.slug} primary={theme.primary} ctaLabel={section.type === 'booking' ? section.ctaLabel : undefined} />}
         />
       ))}
 
