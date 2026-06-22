@@ -88,6 +88,59 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${h(r)}${h(g)}${h(b)}`
 }
 
+// Top-N distinct dominant colours from an image URL (e.g. an uploaded logo).
+// Same hue bucketing as extractAccent, but returns the top `count` winners
+// instead of just one. Used by the website builder's AI palette suggestions.
+export async function extractPalette(url: string, count = 4): Promise<string[]> {
+  const img = await loadImage(url)
+  const size = 80
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return []
+  ctx.drawImage(img, 0, 0, size, size)
+  const data = ctx.getImageData(0, 0, size, size).data
+
+  const BUCKETS = 36
+  const buckets: { r: number; g: number; b: number; count: number; sat: number }[] =
+    Array.from({ length: BUCKETS }, () => ({ r: 0, g: 0, b: 0, count: 0, sat: 0 }))
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3]
+    if (a < 200) continue
+    const [h, s, l] = rgbToHsl(r, g, b)
+    if (l < 0.08 || l > 0.92 || s < 0.18) continue
+    const bi = Math.floor(h * BUCKETS) % BUCKETS
+    const bucket = buckets[bi]
+    bucket.r += r; bucket.g += g; bucket.b += b
+    bucket.sat += s; bucket.count++
+  }
+  const scored = buckets
+    .map((b, i) => ({ i, b, score: b.count ? b.count * (b.sat / b.count) : 0 }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, count)
+  return scored.map(({ b }) => rgbToHex(Math.round(b.r / b.count), Math.round(b.g / b.count), Math.round(b.b / b.count)))
+}
+
+// Sample the colour of a single pixel from an image at a normalised
+// (0–1, 0–1) position. Used when the user clicks on the logo preview to
+// pick a specific colour.
+export async function samplePixel(url: string, nx: number, ny: number): Promise<string | null> {
+  const img = await loadImage(url)
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth
+  canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return null
+  ctx.drawImage(img, 0, 0)
+  const x = Math.max(0, Math.min(canvas.width - 1, Math.floor(nx * canvas.width)))
+  const y = Math.max(0, Math.min(canvas.height - 1, Math.floor(ny * canvas.height)))
+  const [r, g, b, a] = Array.from(ctx.getImageData(x, y, 1, 1).data)
+  if (a < 20) return null
+  return rgbToHex(r, g, b)
+}
+
 // Darken a hex colour by `amount` (0–1) for hover states. Keeps the file
 // dep-free so DashboardShell can derive --accent-hover from --brand.
 export function darken(hex: string, amount = 0.1): string {

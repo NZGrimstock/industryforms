@@ -23,13 +23,19 @@ interface Props {
   company: Company
   team: Profile[]
   googleConnected: boolean
+  integrationStatus: {
+    twilio: boolean
+    resend: boolean
+    stripe: boolean
+    anthropic: boolean
+  }
 }
 
-export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected }: Props) {
+export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected, integrationStatus }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [tab, setTab] = useState<'company' | 'profile' | 'team' | 'integrations' | 'billing'>('company')
+  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription'>('business')
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editMember, setEditMember] = useState<Profile | null>(null)
@@ -292,24 +298,42 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
   return (
     <div className="p-6">
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
-        {(['company', 'profile', 'team', 'integrations', 'billing'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>
-            {t}
+      {/* Friendly grouped tab bar. Each tab owns one focused topic so a new
+          user can fumble through without prior context. */}
+      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1 mb-2 w-fit">
+        {([
+          { key: 'business',     label: 'Business' },
+          { key: 'workflow',     label: 'Workflow' },
+          { key: 'team',         label: 'Team' },
+          { key: 'profile',      label: 'My profile' },
+          { key: 'integrations', label: 'Integrations' },
+          { key: 'subscription', label: 'Subscription' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            {t.label}
           </button>
         ))}
       </div>
+      <p className="text-xs text-gray-500 mb-6">
+        {tab === 'business'     && 'Your business name, logo, branding and document defaults.'}
+        {tab === 'workflow'     && 'Customise the lists and rates that drive jobs, quotes and invoices.'}
+        {tab === 'team'         && 'Invite people, set their rate, and control what they can see.'}
+        {tab === 'profile'      && 'Your personal details, signature and trade qualifications.'}
+        {tab === 'integrations' && 'Connect external services — accounting, calendar, SMS, email.'}
+        {tab === 'subscription' && 'Your plan, billing history and seat usage.'}
+      </p>
 
-      {tab === 'company' && (
+      {tab === 'business' && (
         <Card className="max-w-2xl">
           <CardHeader><CardTitle>Business settings</CardTitle></CardHeader>
           <CardContent>
-            {/* Plan */}
-            <div className="flex items-center gap-3 mb-6 p-3 bg-orange-50 rounded-lg border border-orange-100">
+            {/* Plan summary — full management lives under the Subscription tab */}
+            <div className="flex items-center justify-between gap-3 mb-6 p-3 bg-orange-50 rounded-lg border border-orange-100">
               <div>
                 <p className="text-sm font-medium text-orange-800">Current plan: <strong>{planLabel[company.subscription_plan] ?? company.subscription_plan}</strong></p>
                 <p className="text-xs text-[var(--accent,#f97316)]">Status: {company.subscription_status}</p>
               </div>
+              <button type="button" onClick={() => setTab('subscription')} className="text-xs font-medium text-orange-700 hover:underline">Manage →</button>
             </div>
 
             {/* Logo */}
@@ -437,16 +461,48 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </div>
               <Button type="submit" loading={loading}>Save settings</Button>
             </form>
-
-            <div className="mt-8 pt-6 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-8">
-              <JobStatusesManager companyId={company.id} />
-              <TaxRatesManager companyId={company.id} />
-              <BillingRatesManager companyId={company.id} />
-              <PaymentMethodsManager companyId={company.id} />
-              <EnquiryInboxManager companyId={company.id} initialToken={(company as Company & { inbound_email_token?: string | null }).inbound_email_token ?? null} />
-            </div>
           </CardContent>
         </Card>
+      )}
+
+      {tab === 'workflow' && (
+        <div className="max-w-4xl space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Job statuses</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">The columns on the Jobs board and the dropdown on each job.</p>
+              <JobStatusesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Tax rates</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">GST, exempt, or any custom rate. Picked per line on quotes &amp; invoices.</p>
+              <TaxRatesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Hourly rates</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Saved hourly rates you can pick on timesheets &amp; quote lines (e.g. &ldquo;Standard&rdquo;, &ldquo;After-hours&rdquo;). Not your subscription plan — that&apos;s on the Subscription tab.</p>
+              <BillingRatesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Payment methods</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Methods that appear when recording a payment (cash, bank transfer, EFTPOS).</p>
+              <PaymentMethodsManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Enquiry inbox email</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Forward customer enquiries to this address — they land as enquiries automatically.</p>
+              <EnquiryInboxManager companyId={company.id} initialToken={(company as Company & { inbound_email_token?: string | null }).inbound_email_token ?? null} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {tab === 'profile' && (
@@ -614,6 +670,56 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             </CardContent>
           </Card>
 
+          {/* Platform integrations — credentials live in env vars, not the DB.
+              Cards display green-tick / amber-warning based on env presence. */}
+          <Card>
+            <CardHeader><CardTitle>Email sending (Resend)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.resend}
+                okText="Connected — quote, invoice, reminder and review-request emails will send."
+                missingText="Not configured — set RESEND_API_KEY and EMAIL_FROM in your Vercel project (Production + Preview env vars), then redeploy."
+                docs="https://resend.com/docs"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>SMS sending (Twilio)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.twilio}
+                okText="Connected — outgoing SMS and the two-way customer thread are live."
+                missingText="Not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER in your Vercel env vars, then redeploy. After that, in Twilio set the number's 'A MESSAGE COMES IN' webhook to https://app.industryforms.app/api/sms/inbound (POST)."
+                docs="https://www.twilio.com/docs/usage/secure-credentials"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Online payments (Stripe)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.stripe}
+                okText="Connected — customers can pay invoices online and Tap to Pay is unlocked."
+                missingText="Not configured — set STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY and STRIPE_WEBHOOK_SECRET in your Vercel env vars, then redeploy."
+                docs="https://docs.stripe.com/keys"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>AI (Anthropic Claude)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.anthropic}
+                okText="Connected — SmartWrite, AI quote drafting and the daily AI to-do list are active."
+                missingText="Not configured — set ANTHROPIC_API_KEY in your Vercel env vars, then redeploy."
+                docs="https://docs.anthropic.com/"
+              />
+            </CardContent>
+          </Card>
+
           {/* Import */}
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-orange-500" />Import data</CardTitle></CardHeader>
@@ -627,7 +733,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         </div>
       )}
 
-      {tab === 'billing' && (
+      {tab === 'subscription' && (
         <div className="space-y-6 max-w-2xl">
           <BillingTab company={company} />
         </div>
@@ -730,6 +836,31 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             </form>
           </Dialog>
         </div>
+      )}
+    </div>
+  )
+}
+
+// Compact configured/not-configured indicator for the Integrations cards.
+// Hides credential names by default; reveals the setup instructions inline.
+function StatusRow({ ok, okText, missingText, docs }: {
+  ok: boolean
+  okText: string
+  missingText: string
+  docs?: string
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1">
+        {ok ? (
+          <p className="text-sm font-medium text-green-700">&#10003; Connected</p>
+        ) : (
+          <p className="text-sm font-medium text-amber-700">Needs setup</p>
+        )}
+        <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{ok ? okText : missingText}</p>
+      </div>
+      {docs && (
+        <a href={docs} target="_blank" rel="noreferrer" className="text-xs text-gray-500 hover:underline shrink-0 mt-0.5">Docs →</a>
       )}
     </div>
   )
