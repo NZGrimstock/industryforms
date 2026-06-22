@@ -62,7 +62,7 @@ export default async function DashboardPage() {
 
   const stats = [
     { label: 'Open quotes', value: openQuotes, icon: FileText, href: '/quotes', color: 'text-blue-600 bg-blue-50', ring: 'group-hover:ring-blue-200' },
-    { label: 'Active jobs', value: activeJobs, icon: Briefcase, href: '/jobs', color: 'text-orange-600 bg-orange-50', ring: 'group-hover:ring-orange-200' },
+    { label: 'Active jobs', value: activeJobs, icon: Briefcase, href: '/jobs', color: 'text-[var(--accent,#f97316)] bg-orange-50', ring: 'group-hover:ring-orange-200' },
     { label: 'Outstanding', value: formatCurrency(outstanding), icon: Receipt, href: '/invoices', color: 'text-green-600 bg-green-50', ring: 'group-hover:ring-green-200' },
     { label: 'Hours this week', value: recentHours.toFixed(1) + 'h', icon: Clock, href: '/timesheets', color: 'text-purple-600 bg-purple-50', ring: 'group-hover:ring-purple-200' },
   ]
@@ -135,7 +135,7 @@ export default async function DashboardPage() {
           <Card>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">Recent jobs</h2>
-              <Link href="/jobs" className="text-xs text-orange-500 hover:text-orange-600">View all</Link>
+              <Link href="/jobs" className="text-xs text-orange-500 hover:text-[var(--accent,#f97316)]">View all</Link>
             </div>
             <CardContent className="p-0">
               {recentJobs.length === 0 ? (
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
           <Card>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">Overdue invoices</h2>
-              <Link href="/invoices?status=overdue" className="text-xs text-orange-500 hover:text-orange-600">View all</Link>
+              <Link href="/invoices?status=overdue" className="text-xs text-orange-500 hover:text-[var(--accent,#f97316)]">View all</Link>
             </div>
             <CardContent className="p-0">
               {overdueInvoices.length === 0 ? (
@@ -190,7 +190,7 @@ export default async function DashboardPage() {
           <Card>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">Job profitability</h2>
-              <Link href="/jobs?view=list&status=in_progress" className="text-xs text-orange-500 hover:text-orange-600">View jobs</Link>
+              <Link href="/jobs?view=list&status=in_progress" className="text-xs text-orange-500 hover:text-[var(--accent,#f97316)]">View jobs</Link>
             </div>
             <CardContent className="p-0">
               <ul className="divide-y divide-gray-50">
@@ -234,7 +234,7 @@ const statusColors: Record<string, string> = {
   unscheduled: 'bg-gray-100 text-gray-600',
   scheduled: 'bg-blue-100 text-blue-700',
   in_progress: 'bg-yellow-100 text-yellow-700',
-  on_hold: 'bg-orange-100 text-orange-700',
+  on_hold: 'bg-orange-100 text-[var(--accent,#f97316)]',
   completed: 'bg-green-100 text-green-700',
   cancelled: 'bg-red-100 text-red-700',
 }

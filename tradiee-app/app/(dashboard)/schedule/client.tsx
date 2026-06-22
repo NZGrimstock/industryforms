@@ -13,7 +13,7 @@ const STAFF_COLORS = [
   { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', sub: 'text-green-600', dot: 'bg-green-400' },
   { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-800', sub: 'text-pink-600', dot: 'bg-pink-400' },
   { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-800', sub: 'text-teal-600', dot: 'bg-teal-400' },
-  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', sub: 'text-orange-600', dot: 'bg-orange-400' },
+  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', sub: 'text-[var(--accent,#f97316)]', dot: 'bg-orange-400' },
 ]
 
 import {
@@ -198,7 +198,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
             {days[0].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {days[6].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
           </span>
           <button onClick={nextWeek} className="p-2 rounded-lg hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></button>
-          <button onClick={goToday} className="ml-2 text-xs text-orange-500 hover:text-orange-600 font-medium">Today</button>
+          <button onClick={goToday} className="ml-2 text-xs text-orange-500 hover:text-[var(--accent,#f97316)] font-medium">Today</button>
         </div>
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
           {(['week', 'list'] as const).map(v => (
@@ -217,7 +217,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
               const isToday = isSameDay(day, today)
               return (
                 <div key={day.toISOString()}>
-                  <div className={`text-center mb-2 py-1 rounded-lg text-xs font-medium ${isToday ? 'bg-orange-500 text-white' : 'text-gray-500'}`}>
+                  <div className={`text-center mb-2 py-1 rounded-lg text-xs font-medium ${isToday ? 'bg-[var(--accent,#f97316)] text-white' : 'text-gray-500'}`}>
                     <p>{day.toLocaleDateString('en-NZ', { weekday: 'short' })}</p>
                     <p className="text-lg font-bold">{day.getDate()}</p>
                   </div>
@@ -254,7 +254,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
             </div>
           ) : (
             visits.map(v => (
-              <Link key={v.id} href={`/jobs/${v.jobs?.id}`} className="block bg-white border border-gray-200 rounded-xl px-5 py-3 hover:border-orange-300 transition-colors">
+              <Link key={v.id} href={`/jobs/${v.jobs?.id}`} className="block bg-white border border-gray-200 rounded-xl px-5 py-3 hover:border-[var(--accent,#f97316)]/40 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{v.jobs?.title ?? '—'}</p>

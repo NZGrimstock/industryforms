@@ -121,7 +121,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
         <div className="px-6 py-4 flex flex-wrap items-center gap-3">
           <p className="text-sm text-gray-400">No materials recorded</p>
           {quoteLines.length > 0 && (
-            <button onClick={fillFromQuote} disabled={loading} className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 disabled:opacity-50">
+            <button onClick={fillFromQuote} disabled={loading} className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent,#f97316)] hover:text-[var(--accent,#f97316)] disabled:opacity-50">
               <FileDown className="h-3.5 w-3.5" /> {loading ? 'Filling…' : `Fill from quote${quoteNumber ? ` ${quoteNumber}` : ''}`}
             </button>
           )}
@@ -224,16 +224,16 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       {/* Add buttons */}
       {!showForm && !showPriceList && (
         <div className="px-6 py-2 flex gap-2">
-          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 font-medium">
+          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
             <Plus className="h-3.5 w-3.5" /> Add material
           </button>
           {priceItems.length > 0 && (
-            <button onClick={() => setShowPriceList(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 font-medium">
+            <button onClick={() => setShowPriceList(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
               <Package className="h-3.5 w-3.5" /> From price list
             </button>
           )}
           {quoteLines.length > 0 && (
-            <button onClick={fillFromQuote} disabled={loading} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 font-medium disabled:opacity-50">
+            <button onClick={fillFromQuote} disabled={loading} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium disabled:opacity-50">
               <FileDown className="h-3.5 w-3.5" /> Fill from quote
             </button>
           )}

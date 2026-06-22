@@ -247,14 +247,14 @@ export function ProgressClaims({
           </div>
           <div className="flex gap-2">
             <button onClick={() => setAdding(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50">Cancel</button>
-            <button onClick={addClaim} disabled={!newName.trim() || !newAmount} className="px-4 py-1.5 bg-orange-500 text-white text-xs font-medium rounded-lg hover:bg-orange-600 disabled:opacity-40">Add stage</button>
+            <button onClick={addClaim} disabled={!newName.trim() || !newAmount} className="px-4 py-1.5 bg-[var(--accent,#f97316)] text-white text-xs font-medium rounded-lg hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-40">Add stage</button>
           </div>
         </div>
       ) : (
         <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-3">
           <button
             onClick={() => setAdding(true)}
-            className="flex items-center gap-1.5 text-sm text-orange-500 hover:text-orange-600 font-medium"
+            className="flex items-center gap-1.5 text-sm text-orange-500 hover:text-[var(--accent,#f97316)] font-medium"
           >
             <Plus className="h-4 w-4" /> Add stage
           </button>

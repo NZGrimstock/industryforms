@@ -31,7 +31,7 @@ export function NewMenu({ isStaff = false }: { isStaff?: boolean }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium pl-2.5 pr-3 py-1.5 rounded-lg transition-colors"
+        className="inline-flex items-center gap-1.5 bg-[var(--brand,#f97316)] hover:bg-[var(--brand-hover,#ea580c)] text-white text-sm font-medium pl-2.5 pr-3 py-1.5 rounded-lg transition-colors"
       >
         <Plus className="h-4 w-4" /> New
       </button>

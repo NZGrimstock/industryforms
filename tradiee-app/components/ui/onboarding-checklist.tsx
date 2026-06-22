@@ -15,7 +15,7 @@ export function OnboardingChecklist({ steps }: { steps: OnboardingStep[] }) {
     <div className="rounded-xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-5 mb-6">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-[var(--accent,#f97316)] flex items-center justify-center">
             <Rocket className="h-4 w-4 text-white" />
           </div>
           <div>
@@ -24,7 +24,7 @@ export function OnboardingChecklist({ steps }: { steps: OnboardingStep[] }) {
           </div>
         </div>
         <div className="w-28 h-1.5 rounded-full bg-orange-100 overflow-hidden">
-          <div className="h-full bg-orange-500 transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-[var(--accent,#f97316)] transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
       <ul className="grid gap-1.5 sm:grid-cols-2">

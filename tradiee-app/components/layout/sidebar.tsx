@@ -58,7 +58,7 @@ const groups: Group[] = [
     label: 'Suppliers & Orders',
     hover: 'hover:bg-gradient-to-r hover:from-amber-50 hover:via-orange-50 hover:to-rose-50',
     activeGradient: 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500',
-    iconColor: 'text-orange-600',
+    iconColor: 'text-[var(--accent,#f97316)]',
     items: [
       { href: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingCart },
       { href: '/bills', label: 'Bills', icon: FileMinus },

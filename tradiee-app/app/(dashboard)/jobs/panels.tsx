@@ -83,7 +83,7 @@ export function JobTemplatesPanel({ companyId }: { companyId: string }) {
                   <td className="px-6 py-3 font-medium text-gray-900">{t.name}</td>
                   <td className="px-6 py-3 text-gray-600">{t.title ?? '—'}</td>
                   <td className="px-6 py-3 text-right">
-                    <button onClick={() => use(t)} className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 hover:underline mr-3">Use <ChevronRight className="h-3 w-3" /></button>
+                    <button onClick={() => use(t)} className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent,#f97316)] hover:underline mr-3">Use <ChevronRight className="h-3 w-3" /></button>
                     <button onClick={() => remove(t.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
                   </td>
                 </tr>

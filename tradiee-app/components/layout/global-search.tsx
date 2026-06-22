@@ -102,7 +102,7 @@ export function GlobalSearch() {
                     onClick={() => go(r)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left ${i === active ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
                   >
-                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${i === active ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${i === active ? 'bg-orange-100 text-[var(--accent,#f97316)]' : 'bg-gray-100 text-gray-500'}`}>
                       <Icon className="h-3.5 w-3.5" />
                     </span>
                     <span className="min-w-0 flex-1">

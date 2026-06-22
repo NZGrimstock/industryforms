@@ -35,7 +35,7 @@ export function SmartWriteButton({ value, onChange, placeholder }: SmartWritePro
       onClick={improve}
       disabled={!value.trim() || loading}
       title={placeholder ?? 'Improve with AI'}
-      className="inline-flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 disabled:opacity-30 disabled:cursor-default transition-colors"
+      className="inline-flex items-center gap-1 text-xs text-orange-500 hover:text-[var(--accent,#f97316)] disabled:opacity-30 disabled:cursor-default transition-colors"
     >
       {loading
         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -1,13 +1,14 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   blankSection, slugify, SECTION_LABELS,
   type WebsiteSection, type WebsiteSectionType, type WebsiteTheme,
 } from '@/lib/website'
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw,
+  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw, Pipette, Sparkles,
 } from 'lucide-react'
+import { extractPalette, samplePixel } from '@/lib/extract-color'
 
 type DnsRecord = { type: string; name: string; value: string; note: string }
 
@@ -27,13 +28,14 @@ const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery',
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
 
 export function WebsiteClient({
-  companyId, appUrl, canPublish, photoUrls, initial,
+  companyId, appUrl, canPublish, photoUrls, initial, logoUrl,
 }: {
   companyId: string
   appUrl: string
   canPublish: boolean
   photoUrls: string[]
   initial: Initial
+  logoUrl: string | null
 }) {
   const supabase = createClient()
   const [slug, setSlug] = useState(initial.slug)
@@ -154,7 +156,7 @@ export function WebsiteClient({
             <span className={`inline-flex h-2.5 w-2.5 rounded-full ${isPublished ? 'bg-green-500' : 'bg-gray-300'}`} />
             <span className="font-semibold text-gray-900">{isPublished ? 'Published' : 'Draft'}</span>
             {isPublished && (
-              <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-orange-600 hover:underline">
+              <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--accent,#f97316)] hover:underline">
                 View site <ExternalLink className="h-3.5 w-3.5" />
               </a>
             )}
@@ -172,7 +174,7 @@ export function WebsiteClient({
                 {isPublished ? 'Unpublish' : 'Publish'}
               </button>
             ) : (
-              <button onClick={subscribe} className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+              <button onClick={subscribe} className="rounded-lg bg-[var(--accent,#f97316)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover,#ea580c)]">
                 Publish — $9/mo
               </button>
             )}
@@ -199,7 +201,7 @@ export function WebsiteClient({
           <div className="flex items-center gap-2 mb-1">
             <Globe className="h-4 w-4 text-gray-400" />
             <label className="text-sm font-medium text-gray-700">Use your own domain</label>
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">Add-on</span>
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-[var(--accent,#f97316)]">Add-on</span>
             {domainStatus === 'active' && <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-600">Live</span>}
             {domainStatus === 'pending' && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-600">Pending DNS</span>}
           </div>
@@ -234,7 +236,7 @@ export function WebsiteClient({
           )}
 
           {domainStatus === 'pending' && (
-            <button onClick={() => domainCall('PUT')} disabled={domainBusy} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-orange-600 hover:underline disabled:opacity-50">
+            <button onClick={() => domainCall('PUT')} disabled={domainBusy} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent,#f97316)] hover:underline disabled:opacity-50">
               <RefreshCw className={`h-3.5 w-3.5 ${domainBusy ? 'animate-spin' : ''}`} /> Verify DNS
             </button>
           )}
@@ -247,19 +249,11 @@ export function WebsiteClient({
 
       {/* Theme */}
       <Card title="Theme">
-        <div className="flex flex-wrap items-end gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Brand colour</label>
-            <input type="color" value={theme.primary} onChange={e => setTheme({ ...theme, primary: e.target.value })} className="h-10 w-16 rounded border border-gray-300 cursor-pointer" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Font</label>
-            <select value={theme.font} onChange={e => setTheme({ ...theme, font: e.target.value as WebsiteTheme['font'] })} className={inputCls}>
-              <option value="sans">Sans-serif (modern)</option>
-              <option value="serif">Serif (classic)</option>
-            </select>
-          </div>
-        </div>
+        <ThemeCard
+          theme={theme}
+          setTheme={setTheme}
+          logoUrl={logoUrl}
+        />
       </Card>
 
       {/* Sections */}
@@ -282,7 +276,7 @@ export function WebsiteClient({
 
         {/* Add section */}
         <div className="relative">
-          <button onClick={() => setAddOpen(o => !o)} className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-medium text-gray-500 hover:border-orange-400 hover:text-orange-600">
+          <button onClick={() => setAddOpen(o => !o)} className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-medium text-gray-500 hover:border-orange-400 hover:text-[var(--accent,#f97316)]">
             <Plus className="h-4 w-4" /> Add section
           </button>
           {addOpen && (
@@ -312,7 +306,7 @@ export function WebsiteClient({
             {msg.kind === 'ok' && <Check className="h-4 w-4" />}{msg.text}
           </span>
         )}
-        <button onClick={() => save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-60">
+        <button onClick={() => save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent,#f97316)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-60">
           {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
         </button>
       </div>
@@ -328,6 +322,153 @@ function Card({ title, actions, children }: { title: string; actions?: React.Rea
         {actions}
       </div>
       {children}
+    </div>
+  )
+}
+
+// Theme card: brand colour + font, with three friendly ways to pick a colour:
+//   1. Logo preview that doubles as a click-to-sample target.
+//   2. Native EyeDropper API (Chrome/Edge only — feature-detected).
+//   3. AI palette: dominant colours extracted from the logo as one-click swatches.
+function ThemeCard({
+  theme, setTheme, logoUrl,
+}: {
+  theme: WebsiteTheme
+  setTheme: (t: WebsiteTheme) => void
+  logoUrl: string | null
+}) {
+  const [palette, setPalette] = useState<string[]>([])
+  const [paletteLoading, setPaletteLoading] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+  const supportsEyedropper = typeof window !== 'undefined' && 'EyeDropper' in window
+
+  // Auto-suggest a palette the first time we render with a logo. Refreshable
+  // via the Sparkles button.
+  useEffect(() => {
+    if (!logoUrl) return
+    setPaletteLoading(true)
+    extractPalette(logoUrl, 5)
+      .then(p => setPalette(p))
+      .catch(() => setHint('Could not read your logo image'))
+      .finally(() => setPaletteLoading(false))
+  }, [logoUrl])
+
+  async function onLogoClick(e: React.MouseEvent<HTMLImageElement>) {
+    if (!logoUrl) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const nx = (e.clientX - rect.left) / rect.width
+    const ny = (e.clientY - rect.top) / rect.height
+    const c = await samplePixel(logoUrl, nx, ny)
+    if (c) { setTheme({ ...theme, primary: c }); setHint(`Picked ${c} from logo`) }
+  }
+
+  async function useEyedropper() {
+    type ED = { open: () => Promise<{ sRGBHex: string }> }
+    const Ctor = (window as unknown as { EyeDropper?: new () => ED }).EyeDropper
+    if (!Ctor) return
+    try {
+      const { sRGBHex } = await new Ctor().open()
+      setTheme({ ...theme, primary: sRGBHex })
+      setHint(`Picked ${sRGBHex} with eyedropper`)
+    } catch { /* user cancelled */ }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start gap-6">
+        {/* Logo preview — also acts as a clickable colour picker */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Your logo</label>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Logo"
+              onClick={onLogoClick}
+              title="Click anywhere on the logo to pick that colour"
+              className="h-16 w-auto max-w-[180px] object-contain rounded-lg border border-gray-200 bg-white p-1 cursor-crosshair"
+              crossOrigin="anonymous"
+            />
+          ) : (
+            <div className="h-16 w-32 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-xs text-gray-400">
+              No logo yet
+            </div>
+          )}
+          {logoUrl && <p className="text-[11px] text-gray-400 mt-1">Click the logo to grab that colour</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Brand colour</label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={theme.primary}
+              onChange={e => setTheme({ ...theme, primary: e.target.value })}
+              className="h-10 w-12 rounded border border-gray-300 cursor-pointer"
+            />
+            <span className="text-xs font-mono text-gray-600">{theme.primary}</span>
+            {supportsEyedropper && (
+              <button
+                type="button"
+                onClick={useEyedropper}
+                title="Pick a colour from anywhere on screen"
+                className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50"
+              >
+                <Pipette className="h-3.5 w-3.5" /> Eyedropper
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Font</label>
+          <select value={theme.font} onChange={e => setTheme({ ...theme, font: e.target.value as WebsiteTheme['font'] })} className={inputCls}>
+            <option value="sans">Sans-serif (modern)</option>
+            <option value="serif">Serif (classic)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* AI palette — dominant colours pulled from the uploaded logo */}
+      {logoUrl && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-600 inline-flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-purple-500" /> Suggested from your logo
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (!logoUrl) return
+                setPaletteLoading(true)
+                extractPalette(logoUrl, 5).then(setPalette).finally(() => setPaletteLoading(false))
+              }}
+              disabled={paletteLoading}
+              className="text-xs text-gray-500 hover:text-gray-700 inline-flex items-center gap-1"
+            >
+              <RefreshCw className={`h-3 w-3 ${paletteLoading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+          {palette.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {palette.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => { setTheme({ ...theme, primary: c }); setHint(`Picked ${c} from palette`) }}
+                  title={c}
+                  className={`h-9 w-9 rounded-md border-2 transition-transform hover:scale-105 ${theme.primary.toLowerCase() === c.toLowerCase() ? 'border-gray-900' : 'border-gray-200'}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          ) : !paletteLoading ? (
+            <p className="text-xs text-gray-400">No distinct colours found — try a different logo or pick manually.</p>
+          ) : null}
+        </div>
+      )}
+
+      {hint && <p className="text-xs text-green-600">{hint}</p>}
     </div>
   )
 }
@@ -372,7 +513,7 @@ function SectionEditor({
               <input value={it.description} onChange={e => patch(idx, { items: section.items.map((x, k) => k === i ? { ...x, description: e.target.value } : x) })} placeholder="Short description" className={inputCls} />
             </div>
           ))}
-          <button onClick={() => patch(idx, { items: [...section.items, { title: '', description: '' }] })} className="text-sm font-medium text-orange-600 hover:underline">+ Add service</button>
+          <button onClick={() => patch(idx, { items: [...section.items, { title: '', description: '' }] })} className="text-sm font-medium text-[var(--accent,#f97316)] hover:underline">+ Add service</button>
         </div>
       )
     case 'gallery':
@@ -397,7 +538,7 @@ function SectionEditor({
               <input value={it.author} onChange={e => patch(idx, { items: section.items.map((x, k) => k === i ? { ...x, author: e.target.value } : x) })} placeholder="Customer name" className={inputCls} />
             </div>
           ))}
-          <button onClick={() => patch(idx, { items: [...section.items, { quote: '', author: '' }] })} className="text-sm font-medium text-orange-600 hover:underline">+ Add testimonial</button>
+          <button onClick={() => patch(idx, { items: [...section.items, { quote: '', author: '' }] })} className="text-sm font-medium text-[var(--accent,#f97316)] hover:underline">+ Add testimonial</button>
         </div>
       )
     case 'contact':
@@ -429,11 +570,11 @@ function PhotoPicker({ photoUrls, selected, onToggle, single }: { photoUrls: str
       {photoUrls.map(url => {
         const on = selected.includes(url)
         return (
-          <button key={url} type="button" onClick={() => onToggle(url)} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${on ? 'border-orange-500' : 'border-transparent'}`}>
+          <button key={url} type="button" onClick={() => onToggle(url)} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${on ? 'border-[var(--accent,#f97316)]' : 'border-transparent'}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt="" className="h-full w-full object-cover" />
-            {on && <span className="absolute inset-0 flex items-center justify-center bg-orange-500/30"><Check className="h-5 w-5 text-white" /></span>}
-            {single && on && <span className="absolute right-1 top-1 rounded bg-orange-500 px-1 text-[9px] font-bold text-white">BG</span>}
+            {on && <span className="absolute inset-0 flex items-center justify-center bg-[var(--accent,#f97316)]/30"><Check className="h-5 w-5 text-white" /></span>}
+            {single && on && <span className="absolute right-1 top-1 rounded bg-[var(--accent,#f97316)] px-1 text-[9px] font-bold text-white">BG</span>}
           </button>
         )
       })}

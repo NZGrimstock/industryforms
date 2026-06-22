@@ -206,7 +206,7 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
                     <input
                       value={item.description}
                       onChange={e => updateItem(i, 'description', e.target.value)}
-                      className="w-full bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-orange-300 outline-none py-0.5"
+                      className="w-full bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-[var(--accent,#f97316)]/40 outline-none py-0.5"
                     />
                     {item.part_number && <span className="text-gray-400 block">{item.part_number}</span>}
                     {item.matched_price_item_id && <span className="text-green-500 text-xs">✓ matched to price list</span>}
@@ -216,7 +216,7 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
                       type="number"
                       value={item.quantity}
                       onChange={e => updateItem(i, 'quantity', parseFloat(e.target.value) || 0)}
-                      className="w-16 text-right bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-orange-300 outline-none"
+                      className="w-16 text-right bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-[var(--accent,#f97316)]/40 outline-none"
                     />
                   </td>
                   <td className="px-4 py-2 text-gray-500">{item.unit}</td>
@@ -226,7 +226,7 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
                       value={item.unit_cost}
                       step="0.01"
                       onChange={e => updateItem(i, 'unit_cost', parseFloat(e.target.value) || 0)}
-                      className="w-20 text-right bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-orange-300 outline-none"
+                      className="w-20 text-right bg-transparent text-gray-700 border-b border-transparent hover:border-gray-200 focus:border-[var(--accent,#f97316)]/40 outline-none"
                     />
                   </td>
                   <td className="px-4 py-2 text-right text-gray-600">{formatCurrency(item.line_total)}</td>
@@ -242,7 +242,7 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
             <button
               onClick={save}
               disabled={selectedCount === 0}
-              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white text-xs font-medium rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--accent,#f97316)] text-white text-xs font-medium rounded-lg hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <CheckCircle className="h-3.5 w-3.5" />
               Add {selectedCount} item{selectedCount !== 1 ? 's' : ''} to job

@@ -125,7 +125,7 @@ function CustomerCombobox({ customers, value, onChange }: {
               <button
                 key={c.id}
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 hover:text-orange-700"
+                className="w-full text-left px-3 py-2 text-sm hover:bg-orange-50 hover:text-[var(--accent,#f97316)]"
                 onMouseDown={e => { e.preventDefault(); onChange(c.id); setOpen(false) }}
               >
                 {c.name}
@@ -396,9 +396,9 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
               <Label>Expires</Label>
               <div className="flex gap-1.5 items-center">
                 <Input type="date" value={meta.expires_at} onChange={e => updateMeta('expires_at', e.target.value)} className="flex-1" />
-                <button onClick={() => setExpiry(7)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-orange-700 rounded-lg whitespace-nowrap transition-colors">7d</button>
-                <button onClick={() => setExpiry(30)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-orange-700 rounded-lg whitespace-nowrap transition-colors">30d</button>
-                <button onClick={() => setExpiry(90)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-orange-700 rounded-lg whitespace-nowrap transition-colors">90d</button>
+                <button onClick={() => setExpiry(7)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">7d</button>
+                <button onClick={() => setExpiry(30)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">30d</button>
+                <button onClick={() => setExpiry(90)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-orange-100 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">90d</button>
               </div>
             </div>
           </CardContent>
@@ -586,7 +586,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
               <div className="grid grid-cols-2 gap-2">
                 {kits.map(k => (
                   <button key={k.id} onClick={() => addFromKit(addItemOpen!, k)}
-                    className="text-left p-3 rounded-lg border border-gray-200 hover:border-orange-300 hover:bg-orange-50 transition-colors">
+                    className="text-left p-3 rounded-lg border border-gray-200 hover:border-[var(--accent,#f97316)]/40 hover:bg-orange-50 transition-colors">
                     <p className="text-sm font-medium text-gray-800">{k.name}</p>
                     <p className="text-xs text-gray-400">{k.kit_items.length} items</p>
                   </button>

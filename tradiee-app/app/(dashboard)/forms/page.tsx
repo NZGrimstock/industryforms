@@ -59,7 +59,7 @@ export default async function FormsPage() {
                     </Link>
                     <Link
                       href={`/forms/${t.id}/edit`}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-[var(--accent,#f97316)] border border-orange-200 rounded-lg hover:bg-orange-50 transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" /> Edit
                     </Link>

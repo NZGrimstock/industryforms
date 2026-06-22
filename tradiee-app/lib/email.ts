@@ -132,6 +132,46 @@ export function invoiceEmailHtml({
 </html>`
 }
 
+export function reviewRequestEmailHtml({
+  companyName,
+  customerName,
+  invoiceNumber,
+  reviewUrl,
+  companyPhone,
+}: {
+  companyName: string
+  customerName: string
+  invoiceNumber: string
+  reviewUrl: string
+  companyPhone?: string | null
+}) {
+  const subject = `Thanks from ${companyName} — could you leave us a quick review?`
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    <div style="background:#f97316;padding:24px 32px">
+      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
+    </div>
+    <div style="padding:32px">
+      <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
+      <p style="margin:0 0 16px;color:#4b5563">Thanks so much for paying invoice <strong>${invoiceNumber}</strong> — we really appreciate your business.</p>
+      <p style="margin:0 0 24px;color:#4b5563">If you have a minute, a short review goes a long way in helping us reach more local customers.</p>
+      <a href="${reviewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">Leave a review →</a>
+      <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">
+        Questions? Reply to this email${companyPhone ? ` or call ${companyPhone}` : ''}.
+      </p>
+    </div>
+    <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">
+      <p style="margin:0;font-size:12px;color:#9ca3af">Sent by ${companyName} · Powered by IndustryForms</p>
+    </div>
+  </div>
+</body>
+</html>`
+  return { subject, html }
+}
+
 export function reminderEmailHtml({
   type,
   companyName,

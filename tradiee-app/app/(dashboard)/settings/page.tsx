@@ -12,10 +12,19 @@ export default async function SettingsPage() {
   const typedProfile = profile as unknown as import('@/lib/types').Profile & { companies: import('@/lib/types').Company }
   const googleConnected = !!typedProfile?.google_refresh_token
 
+  // Server-side env-flag check for the Integrations cards (Twilio, Resend,
+  // Stripe). The values are never sent to the client — only `configured: true`.
+  const integrationStatus = {
+    twilio: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER),
+    resend: !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+    stripe: !!process.env.STRIPE_SECRET_KEY,
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+  }
+
   return (
     <>
       <Header title="Settings" profile={profile} />
-      <SettingsClient profile={typedProfile} company={company} team={team ?? []} googleConnected={googleConnected} />
+      <SettingsClient profile={typedProfile} company={company} team={team ?? []} googleConnected={googleConnected} integrationStatus={integrationStatus} />
     </>
   )
 }

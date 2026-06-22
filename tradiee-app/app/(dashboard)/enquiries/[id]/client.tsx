@@ -270,13 +270,13 @@ export function EnquiryDetailClient({ enquiry, companyId, profileId, team, custo
                 <div className="flex gap-2">
                   <button
                     onClick={() => setConvertTo('quote')}
-                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${convertTo === 'quote' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${convertTo === 'quote' ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   >
                     Quote ({nextQuoteNumber})
                   </button>
                   <button
                     onClick={() => setConvertTo('job')}
-                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${convertTo === 'job' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                    className={`flex-1 py-2 text-sm rounded-lg border font-medium ${convertTo === 'job' ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   >
                     Job ({nextJobNumber})
                   </button>
@@ -299,13 +299,13 @@ export function EnquiryDetailClient({ enquiry, companyId, profileId, team, custo
                 <div className="flex gap-2 mb-2">
                   <button
                     onClick={() => { setUseExistingCustomer(false); setForceCreate(false) }}
-                    className={`flex-1 py-1.5 text-xs rounded-lg border ${!useExistingCustomer ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    className={`flex-1 py-1.5 text-xs rounded-lg border ${!useExistingCustomer ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                   >
                     Create new
                   </button>
                   <button
                     onClick={() => { setUseExistingCustomer(true); setDupCustomer(null) }}
-                    className={`flex-1 py-1.5 text-xs rounded-lg border ${useExistingCustomer ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                    className={`flex-1 py-1.5 text-xs rounded-lg border ${useExistingCustomer ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                   >
                     Use existing
                   </button>

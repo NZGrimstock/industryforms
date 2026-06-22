@@ -30,7 +30,7 @@ export function NewFormButton({ companyId }: Props) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-xl hover:bg-orange-600 transition-colors">
+      <button onClick={() => setOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-[var(--accent,#f97316)] text-white text-sm font-medium rounded-xl hover:bg-[var(--accent-hover,#ea580c)] transition-colors">
         <Plus className="h-4 w-4" /> New form
       </button>
     )
@@ -67,7 +67,7 @@ export function NewFormButton({ companyId }: Props) {
           <button
             onClick={create}
             disabled={!name.trim() || loading}
-            className="flex-1 px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium hover:bg-orange-600 disabled:opacity-50 transition-colors"
+            className="flex-1 px-4 py-2.5 bg-[var(--accent,#f97316)] text-white rounded-xl text-sm font-medium hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-50 transition-colors"
           >
             {loading ? 'Creating...' : 'Create & build'}
           </button>

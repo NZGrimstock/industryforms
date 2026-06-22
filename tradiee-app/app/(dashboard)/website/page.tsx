@@ -50,6 +50,7 @@ export default async function WebsitePage() {
         appUrl={process.env.NEXT_PUBLIC_APP_URL ?? ''}
         canPublish={canPublish}
         photoUrls={photoUrls}
+        logoUrl={company.logo_url}
         initial={{
           slug: existing?.slug ?? slugify(company.name),
           isPublished: existing?.is_published ?? false,

@@ -57,3 +57,11 @@ export function accentForPath(pathname: string | null | undefined): Accent {
   const seg = (pathname ?? '/').split('/').filter(Boolean)[0]
   return (seg && MAP[seg]) || ORANGE
 }
+
+// True iff the first path segment has an explicit route accent (i.e. not the
+// orange fallback). The shell uses this to decide whether the company brand
+// accent should override the orange fallback.
+export function hasRouteAccent(pathname: string | null | undefined): boolean {
+  const seg = (pathname ?? '/').split('/').filter(Boolean)[0]
+  return !!(seg && MAP[seg])
+}

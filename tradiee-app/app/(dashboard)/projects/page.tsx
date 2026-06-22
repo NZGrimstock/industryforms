@@ -83,7 +83,7 @@ export default async function ProjectsPage() {
                   <Card className="h-full transition-all duration-150 hover:shadow-md hover:-translate-y-0.5">
                     <CardContent className="space-y-3 py-5">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-base font-semibold text-gray-900 group-hover:text-orange-600 transition-colors line-clamp-2">{p.name}</h3>
+                        <h3 className="text-base font-semibold text-gray-900 group-hover:text-[var(--accent,#f97316)] transition-colors line-clamp-2">{p.name}</h3>
                         <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_COLOR[p.status] ?? STATUS_COLOR.planning}`}>
                           {String(p.status).replace('_', ' ')}
                         </span>

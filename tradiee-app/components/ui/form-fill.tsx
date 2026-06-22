@@ -120,7 +120,7 @@ export function FormFill({ jobId, companyId, profileId, templates, existingSubmi
           <button
             onClick={submit}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-lg hover:bg-orange-600 disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-[var(--accent,#f97316)] text-white text-sm font-medium rounded-lg hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-50"
           >
             <CheckCircle className="h-4 w-4" />
             {saving ? 'Submitting...' : 'Submit form'}
@@ -155,7 +155,7 @@ export function FormFill({ jobId, companyId, profileId, templates, existingSubmi
       {templates.length > 0 && (
         <button
           onClick={() => setView('pick')}
-          className="flex items-center gap-2 text-sm text-orange-500 hover:text-orange-600 font-medium"
+          className="flex items-center gap-2 text-sm text-orange-500 hover:text-[var(--accent,#f97316)] font-medium"
         >
           <FileText className="h-4 w-4" />
           Fill a site form

@@ -145,7 +145,7 @@ export function ImportWizard() {
               <div key={s} className="flex items-center gap-2">
                 <div className={cn(
                   'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold transition-colors',
-                  active ? 'bg-orange-500 text-white' : done ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
+                  active ? 'bg-[var(--accent,#f97316)] text-white' : done ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
                 )}>
                   {done ? '✓' : i + 1}
                 </div>
@@ -166,7 +166,7 @@ export function ImportWizard() {
               <button
                 key={p.id}
                 onClick={() => { setProgram(p); setStep('type') }}
-                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-300 hover:shadow-sm transition-all text-left"
+                className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-[var(--accent,#f97316)]/40 hover:shadow-sm transition-all text-left"
               >
                 <span className="text-2xl">{p.logo}</span>
                 <div>
@@ -192,7 +192,7 @@ export function ImportWizard() {
               <button
                 key={dt.id}
                 onClick={() => { setDataType(dt.id); setStep('instructions') }}
-                className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-orange-300 hover:shadow-sm transition-all text-left"
+                className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-xl hover:border-[var(--accent,#f97316)]/40 hover:shadow-sm transition-all text-left"
               >
                 <div>
                   <p className="font-medium text-gray-900 text-sm">{dt.label}</p>
@@ -217,7 +217,7 @@ export function ImportWizard() {
             {program.exportInstructions[dataType].map((step, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-xs font-semibold text-orange-600">{i + 1}</span>
+                  <span className="text-xs font-semibold text-[var(--accent,#f97316)]">{i + 1}</span>
                 </div>
                 <p className="text-sm text-gray-700">{step}</p>
               </div>
@@ -244,7 +244,7 @@ export function ImportWizard() {
             onClick={() => fileRef.current?.click()}
             className={cn(
               'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors',
-              dragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-orange-300 hover:bg-orange-50/40'
+              dragOver ? 'border-orange-400 bg-orange-50' : 'border-gray-300 hover:border-[var(--accent,#f97316)]/40 hover:bg-orange-50/40'
             )}
           >
             <Upload className="h-8 w-8 text-gray-300 mx-auto mb-3" />

@@ -31,7 +31,7 @@ export function Header({ title, profile }: HeaderProps) {
         {profile && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">
-              <User className="h-4 w-4 text-orange-600" />
+              <User className="h-4 w-4 text-[var(--accent,#f97316)]" />
             </div>
             <span className="hidden sm:block">{profile.full_name}</span>
             <span className="hidden sm:block text-xs text-gray-400 capitalize">({profile.role})</span>

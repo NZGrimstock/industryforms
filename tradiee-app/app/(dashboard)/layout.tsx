@@ -17,11 +17,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // billing-exempt review accounts bypass this).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, is_super_admin, companies(subscription_status, subscription_plan, trial_ends_at, billing_exempt)')
+    .select('role, is_super_admin, companies(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent)')
     .eq('id', user.id)
     .single()
-  const company = (profile?.companies ?? null) as BillingCompany | null
+  const company = (profile?.companies ?? null) as (BillingCompany & { theme_accent?: string | null }) | null
   if (!hasAccess(!!profile?.is_super_admin, company)) redirect('/upgrade')
+  const brandAccent = company?.theme_accent ?? null
 
   // Field staff get a focused nav (their jobs/schedule/time) — no financials.
   const isStaff = profile?.role === 'staff'
@@ -31,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <SidebarProvider>
         <div className="flex h-full">
           <Sidebar isStaff={isStaff} />
-          <DashboardShell>
+          <DashboardShell brandAccent={brandAccent}>
             <SyncStatusBar />
             {children}
           </DashboardShell>

@@ -240,7 +240,7 @@ export function JobMap({ jobs, team }: { jobs: MapJob[]; team: TeamMember[] }) {
                 {selected.customer_phone && (
                   <p className="text-xs mt-1 flex items-center gap-1">
                     <Phone className="h-3 w-3 text-gray-400" />
-                    <a href={`tel:${selected.customer_phone.replace(/[^+\d]/g, '')}`} className="text-orange-500 hover:text-orange-600 font-medium">
+                    <a href={`tel:${selected.customer_phone.replace(/[^+\d]/g, '')}`} className="text-orange-500 hover:text-[var(--accent,#f97316)] font-medium">
                       {selected.customer_phone}
                     </a>
                   </p>

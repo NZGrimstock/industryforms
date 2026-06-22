@@ -123,7 +123,7 @@ export default async function ReportsPage() {
                   {lowStock.map(item => (
                     <li key={item.name} className="px-6 py-3 flex items-center justify-between">
                       <span className="text-sm text-gray-700">{item.name}</span>
-                      <span className="text-sm text-orange-600 font-medium">{item.quantity_on_hand} {item.unit} remaining</span>
+                      <span className="text-sm text-[var(--accent,#f97316)] font-medium">{item.quantity_on_hand} {item.unit} remaining</span>
                     </li>
                   ))}
                 </ul>

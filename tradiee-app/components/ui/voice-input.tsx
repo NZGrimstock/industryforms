@@ -112,7 +112,7 @@ export function VoiceInput({ mode, onParsed, hint, label = 'VoiceFill' }: VoiceI
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 border border-orange-200 rounded-lg px-3 py-1.5 hover:bg-orange-50 transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent,#f97316)] hover:text-[var(--accent,#f97316)] border border-orange-200 rounded-lg px-3 py-1.5 hover:bg-orange-50 transition-colors"
       >
         <Sparkles className="h-3.5 w-3.5" />
         {label}
@@ -143,7 +143,7 @@ export function VoiceInput({ mode, onParsed, hint, label = 'VoiceFill' }: VoiceI
                 className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all focus:outline-none ${
                   recording
                     ? 'bg-red-500 hover:bg-red-600 shadow-xl shadow-red-200'
-                    : 'bg-orange-500 hover:bg-orange-600 shadow-xl shadow-orange-200'
+                    : 'bg-[var(--accent,#f97316)] hover:bg-[var(--accent-hover,#ea580c)] shadow-xl shadow-orange-200'
                 }`}
               >
                 {recording && (
@@ -184,7 +184,7 @@ export function VoiceInput({ mode, onParsed, hint, label = 'VoiceFill' }: VoiceI
                   type="button"
                   onClick={parseTranscript}
                   disabled={parsing}
-                  className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 bg-[var(--accent,#f97316)] hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-60 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors"
                 >
                   {parsing
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Filling form…</>

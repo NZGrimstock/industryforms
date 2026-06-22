@@ -34,13 +34,14 @@ interface Props {
   initialOpen?: boolean
   initialTitle?: string
   initialDescription?: string
+  initialCustomerId?: string
 }
 
 const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '' }: Props) {
+export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
   const [open, setOpen] = useState(initialOpen)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
@@ -50,7 +51,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [form, setForm] = useState({ customerId: '', title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '' })
+  const [form, setForm] = useState({ customerId: initialCustomerId, title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '' })
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing')
   const [newCust, setNewCust] = useState({ name: '', phone: '' })
 
@@ -188,11 +189,11 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
               <Label>Customer <span className="text-red-400">*</span></Label>
               <div className="flex gap-2 mb-2">
                 <button type="button" onClick={() => setCustomerMode('existing')}
-                  className={`flex-1 py-1.5 text-xs rounded-lg border ${customerMode === 'existing' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  className={`flex-1 py-1.5 text-xs rounded-lg border ${customerMode === 'existing' ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                   Existing
                 </button>
                 <button type="button" onClick={() => setCustomerMode('new')}
-                  className={`flex-1 py-1.5 text-xs rounded-lg border ${customerMode === 'new' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  className={`flex-1 py-1.5 text-xs rounded-lg border ${customerMode === 'new' ? 'border-[var(--accent,#f97316)] bg-orange-50 text-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                   + New customer
                 </button>
               </div>

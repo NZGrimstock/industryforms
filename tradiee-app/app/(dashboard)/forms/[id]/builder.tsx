@@ -133,7 +133,7 @@ export function FormBuilder({ template, companyId }: Props) {
             <button
               key={ft.type}
               onClick={() => addField(ft.type)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:border-orange-300 hover:text-orange-600 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:border-[var(--accent,#f97316)]/40 hover:text-[var(--accent,#f97316)] transition-colors"
             >
               <span>{ft.icon}</span> {ft.label}
             </button>
@@ -145,7 +145,7 @@ export function FormBuilder({ template, companyId }: Props) {
       <button
         onClick={save}
         disabled={saving}
-        className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white text-sm font-medium rounded-xl hover:bg-orange-600 disabled:opacity-50 transition-colors"
+        className="flex items-center gap-2 px-6 py-3 bg-[var(--accent,#f97316)] text-white text-sm font-medium rounded-xl hover:bg-[var(--accent-hover,#ea580c)] disabled:opacity-50 transition-colors"
       >
         {saved ? <CheckCircle className="h-4 w-4" /> : <Save className="h-4 w-4" />}
         {saved ? 'Saved!' : saving ? 'Saving...' : 'Save form'}

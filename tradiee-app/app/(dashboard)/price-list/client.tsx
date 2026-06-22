@@ -125,7 +125,7 @@ export function PriceListClient({ companyId, items, kits }: Props) {
             </div>
             <div className="p-6 flex-1 overflow-auto">
               {csvRows.length === 0 ? (
-                <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-12 cursor-pointer hover:border-orange-300 transition-colors">
+                <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl py-12 cursor-pointer hover:border-[var(--accent,#f97316)]/40 transition-colors">
                   <Upload className="h-8 w-8 text-gray-300 mb-2" />
                   <p className="text-sm text-gray-500">Click to upload CSV file</p>
                   <p className="text-xs text-gray-400 mt-1">Supplier exports, spreadsheet exports</p>

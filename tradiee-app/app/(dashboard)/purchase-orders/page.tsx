@@ -28,9 +28,9 @@ export default async function PurchaseOrdersPage({ searchParams }: { searchParam
       <div className="p-6">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <div className="flex gap-1 overflow-x-auto">
-            <Link href="/purchase-orders" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
+            <Link href="/purchase-orders" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
             {statuses.map(s => (
-              <Link key={s} href={`/purchase-orders?status=${s}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap capitalize ${sp.status === s ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{s}</Link>
+              <Link key={s} href={`/purchase-orders?status=${s}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap capitalize ${sp.status === s ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{s}</Link>
             ))}
           </div>
           <Link href="/purchase-orders/new" className="inline-flex items-center gap-2 bg-[var(--accent,#f97316)] hover:bg-[var(--accent-hover,#ea580c)] text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
@@ -40,7 +40,7 @@ export default async function PurchaseOrdersPage({ searchParams }: { searchParam
 
         {!pos?.length ? (
           <EmptyState icon={ClipboardList} title="No purchase orders" description="Raise a purchase order to a supplier" action={
-            <Link href="/purchase-orders/new" className="inline-flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-4 py-2 rounded-lg">
+            <Link href="/purchase-orders/new" className="inline-flex items-center gap-2 bg-[var(--accent,#f97316)] text-white text-sm font-medium px-4 py-2 rounded-lg">
               <Plus className="h-4 w-4" /> New PO
             </Link>
           } />

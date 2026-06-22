@@ -150,7 +150,7 @@ export function ProjectDetailClient({ project, stages: initialStages, jobs, invo
                             ))}
                             {stageInvoices.map(i => (
                               <li key={i.id} className="flex items-center justify-between text-xs">
-                                <Link href={`/invoices/${i.id}`} className="inline-flex items-center gap-1.5 text-gray-700 hover:text-orange-600">
+                                <Link href={`/invoices/${i.id}`} className="inline-flex items-center gap-1.5 text-gray-700 hover:text-[var(--accent,#f97316)]">
                                   <Receipt className="h-3.5 w-3.5 text-orange-500" />{i.invoice_number}
                                 </Link>
                                 <span className="tabular-nums text-gray-600">{formatCurrency(Number(i.total))}</span>
@@ -258,7 +258,7 @@ export function ProjectDetailClient({ project, stages: initialStages, jobs, invo
               ))}
               {invoices.map(i => (
                 <li key={i.id} className="px-6 py-3 flex items-center justify-between gap-3">
-                  <Link href={`/invoices/${i.id}`} className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-orange-600">
+                  <Link href={`/invoices/${i.id}`} className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-[var(--accent,#f97316)]">
                     <Receipt className="h-4 w-4 text-orange-500" />{i.invoice_number} · {formatCurrency(Number(i.total))}
                   </Link>
                   <select disabled={busy} value={i.project_stage_id ?? ''} onChange={e => relinkInvoice(i.id, e.target.value || null)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white">

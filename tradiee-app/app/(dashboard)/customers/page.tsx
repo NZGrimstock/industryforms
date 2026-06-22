@@ -4,7 +4,8 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import Link from 'next/link'
-import { Users, Plus } from 'lucide-react'
+import { Users, Plus, FileText, Briefcase } from 'lucide-react'
+import { RowActions } from '@/components/ui/row-actions'
 
 export default async function CustomersPage() {
   const supabase = await createClient()
@@ -29,7 +30,7 @@ export default async function CustomersPage() {
 
         {!customers?.length ? (
           <EmptyState icon={Users} title="No customers yet" description="Add your first customer to get started" action={
-            <Link href="/customers/new" className="inline-flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-4 py-2 rounded-lg">
+            <Link href="/customers/new" className="inline-flex items-center gap-2 bg-[var(--accent,#f97316)] text-white text-sm font-medium px-4 py-2 rounded-lg">
               <Plus className="h-4 w-4" /> Add customer
             </Link>
           } />
@@ -43,6 +44,7 @@ export default async function CustomersPage() {
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Phone</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Sites</th>
+                  <th className="w-10 px-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -62,6 +64,12 @@ export default async function CustomersPage() {
                     <td className="p-0"><Link href={`/customers/${c.id}`} className="block px-6 py-3 text-gray-600">{c.email ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/customers/${c.id}`} className="block px-6 py-3 text-gray-600">{c.phone ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/customers/${c.id}`} className="block px-6 py-3 text-gray-500">{(c.customer_sites as unknown as [{count: number}])?.[0]?.count ?? 0}</Link></td>
+                    <td className="px-3 text-right">
+                      <RowActions actions={[
+                        { label: 'New quote', href: `/quotes/new?customerId=${c.id}`,    icon: <FileText /> },
+                        { label: 'New job',   href: `/jobs?newJob=1&customerId=${c.id}`, icon: <Briefcase /> },
+                      ]} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

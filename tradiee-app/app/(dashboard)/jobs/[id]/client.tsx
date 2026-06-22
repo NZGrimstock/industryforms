@@ -436,7 +436,7 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
             <Label>Invoice type</Label>
             <div className="flex gap-2 mt-1">
               {(['full', 'progress'] as const).map(t => (
-                <button key={t} onClick={() => setInvoiceType(t)} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceType === t ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-600 hover:border-orange-300'}`}>
+                <button key={t} onClick={() => setInvoiceType(t)} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceType === t ? 'bg-[var(--accent,#f97316)] text-white border-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-600 hover:border-[var(--accent,#f97316)]/40'}`}>
                   {t === 'full' ? 'Full invoice' : 'Progress claim'}
                 </button>
               ))}
@@ -446,10 +446,10 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
             <div>
               <Label>Bill from</Label>
               <div className="flex gap-2 mt-1">
-                <button onClick={() => setInvoiceBasis('quote')} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceBasis === 'quote' ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-600 hover:border-orange-300'}`}>
+                <button onClick={() => setInvoiceBasis('quote')} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceBasis === 'quote' ? 'bg-[var(--accent,#f97316)] text-white border-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-600 hover:border-[var(--accent,#f97316)]/40'}`}>
                   Quote ({formatCurrency(jobTotal)})
                 </button>
-                <button onClick={() => setInvoiceBasis('actuals')} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceBasis === 'actuals' ? 'bg-orange-500 text-white border-orange-500' : 'border-gray-200 text-gray-600 hover:border-orange-300'}`}>
+                <button onClick={() => setInvoiceBasis('actuals')} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${invoiceBasis === 'actuals' ? 'bg-[var(--accent,#f97316)] text-white border-[var(--accent,#f97316)]' : 'border-gray-200 text-gray-600 hover:border-[var(--accent,#f97316)]/40'}`}>
                   Actuals ({formatCurrency(actualTotal)})
                 </button>
               </div>
@@ -465,11 +465,11 @@ export function JobDetailClient({ job, companyId, profileId, team, gstRate, next
               <Label>Claim percentage</Label>
               <div className="flex items-center gap-3 mt-1">
                 <input type="range" min="5" max="100" step="5" value={progressPct} onChange={e => setProgressPct(e.target.value)} className="flex-1 accent-orange-500" />
-                <span className="text-sm font-semibold text-orange-600 w-12 text-right">{progressPct}%</span>
+                <span className="text-sm font-semibold text-[var(--accent,#f97316)] w-12 text-right">{progressPct}%</span>
               </div>
               <div className="flex justify-between mt-1">
                 {['25', '50', '75', '100'].map(p => (
-                  <button key={p} onClick={() => setProgressPct(p)} className={`text-xs px-2 py-1 rounded ${progressPct === p ? 'bg-orange-100 text-orange-700 font-medium' : 'text-gray-400 hover:text-gray-600'}`}>{p}%</button>
+                  <button key={p} onClick={() => setProgressPct(p)} className={`text-xs px-2 py-1 rounded ${progressPct === p ? 'bg-orange-100 text-[var(--accent,#f97316)] font-medium' : 'text-gray-400 hover:text-gray-600'}`}>{p}%</button>
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-2">A progress claim invoices a percentage of the total quoted value.</p>

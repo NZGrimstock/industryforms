@@ -14,21 +14,28 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager } from '@/components/forms/company-lists'
-import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2 } from 'lucide-react'
+import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check } from 'lucide-react'
 import { getPlan, planForSeats } from '@/lib/plans'
+import { extractAccent } from '@/lib/extract-color'
 
 interface Props {
   profile: Profile & { companies: Company }
   company: Company
   team: Profile[]
   googleConnected: boolean
+  integrationStatus: {
+    twilio: boolean
+    resend: boolean
+    stripe: boolean
+    anthropic: boolean
+  }
 }
 
-export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected }: Props) {
+export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected, integrationStatus }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [tab, setTab] = useState<'company' | 'profile' | 'team' | 'integrations' | 'billing'>('company')
+  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription'>('business')
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editMember, setEditMember] = useState<Profile | null>(null)
@@ -36,6 +43,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(company.logo_url ?? null)
   const [logoUploading, setLogoUploading] = useState(false)
+  const [themeAccent, setThemeAccent] = useState<string | null>(company.theme_accent ?? null)
+  const [suggestedAccent, setSuggestedAccent] = useState<string | null>(null)
   const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected)
   const [googleSyncing, setGoogleSyncing] = useState(false)
   const [googleDisconnecting, setGoogleDisconnecting] = useState(false)
@@ -58,6 +67,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
     invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
     quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
+    review_link: company.review_link ?? '',
+    review_request_enabled: company.review_request_enabled ?? true,
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -88,6 +99,9 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
   async function uploadLogo(file: File) {
     setLogoUploading(true)
+    // Sample the logo for a dominant accent — only offered as a suggestion;
+    // owner clicks "Use" to actually apply.
+    extractAccent(file).then(c => { if (c) setSuggestedAccent(c) }).catch(() => {})
     const ext = file.name.split('.').pop() ?? 'png'
 
     const res = await fetch('/api/storage/upload-url', {
@@ -114,6 +128,15 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     await supabase.from('companies').update({ logo_url: null }).eq('id', company.id)
     setLogoPreview(null)
     toast('Logo removed')
+  }
+
+  async function saveAccent(hex: string | null) {
+    const { error } = await supabase.from('companies').update({ theme_accent: hex }).eq('id', company.id)
+    if (error) { toast(error.message, 'error'); return }
+    setThemeAccent(hex)
+    setSuggestedAccent(null)
+    toast(hex ? 'Theme accent updated' : 'Theme accent reset')
+    router.refresh()
   }
 
   async function syncGoogleCalendar() {
@@ -275,24 +298,42 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
   return (
     <div className="p-6">
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
-        {(['company', 'profile', 'team', 'integrations', 'billing'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>
-            {t}
+      {/* Friendly grouped tab bar. Each tab owns one focused topic so a new
+          user can fumble through without prior context. */}
+      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-lg p-1 mb-2 w-fit">
+        {([
+          { key: 'business',     label: 'Business' },
+          { key: 'workflow',     label: 'Workflow' },
+          { key: 'team',         label: 'Team' },
+          { key: 'profile',      label: 'My profile' },
+          { key: 'integrations', label: 'Integrations' },
+          { key: 'subscription', label: 'Subscription' },
+        ] as const).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            {t.label}
           </button>
         ))}
       </div>
+      <p className="text-xs text-gray-500 mb-6">
+        {tab === 'business'     && 'Your business name, logo, branding and document defaults.'}
+        {tab === 'workflow'     && 'Customise the lists and rates that drive jobs, quotes and invoices.'}
+        {tab === 'team'         && 'Invite people, set their rate, and control what they can see.'}
+        {tab === 'profile'      && 'Your personal details, signature and trade qualifications.'}
+        {tab === 'integrations' && 'Connect external services — accounting, calendar, SMS, email.'}
+        {tab === 'subscription' && 'Your plan, billing history and seat usage.'}
+      </p>
 
-      {tab === 'company' && (
+      {tab === 'business' && (
         <Card className="max-w-2xl">
           <CardHeader><CardTitle>Business settings</CardTitle></CardHeader>
           <CardContent>
-            {/* Plan */}
-            <div className="flex items-center gap-3 mb-6 p-3 bg-orange-50 rounded-lg border border-orange-100">
+            {/* Plan summary — full management lives under the Subscription tab */}
+            <div className="flex items-center justify-between gap-3 mb-6 p-3 bg-orange-50 rounded-lg border border-orange-100">
               <div>
                 <p className="text-sm font-medium text-orange-800">Current plan: <strong>{planLabel[company.subscription_plan] ?? company.subscription_plan}</strong></p>
-                <p className="text-xs text-orange-600">Status: {company.subscription_status}</p>
+                <p className="text-xs text-[var(--accent,#f97316)]">Status: {company.subscription_status}</p>
               </div>
+              <button type="button" onClick={() => setTab('subscription')} className="text-xs font-medium text-orange-700 hover:underline">Manage →</button>
             </div>
 
             {/* Logo */}
@@ -334,6 +375,36 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </div>
             </div>
 
+            <div>
+              <Label>Theme accent</Label>
+              <p className="text-xs text-gray-400 mb-2">Drives the &ldquo;+ New&rdquo; button and any unscoped pages. Suggested from your logo.</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 border border-gray-200 rounded-lg pl-1 pr-3 py-1">
+                  <input
+                    type="color"
+                    value={themeAccent ?? '#f97316'}
+                    onChange={e => setThemeAccent(e.target.value)}
+                    className="h-7 w-9 rounded cursor-pointer border-0 bg-transparent"
+                  />
+                  <span className="text-xs font-mono text-gray-600">{themeAccent ?? '#f97316'}</span>
+                </div>
+                <Button size="sm" type="button" onClick={() => saveAccent(themeAccent)}>Save accent</Button>
+                {themeAccent && (
+                  <button type="button" onClick={() => saveAccent(null)} className="text-xs text-gray-500 hover:underline">Reset to default</button>
+                )}
+                {suggestedAccent && suggestedAccent.toLowerCase() !== (themeAccent ?? '').toLowerCase() && (
+                  <div className="flex items-center gap-2 ml-2 pl-3 border-l border-gray-200">
+                    <span className="text-xs text-gray-500">From logo:</span>
+                    <span className="h-5 w-5 rounded border border-gray-200" style={{ backgroundColor: suggestedAccent }} />
+                    <span className="text-xs font-mono text-gray-600">{suggestedAccent}</span>
+                    <button type="button" onClick={() => saveAccent(suggestedAccent)} className="text-xs font-medium text-[var(--accent,#f97316)] hover:underline inline-flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Use this
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <form onSubmit={saveCompany} className="space-y-4">
               <div><Label>Business name <span className="text-red-400">*</span></Label><Input value={companyForm.name} onChange={e => setC('name', e.target.value)} required /></div>
               <div><Label>Trade type</Label><Input value={companyForm.trade_type} onChange={e => setC('trade_type', e.target.value)} placeholder="e.g. Electrician" /></div>
@@ -353,6 +424,17 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 <Label>Default terms & conditions</Label>
                 <Textarea value={companyForm.default_terms} onChange={e => setC('default_terms', e.target.value)} rows={6} placeholder="Enter your standard payment terms, warranty clauses, or any default conditions that appear on quotes..." />
                 <p className="text-xs text-gray-400 mt-1">Auto-populated on new quotes. Can be edited per quote.</p>
+              </div>
+              <div>
+                <Label>Review link <span className="text-xs font-normal text-gray-400 ml-1">(optional)</span></Label>
+                <Input type="url" placeholder="https://g.page/r/…" value={companyForm.review_link}
+                  onChange={e => setC('review_link', e.target.value)} />
+                <label className="flex items-center gap-2 text-xs text-gray-600 mt-2">
+                  <input type="checkbox" checked={companyForm.review_request_enabled}
+                    onChange={e => setCompanyForm(f => ({ ...f, review_request_enabled: e.target.checked }))}
+                    className="rounded border-gray-300" />
+                  Email customers a one-tap review link after they pay their invoice
+                </label>
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={companyForm.prices_include_tax} onChange={e => setCompanyForm(f => ({ ...f, prices_include_tax: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
@@ -379,16 +461,48 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </div>
               <Button type="submit" loading={loading}>Save settings</Button>
             </form>
-
-            <div className="mt-8 pt-6 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-8">
-              <JobStatusesManager companyId={company.id} />
-              <TaxRatesManager companyId={company.id} />
-              <BillingRatesManager companyId={company.id} />
-              <PaymentMethodsManager companyId={company.id} />
-              <EnquiryInboxManager companyId={company.id} initialToken={(company as Company & { inbound_email_token?: string | null }).inbound_email_token ?? null} />
-            </div>
           </CardContent>
         </Card>
+      )}
+
+      {tab === 'workflow' && (
+        <div className="max-w-4xl space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Job statuses</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">The columns on the Jobs board and the dropdown on each job.</p>
+              <JobStatusesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Tax rates</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">GST, exempt, or any custom rate. Picked per line on quotes &amp; invoices.</p>
+              <TaxRatesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Hourly rates</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Saved hourly rates you can pick on timesheets &amp; quote lines (e.g. &ldquo;Standard&rdquo;, &ldquo;After-hours&rdquo;). Not your subscription plan — that&apos;s on the Subscription tab.</p>
+              <BillingRatesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Payment methods</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Methods that appear when recording a payment (cash, bank transfer, EFTPOS).</p>
+              <PaymentMethodsManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Enquiry inbox email</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-xs text-gray-500 mb-3">Forward customer enquiries to this address — they land as enquiries automatically.</p>
+              <EnquiryInboxManager companyId={company.id} initialToken={(company as Company & { inbound_email_token?: string | null }).inbound_email_token ?? null} />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {tab === 'profile' && (
@@ -556,6 +670,56 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             </CardContent>
           </Card>
 
+          {/* Platform integrations — credentials live in env vars, not the DB.
+              Cards display green-tick / amber-warning based on env presence. */}
+          <Card>
+            <CardHeader><CardTitle>Email sending (Resend)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.resend}
+                okText="Connected — quote, invoice, reminder and review-request emails will send."
+                missingText="Not configured — set RESEND_API_KEY and EMAIL_FROM in your Vercel project (Production + Preview env vars), then redeploy."
+                docs="https://resend.com/docs"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>SMS sending (Twilio)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.twilio}
+                okText="Connected — outgoing SMS and the two-way customer thread are live."
+                missingText="Not configured — set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER in your Vercel env vars, then redeploy. After that, in Twilio set the number's 'A MESSAGE COMES IN' webhook to https://app.industryforms.app/api/sms/inbound (POST)."
+                docs="https://www.twilio.com/docs/usage/secure-credentials"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Online payments (Stripe)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.stripe}
+                okText="Connected — customers can pay invoices online and Tap to Pay is unlocked."
+                missingText="Not configured — set STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY and STRIPE_WEBHOOK_SECRET in your Vercel env vars, then redeploy."
+                docs="https://docs.stripe.com/keys"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>AI (Anthropic Claude)</CardTitle></CardHeader>
+            <CardContent>
+              <StatusRow
+                ok={integrationStatus.anthropic}
+                okText="Connected — SmartWrite, AI quote drafting and the daily AI to-do list are active."
+                missingText="Not configured — set ANTHROPIC_API_KEY in your Vercel env vars, then redeploy."
+                docs="https://docs.anthropic.com/"
+              />
+            </CardContent>
+          </Card>
+
           {/* Import */}
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4 text-orange-500" />Import data</CardTitle></CardHeader>
@@ -569,7 +733,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         </div>
       )}
 
-      {tab === 'billing' && (
+      {tab === 'subscription' && (
         <div className="space-y-6 max-w-2xl">
           <BillingTab company={company} />
         </div>
@@ -672,6 +836,31 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             </form>
           </Dialog>
         </div>
+      )}
+    </div>
+  )
+}
+
+// Compact configured/not-configured indicator for the Integrations cards.
+// Hides credential names by default; reveals the setup instructions inline.
+function StatusRow({ ok, okText, missingText, docs }: {
+  ok: boolean
+  okText: string
+  missingText: string
+  docs?: string
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex-1">
+        {ok ? (
+          <p className="text-sm font-medium text-green-700">&#10003; Connected</p>
+        ) : (
+          <p className="text-sm font-medium text-amber-700">Needs setup</p>
+        )}
+        <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{ok ? okText : missingText}</p>
+      </div>
+      {docs && (
+        <a href={docs} target="_blank" rel="noreferrer" className="text-xs text-gray-500 hover:underline shrink-0 mt-0.5">Docs →</a>
       )}
     </div>
   )
@@ -831,7 +1020,7 @@ function BillingTab({ company }: { company: Company }) {
               <p className="text-lg font-semibold text-gray-900 capitalize">{company.subscription_plan} plan</p>
               <p className="text-sm text-gray-500 capitalize">Status: {company.subscription_status}</p>
               {trialDaysLeft !== null && trialDaysLeft > 0 && (
-                <p className="text-sm text-orange-600 font-medium mt-1">{trialDaysLeft} days left in trial</p>
+                <p className="text-sm text-[var(--accent,#f97316)] font-medium mt-1">{trialDaysLeft} days left in trial</p>
               )}
               {trialDaysLeft === 0 && company.subscription_plan === 'trial' && (
                 <p className="text-sm text-red-600 font-medium mt-1">Trial expired — subscribe to continue</p>

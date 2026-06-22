@@ -106,7 +106,7 @@ export function JobPhotoUpload({ jobId, companyId, profileId, photos: initial, o
         <button
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-600 font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium disabled:opacity-50"
         >
           {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
           {uploading ? 'Uploading…' : 'Add photos'}

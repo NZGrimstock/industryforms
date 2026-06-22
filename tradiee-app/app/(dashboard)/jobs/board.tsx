@@ -26,7 +26,7 @@ type Column = { key: string; label: string; color: string; bg: string }
 
 function JobCard({ job, isDragging = false }: { job: Job; isDragging?: boolean }) {
   return (
-    <div className={`bg-white border border-gray-200 rounded-xl p-3 shadow-sm ${isDragging ? 'opacity-40 shadow-lg rotate-1' : 'hover:border-orange-300 hover:shadow'} transition-all cursor-grab active:cursor-grabbing`}>
+    <div className={`bg-white border border-gray-200 rounded-xl p-3 shadow-sm ${isDragging ? 'opacity-40 shadow-lg rotate-1' : 'hover:border-[var(--accent,#f97316)]/40 hover:shadow'} transition-all cursor-grab active:cursor-grabbing`}>
       <div className="flex items-start justify-between gap-1 mb-2">
         <span className="text-xs font-semibold text-orange-500">{job.job_number}</span>
       </div>

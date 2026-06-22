@@ -110,9 +110,9 @@ export function TodoClient({ todos, companyId, profileId, team, jobs, currentSta
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-1">
-          <Link href="/todos" className={`px-3 py-1.5 text-xs font-medium rounded-full ${!currentStatus ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Active</Link>
-          <Link href="/todos?status=done" className={`px-3 py-1.5 text-xs font-medium rounded-full ${currentStatus === 'done' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Done</Link>
-          <Link href={mineOnly ? '/todos' : '/todos?mine=1'} className={`px-3 py-1.5 text-xs font-medium rounded-full ${mineOnly ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Mine</Link>
+          <Link href="/todos" className={`px-3 py-1.5 text-xs font-medium rounded-full ${!currentStatus ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Active</Link>
+          <Link href="/todos?status=done" className={`px-3 py-1.5 text-xs font-medium rounded-full ${currentStatus === 'done' ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Done</Link>
+          <Link href={mineOnly ? '/todos' : '/todos?mine=1'} className={`px-3 py-1.5 text-xs font-medium rounded-full ${mineOnly ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Mine</Link>
         </div>
         <button
           onClick={() => setNewOpen(true)}

@@ -2,20 +2,30 @@
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
 import { useSidebar } from './sidebar-context'
-import { accentForPath } from '@/lib/route-accent'
+import { accentForPath, hasRouteAccent } from '@/lib/route-accent'
+import { darken } from '@/lib/extract-color'
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function DashboardShell({ children, brandAccent }: { children: React.ReactNode; brandAccent?: string | null }) {
   const { collapsed } = useSidebar()
   const pathname = usePathname()
-  const accent = accentForPath(pathname)
-  // CSS variables consumed by Button (default variant) and any component that
-  // wants a route-tinted accent without hard-coding orange.
+  // Route accent wins on mapped pages; on unscoped pages (dashboard, upgrade,
+  // settings) the company's brand accent (or orange) takes over.
+  const routed = hasRouteAccent(pathname)
+  const brand = brandAccent ?? '#f97316'
+  const accent = routed ? accentForPath(pathname) : {
+    solid: brand, solidHover: darken(brand, 0.1),
+    soft: '#fff7ed', softText: darken(brand, 0.3), ring: brand,
+  }
   const style = {
     '--accent': accent.solid,
     '--accent-hover': accent.solidHover,
     '--accent-soft': accent.soft,
     '--accent-soft-text': accent.softText,
     '--accent-ring': accent.ring,
+    // --brand is always the company brand (independent of route) for the
+    // global "+ New" pill and any other route-agnostic brand chrome.
+    '--brand': brand,
+    '--brand-hover': darken(brand, 0.1),
   } as React.CSSProperties
   return (
     <main

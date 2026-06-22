@@ -157,7 +157,7 @@ export function TaxRatesManager({ companyId }: { companyId: string }) {
       <div className="space-y-2 mb-3">
         {rows.map(r => (
           <div key={r.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-            <span className="text-gray-700">{r.name} — {(Number(r.rate) * 100).toFixed(2).replace(/\.00$/, '')}% {r.is_default && <span className="ml-1 text-xs text-orange-600">(default)</span>}</span>
+            <span className="text-gray-700">{r.name} — {(Number(r.rate) * 100).toFixed(2).replace(/\.00$/, '')}% {r.is_default && <span className="ml-1 text-xs text-[var(--accent,#f97316)]">(default)</span>}</span>
             <div className="flex items-center gap-2">
               {!r.is_default && <button onClick={() => makeDefault(r.id)} className="text-gray-300 hover:text-orange-500" title="Make default"><Star className="h-4 w-4" /></button>}
               <button onClick={() => remove(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
@@ -254,7 +254,7 @@ export function BillingRatesManager({ companyId }: { companyId: string }) {
       <div className="space-y-2 mb-3">
         {rows.map(r => (
           <div key={r.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-            <span className="text-gray-700">{r.name} — ${Number(r.rate).toFixed(2)}/hr {r.is_default && <span className="ml-1 text-xs text-orange-600">(default)</span>}</span>
+            <span className="text-gray-700">{r.name} — ${Number(r.rate).toFixed(2)}/hr {r.is_default && <span className="ml-1 text-xs text-[var(--accent,#f97316)]">(default)</span>}</span>
             <div className="flex items-center gap-2">
               {!r.is_default && <button onClick={() => makeDefault(r.id)} className="text-gray-300 hover:text-orange-500" title="Make default"><Star className="h-4 w-4" /></button>}
               <button onClick={() => remove(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>

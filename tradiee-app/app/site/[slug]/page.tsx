@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
 import { SectionBlock } from './sections'
 import { ContactForm } from './contact-form'
+import { BookingForm } from './booking-form'
 
 type SiteRow = {
   company_id: string
@@ -30,9 +31,31 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params
   const site = await getSite(slug)
   if (!site || !site.is_published) return { title: 'Not found' }
+
+  const name = site.companies?.name ?? 'Welcome'
+  const title = site.seo_title || name
+  // Pull a description: explicit SEO field → first about/hero subheading → null.
+  const fallbackDesc = (() => {
+    for (const s of site.sections ?? []) {
+      if (s.type === 'about' && s.body) return s.body.slice(0, 160)
+      if (s.type === 'hero' && s.subheading) return s.subheading.slice(0, 160)
+    }
+    return undefined
+  })()
+  const description = site.seo_description || fallbackDesc
+  const logo = site.companies?.logo_url ?? undefined
+
   return {
-    title: site.seo_title || site.companies?.name || 'Welcome',
-    description: site.seo_description || undefined,
+    title,
+    description,
+    openGraph: {
+      title, description,
+      siteName: name,
+      images: logo ? [{ url: logo }] : undefined,
+      type: 'website',
+    },
+    twitter: { card: 'summary', title, description, images: logo ? [logo] : undefined },
+    icons: logo ? { icon: logo } : undefined,
   }
 }
 
@@ -68,6 +91,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
           section={section}
           primary={theme.primary}
           ContactForm={<ContactForm slug={site.slug} primary={theme.primary} />}
+          BookingForm={<BookingForm slug={site.slug} primary={theme.primary} ctaLabel={section.type === 'booking' ? section.ctaLabel : undefined} />}
         />
       ))}
 

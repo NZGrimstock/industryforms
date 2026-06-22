@@ -136,6 +136,11 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       paid_at: newStatus === 'paid' ? new Date().toISOString() : null,
     }).eq('id', invoice.id)
 
+    // Fire-and-forget review request — server enforces idempotency + opt-in.
+    if (newStatus === 'paid') {
+      fetch(`/api/invoices/${invoice.id}/review-request`, { method: 'POST' }).catch(() => {})
+    }
+
     toast('Payment recorded')
     setActiveDialog(null)
     router.refresh()

@@ -445,8 +445,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <p className="text-xs text-gray-400">incl. GST</p>
               </div>
               <div className="text-center p-3 bg-orange-50 rounded-xl">
-                <p className="text-xs text-orange-600 mb-1">Collected</p>
-                <p className="text-lg font-semibold text-orange-700">{formatCurrency(totalPaid)}</p>
+                <p className="text-xs text-[var(--accent,#f97316)] mb-1">Collected</p>
+                <p className="text-lg font-semibold text-[var(--accent,#f97316)]">{formatCurrency(totalPaid)}</p>
                 <p className="text-xs text-orange-400">payments received</p>
               </div>
             </div>

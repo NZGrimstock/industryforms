@@ -54,7 +54,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
 
         {!quotes?.length ? (
           <EmptyState icon={FileText} title="No quotes" description="Create your first quote to get started" action={
-            <Link href="/quotes/new" className="inline-flex items-center gap-2 bg-orange-500 text-white text-sm font-medium px-4 py-2 rounded-lg">
+            <Link href="/quotes/new" className="inline-flex items-center gap-2 bg-[var(--accent,#f97316)] text-white text-sm font-medium px-4 py-2 rounded-lg">
               <Plus className="h-4 w-4" /> New quote
             </Link>
           } />
