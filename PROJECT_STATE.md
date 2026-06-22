@@ -186,13 +186,24 @@ Tabs: Jobs (My/All), Map, Invitations, Schedule, **Quotes/Invoices (admin only)*
 
 ## Outstanding / next steps
 1. **Merge `feature/outstanding-backlog` to `main`** after:
-   - Re-uploading `sync-rules.yaml` to PowerSync.
-   - Applying migrations 038 + 039 (`supabase db push`).
+   - Re-uploading `sync-rules.yaml` to PowerSync (now sync-streams edition 3 — JOIN form).
+   - Migrations 038 + 039 already pushed (2026-06-22).
    - Reviewing the PR and the visual changes.
-2. **Stripe wiring for the Projects add-on**: create the \$19/mo `projects_monthly` price and a webhook handler that flips `companies.addons.projects.active`. Today `/api/billing/addon` flips it directly (no payment) — fine for dev/super-admin; needs Stripe for prod.
-3. **Per-screen accent on chips/pills**: filter pills (e.g. "All (0)" on Enquiries) still use raw orange. Either keep (route-tagging) or extend the accent system. User decision.
-4. **Pricing levels** (per-customer-group pricing). **MYOB/QuickBooks** sync (have Xero). **Reminder-cron comms logging** (manual sends are logged; cron sends aren't). **Invoice templates** standalone (currently lean on recurring invoices).
-5. **Mobile Projects view** (deferred — Projects is intentionally web-only per the spec, but field crews seeing the stage they're on would help).
+
+### Next sprint — competitor-parity & differentiators (queued 2026-06-22)
+Ordered roughly by ROI / effort. Each is its own commit/PR.
+1. **Quick-action menus on list rows** — Tradify just shipped this in 2026. Per-row `⋯` on Quotes/Customers/Suppliers/Invoices/Jobs that opens "New job / quote / invoice / PO / bill" pre-filled with that row's customer or supplier. ~1 day.
+2. **Logo → accent picker** — on logo upload (Settings → Company), extract a dominant non-white colour and offer it as the default theme accent. Re-uses the existing `lib/route-accent.ts` shape. Small client-side color-extract (e.g. `node-vibrant`) + write to `companies.theme_accent`. ~1 day.
+3. **Automated review-request emails on invoice paid** — hook into the existing invoice payment path; send a Resend email with a Google review link (per-company `companies.review_link` setting). Optional follow-up after 7d if not actioned. Log to communications.
+4. **Two-way SMS thread** — Twilio inbound webhook → store on a new `customer_messages` table; thread view in customer detail. Outbound sends already exist in places — unify under one sender.
+5. **Booking widget for the website builder** — public `/site/[slug]/book` form posting to `/api/enquiries/public` (already wired for the enquiry inbox). Toggle in website builder section.
+6. **Integrated SEO + Google Business Profile sync** — meta description / OG image / sitemap / robots auto-generated from website builder content; optional GBP API push for hours + photos.
+7. **Tap-to-Pay on phone** — Stripe Terminal SDK (Tap to Pay on iPhone/Android). Needs Stripe Connect express accounts per company. Largest scope; do last.
+
+### Pre-existing backlog
+- **Stripe wiring for the Projects add-on**: create the \$19/mo `projects_monthly` price and a webhook handler that flips `companies.addons.projects.active`. Today `/api/billing/addon` flips it directly (no payment) — fine for dev/super-admin; needs Stripe for prod.
+- **Pricing levels** (per-customer-group pricing). **MYOB/QuickBooks** sync (have Xero). **Reminder-cron comms logging** (manual sends are logged; cron sends aren't). **Invoice templates** standalone (currently lean on recurring invoices).
+- **Mobile Projects view** (deferred — Projects is intentionally web-only per the spec, but field crews seeing the stage they're on would help).
 
 ## Memory (auto-loaded each session, at `C:\Users\User\.claude\projects\D--TRADIEE\memory\`)
 - `project-overview.md`, `tech-stack.md`, `build-state.md`, `feedback_nextjs16_allowedDevOrigins.md`, `gotcha_turbopack_stale_api_404.md`, `tradify-parity-backlog.md`.

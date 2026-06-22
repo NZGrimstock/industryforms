@@ -1,63 +1,64 @@
-# PowerSync sync rules for IndustryForms — upload via PowerSync Dashboard → Sync Rules.
+# PowerSync sync streams for IndustryForms — upload via PowerSync Dashboard
+# → Sync Rules. (Edition 3 = sync streams, replaces bucket_definitions.)
 #
-# Role-aware buckets (mirrors the web RLS from migration 031):
-#   • owner/admin  → full company dataset (company_admin bucket)
-#   • staff        → company reference data (customers, sites, price list, forms)
-#                    + only the jobs assigned to them and those jobs' children
-#                    + only their own timesheets / travel logs
-#                    NEVER quotes, invoices or their line items.
+# Role-aware (mirrors web RLS from migration 031):
+#   • owner/admin  → full company dataset
+#   • staff        → company reference data + only their assigned jobs
+#                    and own time/travel. Never quotes/invoices.
 #
-# company_id is resolved with PARAMETER QUERIES against profiles/jobs.
-# request.user_id() is the Supabase auth user id (JWT `sub`).
-# PowerSync data queries are single-table (no joins), so every synced table
-# carries company_id — added by migration 022_powersync_company_id.sql.
+# auth.user_id() is the Supabase JWT `sub`. Streams require JOINs to use
+# simple equality (no `IN ('owner','admin')` literal lists, no IN-subqueries)
+# so role checks are written with OR.
 
-bucket_definitions:
-  # ── Owners & admins: the full company dataset (unchanged behaviour) ──────────
-  company_admin:
-    parameters: select company_id from profiles where id = request.user_id() and role in ('owner', 'admin')
-    data:
-      - select * from jobs               where company_id = bucket.company_id
-      - select * from customers          where company_id = bucket.company_id
-      - select * from customer_sites     where company_id = bucket.company_id
-      - select * from job_visits         where company_id = bucket.company_id
-      - select * from job_notes          where company_id = bucket.company_id
-      - select * from timesheets         where company_id = bucket.company_id
-      - select * from job_materials      where company_id = bucket.company_id
-      - select * from form_templates     where company_id = bucket.company_id
-      - select * from form_submissions   where company_id = bucket.company_id
-      - select * from price_list_items   where company_id = bucket.company_id
-      - select * from travel_logs        where company_id = bucket.company_id
-      - select * from quotes             where company_id = bucket.company_id
-      - select * from quote_sections     where company_id = bucket.company_id
-      - select * from quote_line_items   where company_id = bucket.company_id
-      - select * from invoices           where company_id = bucket.company_id
-      - select * from invoice_line_items where company_id = bucket.company_id
-      - select * from job_photos         where company_id = bucket.company_id
+config:
+  edition: 3
 
-  # ── Staff: company-wide reference data they need on every job ────────────────
-  staff_company:
-    parameters: select company_id from profiles where id = request.user_id() and role = 'staff'
-    data:
-      - select * from customers        where company_id = bucket.company_id
-      - select * from customer_sites   where company_id = bucket.company_id
-      - select * from price_list_items where company_id = bucket.company_id
-      - select * from form_templates   where company_id = bucket.company_id
+streams:
+  # ── Owner & admin: full company dataset ─────────────────────────────────
+  admin_company:
+    auto_subscribe: true
+    queries:
+      - SELECT jobs.*               FROM jobs               INNER JOIN profiles ON profiles.company_id = jobs.company_id               WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT customers.*          FROM customers          INNER JOIN profiles ON profiles.company_id = customers.company_id          WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT customer_sites.*     FROM customer_sites     INNER JOIN profiles ON profiles.company_id = customer_sites.company_id     WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT job_visits.*         FROM job_visits         INNER JOIN profiles ON profiles.company_id = job_visits.company_id         WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT job_notes.*          FROM job_notes          INNER JOIN profiles ON profiles.company_id = job_notes.company_id          WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT timesheets.*         FROM timesheets         INNER JOIN profiles ON profiles.company_id = timesheets.company_id         WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT job_materials.*      FROM job_materials      INNER JOIN profiles ON profiles.company_id = job_materials.company_id      WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT form_templates.*     FROM form_templates     INNER JOIN profiles ON profiles.company_id = form_templates.company_id     WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT form_submissions.*   FROM form_submissions   INNER JOIN profiles ON profiles.company_id = form_submissions.company_id   WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT price_list_items.*   FROM price_list_items   INNER JOIN profiles ON profiles.company_id = price_list_items.company_id   WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT travel_logs.*        FROM travel_logs        INNER JOIN profiles ON profiles.company_id = travel_logs.company_id        WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT quotes.*             FROM quotes             INNER JOIN profiles ON profiles.company_id = quotes.company_id             WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT quote_sections.*     FROM quote_sections     INNER JOIN profiles ON profiles.company_id = quote_sections.company_id     WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT quote_line_items.*   FROM quote_line_items   INNER JOIN profiles ON profiles.company_id = quote_line_items.company_id   WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT invoices.*           FROM invoices           INNER JOIN profiles ON profiles.company_id = invoices.company_id           WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT invoice_line_items.* FROM invoice_line_items INNER JOIN profiles ON profiles.company_id = invoice_line_items.company_id WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT job_photos.*         FROM job_photos         INNER JOIN profiles ON profiles.company_id = job_photos.company_id         WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
 
-  # ── Staff: one bucket per job assigned to them (job + its children) ──────────
+  # ── Staff: company-wide reference data needed on every job ──────────────
+  staff_reference:
+    auto_subscribe: true
+    queries:
+      - SELECT customers.*        FROM customers        INNER JOIN profiles ON profiles.company_id = customers.company_id        WHERE profiles.id = auth.user_id() AND profiles.role = 'staff'
+      - SELECT customer_sites.*   FROM customer_sites   INNER JOIN profiles ON profiles.company_id = customer_sites.company_id   WHERE profiles.id = auth.user_id() AND profiles.role = 'staff'
+      - SELECT price_list_items.* FROM price_list_items INNER JOIN profiles ON profiles.company_id = price_list_items.company_id WHERE profiles.id = auth.user_id() AND profiles.role = 'staff'
+      - SELECT form_templates.*   FROM form_templates   INNER JOIN profiles ON profiles.company_id = form_templates.company_id   WHERE profiles.id = auth.user_id() AND profiles.role = 'staff'
+
+  # ── Staff: assigned jobs + their children ───────────────────────────────
   staff_jobs:
-    parameters: select id as job_id from jobs where assigned_to = request.user_id()
-    data:
-      - select * from jobs             where id = bucket.job_id
-      - select * from job_visits       where job_id = bucket.job_id
-      - select * from job_notes        where job_id = bucket.job_id
-      - select * from job_materials    where job_id = bucket.job_id
-      - select * from job_photos       where job_id = bucket.job_id
-      - select * from form_submissions where job_id = bucket.job_id
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM jobs WHERE assigned_to = auth.user_id()
+      - SELECT job_visits.*       FROM job_visits       INNER JOIN jobs ON jobs.id = job_visits.job_id       WHERE jobs.assigned_to = auth.user_id()
+      - SELECT job_notes.*        FROM job_notes        INNER JOIN jobs ON jobs.id = job_notes.job_id        WHERE jobs.assigned_to = auth.user_id()
+      - SELECT job_materials.*    FROM job_materials    INNER JOIN jobs ON jobs.id = job_materials.job_id    WHERE jobs.assigned_to = auth.user_id()
+      - SELECT job_photos.*       FROM job_photos       INNER JOIN jobs ON jobs.id = job_photos.job_id       WHERE jobs.assigned_to = auth.user_id()
+      - SELECT form_submissions.* FROM form_submissions INNER JOIN jobs ON jobs.id = form_submissions.job_id WHERE jobs.assigned_to = auth.user_id()
 
-  # ── Staff: only their own timesheets and travel logs ────────────────────────
+  # ── Staff: own time only ────────────────────────────────────────────────
   staff_self:
-    parameters: select id as profile_id from profiles where id = request.user_id() and role = 'staff'
-    data:
-      - select * from timesheets  where profile_id = bucket.profile_id
-      - select * from travel_logs where profile_id = bucket.profile_id
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM timesheets  WHERE profile_id = auth.user_id()
+      - SELECT * FROM travel_logs WHERE profile_id = auth.user_id()
