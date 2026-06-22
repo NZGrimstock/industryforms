@@ -49,7 +49,9 @@ export async function proxy(request: NextRequest) {
     if (sub && sub !== 'www' && sub !== 'app' && !sub.includes('.')) {
       if (!passThrough) {
         const url = request.nextUrl.clone()
-        url.pathname = `/site/${sub}`
+        // Preserve any nested path (/sitemap.xml, /robots.txt, /book) so we
+        // can serve site-scoped routes from inside /site/[slug]/.
+        url.pathname = `/site/${sub}${pathname === '/' ? '' : pathname}`
         return NextResponse.rewrite(url)
       }
       return NextResponse.next({ request })
@@ -61,7 +63,7 @@ export async function proxy(request: NextRequest) {
       const slug = await resolveCustomDomain(hostname)
       if (slug) {
         const url = request.nextUrl.clone()
-        url.pathname = `/site/${slug}`
+        url.pathname = `/site/${slug}${pathname === '/' ? '' : pathname}`
         return NextResponse.rewrite(url)
       }
     }
