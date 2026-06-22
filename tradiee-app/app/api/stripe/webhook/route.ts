@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
+import { maybeSendReviewRequest } from '@/lib/review-request'
 
 export async function POST(req: NextRequest) {
   const stripe = getStripe()
@@ -44,6 +45,8 @@ export async function POST(req: NextRequest) {
         status: newStatus,
         paid_at: newStatus === 'paid' ? new Date().toISOString() : null,
       }).eq('id', invoiceId)
+
+      if (newStatus === 'paid') await maybeSendReviewRequest(service, invoiceId)
       break
     }
 

@@ -61,6 +61,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
     invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
     quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
+    review_link: company.review_link ?? '',
+    review_request_enabled: company.review_request_enabled ?? true,
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -398,6 +400,17 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 <Label>Default terms & conditions</Label>
                 <Textarea value={companyForm.default_terms} onChange={e => setC('default_terms', e.target.value)} rows={6} placeholder="Enter your standard payment terms, warranty clauses, or any default conditions that appear on quotes..." />
                 <p className="text-xs text-gray-400 mt-1">Auto-populated on new quotes. Can be edited per quote.</p>
+              </div>
+              <div>
+                <Label>Review link <span className="text-xs font-normal text-gray-400 ml-1">(optional)</span></Label>
+                <Input type="url" placeholder="https://g.page/r/…" value={companyForm.review_link}
+                  onChange={e => setC('review_link', e.target.value)} />
+                <label className="flex items-center gap-2 text-xs text-gray-600 mt-2">
+                  <input type="checkbox" checked={companyForm.review_request_enabled}
+                    onChange={e => setCompanyForm(f => ({ ...f, review_request_enabled: e.target.checked }))}
+                    className="rounded border-gray-300" />
+                  Email customers a one-tap review link after they pay their invoice
+                </label>
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={companyForm.prices_include_tax} onChange={e => setCompanyForm(f => ({ ...f, prices_include_tax: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
