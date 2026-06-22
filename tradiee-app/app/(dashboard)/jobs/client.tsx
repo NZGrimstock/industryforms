@@ -34,13 +34,14 @@ interface Props {
   initialOpen?: boolean
   initialTitle?: string
   initialDescription?: string
+  initialCustomerId?: string
 }
 
 const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '' }: Props) {
+export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
   const [open, setOpen] = useState(initialOpen)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
@@ -50,7 +51,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [form, setForm] = useState({ customerId: '', title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '' })
+  const [form, setForm] = useState({ customerId: initialCustomerId, title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '' })
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing')
   const [newCust, setNewCust] = useState({ name: '', phone: '' })
 

@@ -3,7 +3,8 @@ import { Header } from '@/components/layout/header'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import Link from 'next/link'
-import { Truck, Plus } from 'lucide-react'
+import { Truck, Plus, ShoppingCart, Receipt } from 'lucide-react'
+import { RowActions } from '@/components/ui/row-actions'
 
 export default async function SuppliersPage() {
   const supabase = await createClient()
@@ -42,6 +43,7 @@ export default async function SuppliersPage() {
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Phone</th>
                   <th className="text-left px-6 py-3 font-medium text-gray-500">Account</th>
+                  <th className="w-10 px-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -51,6 +53,12 @@ export default async function SuppliersPage() {
                     <td className="p-0"><Link href={`/suppliers/${s.id}`} className="block px-6 py-3 text-gray-600">{s.email ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/suppliers/${s.id}`} className="block px-6 py-3 text-gray-600">{s.phone ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/suppliers/${s.id}`} className="block px-6 py-3 text-gray-500">{s.account_number ?? '—'}</Link></td>
+                    <td className="px-3 text-right">
+                      <RowActions actions={[
+                        { label: 'New purchase order', href: `/purchase-orders/new?supplierId=${s.id}`, icon: <ShoppingCart /> },
+                        { label: 'New bill',           href: `/bills/new?supplierId=${s.id}`,           icon: <Receipt /> },
+                      ]} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

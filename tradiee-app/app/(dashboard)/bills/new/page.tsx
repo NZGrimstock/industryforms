@@ -3,7 +3,7 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent } from '@/components/ui/card'
 import { BillForm } from '@/components/forms/bill-form'
 
-export default async function NewBillPage({ searchParams }: { searchParams: Promise<{ poId?: string }> }) {
+export default async function NewBillPage({ searchParams }: { searchParams: Promise<{ poId?: string; supplierId?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,11 +15,13 @@ export default async function NewBillPage({ searchParams }: { searchParams: Prom
     supabase.from('jobs').select('id, job_number, title').eq('company_id', companyId).order('created_at', { ascending: false }).limit(100),
   ])
 
-  // Optional prefill from a received purchase order
+  // Optional prefill from a received purchase order, or just from a supplier
   let defaults: { supplier_id?: string; job_id?: string; purchase_order_id?: string; total?: number } | undefined
   if (sp.poId) {
     const { data: po } = await supabase.from('purchase_orders').select('id, supplier_id, job_id, total').eq('id', sp.poId).eq('company_id', companyId).single()
     if (po) defaults = { supplier_id: po.supplier_id ?? undefined, job_id: po.job_id ?? undefined, purchase_order_id: po.id, total: Number(po.total) }
+  } else if (sp.supplierId) {
+    defaults = { supplier_id: sp.supplierId }
   }
 
   const gstRate = (profile?.companies as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15

@@ -17,7 +17,7 @@ import { nextDocNumber } from '@/lib/numbering'
 
 const SORTABLE = ['job_number', 'title', 'status', 'created_at']
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string; sort?: string; dir?: string }> }) {
+export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string; customerId?: string; sort?: string; dir?: string }> }) {
   const sp = await searchParams
   const tab = (sp.tab ?? 'jobs') as 'jobs' | 'recurring' | 'templates' | 'reminders'
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
@@ -97,7 +97,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </Link>
               ))}
             </div>
-            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} />
+            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
           </div>
         </div>
 
