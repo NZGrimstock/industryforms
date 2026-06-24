@@ -72,6 +72,9 @@ export default function QuoteDetailScreen() {
   const [showAddItem, setShowAddItem] = useState(false)
   const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' })
   const [addingItem, setAddingItem] = useState(false)
+  const [editingItem, setEditingItem] = useState<LineItem | null>(null)
+  const [editForm, setEditForm] = useState({ description: '', quantity: '1', unit_price: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const { data: quotes, isLoading } = useQuery<Quote>(
     `SELECT q.id, q.quote_number, q.title, q.status, q.subtotal, q.gst_amount, q.total,
@@ -144,6 +147,44 @@ export default function QuoteDetailScreen() {
         },
       ]
     )
+  }
+
+  function startEdit(item: LineItem) {
+    setEditingItem(item)
+    setEditForm({
+      description: item.description,
+      quantity: String(item.quantity),
+      unit_price: String(item.unit_price),
+    })
+  }
+
+  async function saveEdit() {
+    if (!editingItem) return
+    setSavingEdit(true)
+    const qty = parseFloat(editForm.quantity) || 1
+    const price = parseFloat(editForm.unit_price) || 0
+    const { error } = await supabase.from('quote_line_items').update({
+      description: editForm.description.trim(),
+      quantity: qty,
+      unit_price: price,
+      line_total: qty * price,
+    }).eq('id', editingItem.id)
+    setSavingEdit(false)
+    if (error) { Alert.alert('Error', error.message); return }
+    setEditingItem(null)
+    refreshItems?.()
+  }
+
+  async function deleteLineItem(itemId: string) {
+    Alert.alert('Remove item', 'Remove this line item?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          await supabase.from('quote_line_items').delete().eq('id', itemId)
+          refreshItems?.()
+        },
+      },
+    ])
   }
 
   async function addLineItem() {
@@ -304,14 +345,30 @@ export default function QuoteDetailScreen() {
             <Text style={s.empty}>No line items</Text>
           ) : (
             <>
-              {unsectioned.map(item => <LineRow key={item.id} item={item} />)}
+              {unsectioned.map(item => (
+                <LineRow
+                  key={item.id}
+                  item={item}
+                  isDraft={isDraft}
+                  onEdit={() => startEdit(item)}
+                  onDelete={() => deleteLineItem(item.id)}
+                />
+              ))}
               {(sections ?? []).map(section => {
                 const items = sectionMap.get(section.id) ?? []
                 if (items.length === 0) return null
                 return (
                   <View key={section.id}>
                     <Text style={s.sectionHeader}>{section.title}</Text>
-                    {items.map(item => <LineRow key={item.id} item={item} />)}
+                    {items.map(item => (
+                      <LineRow
+                        key={item.id}
+                        item={item}
+                        isDraft={isDraft}
+                        onEdit={() => startEdit(item)}
+                        onDelete={() => deleteLineItem(item.id)}
+                      />
+                    ))}
                   </View>
                 )
               })}
@@ -329,16 +386,77 @@ export default function QuoteDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Edit line item modal */}
+      {editingItem && (
+        <View style={s.editOverlay}>
+          <View style={s.editSheet}>
+            <Text style={s.editTitle}>Edit Line Item</Text>
+            <TextInput
+              style={[s.input, { marginBottom: 8 }]}
+              value={editForm.description}
+              onChangeText={v => setEditForm(p => ({ ...p, description: v }))}
+              placeholder="Description"
+              placeholderTextColor="#9ca3af"
+            />
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={editForm.quantity}
+                onChangeText={v => setEditForm(p => ({ ...p, quantity: v }))}
+                placeholder="Qty"
+                keyboardType="decimal-pad"
+                placeholderTextColor="#9ca3af"
+              />
+              <TextInput
+                style={[s.input, { flex: 2 }]}
+                value={editForm.unit_price}
+                onChangeText={v => setEditForm(p => ({ ...p, unit_price: v }))}
+                placeholder="Unit price ($)"
+                keyboardType="decimal-pad"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[s.miniBtn, s.miniBtnOrange, savingEdit && { opacity: 0.5 }]}
+                onPress={saveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={s.miniBtnTextWhite}>Save</Text>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.miniBtn, s.miniBtnGhost]} onPress={() => setEditingItem(null)}>
+                <Text style={s.miniBtnTextGray}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
 
-function LineRow({ item }: { item: LineItem }) {
+function LineRow({ item, isDraft, onEdit, onDelete }: {
+  item: LineItem
+  isDraft: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
   return (
     <View style={s.lineRow}>
-      <Text style={s.lineDesc} numberOfLines={2}>{item.description}</Text>
-      <Text style={s.lineQty}>{item.quantity} {item.unit}</Text>
+      <TouchableOpacity style={{ flex: 1 }} onPress={isDraft ? onEdit : undefined} activeOpacity={isDraft ? 0.6 : 1}>
+        <Text style={s.lineDesc} numberOfLines={2}>{item.description}</Text>
+        <Text style={s.lineQty}>{item.quantity} {item.unit}</Text>
+      </TouchableOpacity>
       <Text style={s.lineTotal}>{fmt(item.line_total ?? 0)}</Text>
+      {isDraft && (
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Feather name="trash-2" size={16} color="#ef4444" />
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -382,4 +500,13 @@ const s = StyleSheet.create({
   miniBtnGhost: { backgroundColor: '#f3f4f6' },
   miniBtnTextWhite: { color: '#fff', fontWeight: '700', fontSize: 14 },
   miniBtnTextGray: { color: '#6b7280', fontWeight: '600', fontSize: 14 },
+  editOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, top: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end',
+  },
+  editSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 20, paddingBottom: 32,
+  },
+  editTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 14 },
 })

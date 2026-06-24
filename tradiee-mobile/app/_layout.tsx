@@ -8,10 +8,26 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { StatusBar } from 'expo-status-bar'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
+import { StripeTerminalProvider } from '@stripe/stripe-terminal-react-native'
 import { db } from '@/lib/powersync/database'
 import { SupabaseConnector } from '@/lib/powersync/connector'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
+
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+
+async function fetchTokenProvider(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+  const res = await fetch(`${API_BASE}/api/stripe/terminal/connection-token`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  if (!res.ok) throw new Error('Failed to fetch connection token')
+  const { secret } = await res.json()
+  if (!secret) throw new Error('No connection token in response')
+  return secret as string
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -98,19 +114,23 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PowerSyncContext.Provider value={db}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="login" />
-          <Stack.Screen name="signup" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="jobs/[id]" options={{ headerShown: true, title: 'Job', headerTintColor: '#f97316' }} />
-          <Stack.Screen name="quotes/[id]" options={{ headerShown: true, title: 'Quote', headerTintColor: '#f97316' }} />
-          <Stack.Screen name="invoices/[id]" options={{ headerShown: true, title: 'Invoice', headerTintColor: '#f97316' }} />
-          <Stack.Screen name="customers/[id]" options={{ headerShown: true, title: 'Customer', headerTintColor: '#f97316' }} />
-          <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
-        </Stack>
-      </PowerSyncContext.Provider>
+      <StripeTerminalProvider tokenProvider={fetchTokenProvider} logLevel="none">
+        <PowerSyncContext.Provider value={db}>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="login" />
+            <Stack.Screen name="signup" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="jobs/[id]" options={{ headerShown: true, title: 'Job', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="quotes/[id]" options={{ headerShown: true, title: 'Quote', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invoices/[id]" options={{ headerShown: true, title: 'Invoice', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="customers/[id]" options={{ headerShown: true, title: 'Customer', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="pay-now" options={{ headerShown: true, title: 'Pay Now', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications', headerTintColor: '#f97316' }} />
+          </Stack>
+        </PowerSyncContext.Provider>
+      </StripeTerminalProvider>
     </GestureHandlerRootView>
   )
 }

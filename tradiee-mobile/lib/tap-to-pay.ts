@@ -28,7 +28,7 @@
 // installed, so importing the SDK would break the build. Remove this guard
 // after the npm install lands.
 
-export const TAP_TO_PAY_READY = false
+export const TAP_TO_PAY_READY = true
 
 export async function fetchConnectionToken(apiBase: string): Promise<string> {
   const res = await fetch(`${apiBase}/api/stripe/terminal/connection-token`, { method: 'POST' })

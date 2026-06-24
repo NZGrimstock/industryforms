@@ -3,9 +3,10 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert,
 } from 'react-native'
-import { useLocalSearchParams, Stack } from 'expo-router'
+import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 
 const STATUS_COLOR: Record<string, string> = {
@@ -193,21 +194,36 @@ export default function InvoiceDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Bottom action */}
+      {/* Bottom actions */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
-        <TouchableOpacity
-          style={[styles.payBtn, isPaid && styles.payBtnDisabled]}
-          onPress={recordPayment}
-          disabled={isPaid || recording}
-          activeOpacity={0.85}
-        >
-          {recording
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.payBtnText}>
-                {isPaid ? 'Payment Recorded' : 'Record Payment'}
-              </Text>
-          }
-        </TouchableOpacity>
+        {isPaid ? (
+          <View style={[styles.payBtn, styles.payBtnDisabled]}>
+            <Feather name="check-circle" size={18} color="#fff" />
+            <Text style={styles.payBtnText}>Paid</Text>
+          </View>
+        ) : (
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={[styles.tapPayBtn]}
+              onPress={() => router.push(`/pay-now?invoiceId=${id}`)}
+              activeOpacity={0.85}
+            >
+              <Feather name="credit-card" size={16} color="#fff" />
+              <Text style={styles.tapPayBtnText}>Tap to Pay</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.manualBtn, recording && { opacity: 0.5 }]}
+              onPress={recordPayment}
+              disabled={recording}
+              activeOpacity={0.85}
+            >
+              {recording
+                ? <ActivityIndicator color="#374151" size="small" />
+                : <Text style={styles.manualBtnText}>Manual</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     </View>
   )
@@ -236,7 +252,12 @@ const styles = StyleSheet.create({
   totalLabelBold: { fontSize: 15, fontWeight: '700', color: '#111827' },
   totalValueBold: { fontSize: 15, fontWeight: '700', color: '#111827' },
   bottomBar: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  payBtn: { backgroundColor: '#22c55e', borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  payBtn: { backgroundColor: '#22c55e', borderRadius: 14, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   payBtnDisabled: { backgroundColor: '#9ca3af' },
   payBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  btnRow: { flexDirection: 'row', gap: 10 },
+  tapPayBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#22c55e', borderRadius: 14, paddingVertical: 16 },
+  tapPayBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  manualBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6', borderRadius: 14, paddingVertical: 16 },
+  manualBtnText: { color: '#374151', fontSize: 14, fontWeight: '600' },
 })
