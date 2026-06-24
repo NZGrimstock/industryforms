@@ -14,6 +14,11 @@ const API_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY
 
 type Suggestion = { place_id: string; display_name: string }
 
+// LocationIQ returns "123, Any Street, …" — strip the comma after the house number
+function cleanAddress(s: string) {
+  return s.replace(/^(\d+[a-zA-Z]?),\s+/, '$1 ')
+}
+
 export function AddressAutocomplete({
   value,
   onChange,
@@ -63,8 +68,9 @@ export function AddressAutocomplete({
   }
 
   function select(s: Suggestion) {
-    setQuery(s.display_name)
-    onChange(s.display_name)
+    const addr = cleanAddress(s.display_name)
+    setQuery(addr)
+    onChange(addr)
     setSuggestions([])
     setOpen(false)
   }
@@ -107,7 +113,7 @@ export function AddressAutocomplete({
               onClick={() => select(s)}
               className={`w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors ${i < suggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
             >
-              {s.display_name}
+              {cleanAddress(s.display_name)}
             </button>
           ))}
         </div>
