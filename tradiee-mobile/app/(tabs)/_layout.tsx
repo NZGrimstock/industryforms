@@ -108,7 +108,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
+        headerShown: false,
         headerStyle: styles.header,
         headerTitleStyle: styles.headerTitle,
         headerRight: HeaderRight,
@@ -134,7 +134,6 @@ export default function TabLayout() {
                 )}
               </View>
             ),
-            headerShown: tab.name !== 'home',
             href: isStaff && ADMIN_ONLY.has(tab.name) ? null : undefined,
           }}
         />
