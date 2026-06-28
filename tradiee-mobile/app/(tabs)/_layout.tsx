@@ -134,6 +134,7 @@ export default function TabLayout() {
                 )}
               </View>
             ),
+            headerShown: tab.name !== 'home',
             href: isStaff && ADMIN_ONLY.has(tab.name) ? null : undefined,
           }}
         />
