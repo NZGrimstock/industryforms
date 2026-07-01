@@ -17,15 +17,18 @@ import { Package, Plus, Pencil, Trash2, AlertTriangle, Upload, X, CheckCircle } 
 
 interface Props {
   companyId: string
+  standardMarkupEnabled: boolean
+  standardMarkupPct: number
   items: PriceListItem[]
   kits: Kit[]
 }
 
 type CsvRow = { name: string; code: string; type: string; unit: string; cost_price: string; sell_price: string }
 
-export function PriceListClient({ companyId, items, kits }: Props) {
+export function PriceListClient({ companyId, standardMarkupEnabled, standardMarkupPct, items, kits }: Props) {
   const [tab, setTab] = useState<'items' | 'kits'>('items')
   const [itemDialog, setItemDialog] = useState<PriceListItem | null | 'new'>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [csvOpen, setCsvOpen] = useState(false)
   const [csvRows, setCsvRows] = useState<CsvRow[]>([])
   const [csvImporting, setCsvImporting] = useState(false)
@@ -38,6 +41,22 @@ export function PriceListClient({ companyId, items, kits }: Props) {
     const { error } = await supabase.from('price_list_items').delete().eq('id', id)
     if (error) toast(error.message, 'error')
     else { toast('Item deleted'); router.refresh() }
+  }
+
+  async function deleteSelectedItems() {
+    if (selectedIds.length === 0) return
+    if (!confirm(`Delete ${selectedIds.length} selected inventory item${selectedIds.length === 1 ? '' : 's'}?`)) return
+    const { error } = await supabase.from('price_list_items').delete().in('id', selectedIds)
+    if (error) toast(error.message, 'error')
+    else {
+      toast(`Deleted ${selectedIds.length} item${selectedIds.length === 1 ? '' : 's'}`)
+      setSelectedIds([])
+      router.refresh()
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -69,15 +88,19 @@ export function PriceListClient({ companyId, items, kits }: Props) {
 
   async function importCsv() {
     setCsvImporting(true)
-    const payload = csvRows.map(r => ({
+    const payload = csvRows.map(r => {
+      const cost = Number(r.cost_price) || 0
+      const sell = Number(r.sell_price) || 0
+      return ({
       company_id: companyId,
       name: r.name,
       code: r.code || null,
       type: r.type,
       unit: r.unit || 'each',
-      cost_price: Number(r.cost_price) || 0,
-      sell_price: Number(r.sell_price) || 0,
-    }))
+      cost_price: cost,
+      sell_price: sell || (standardMarkupEnabled ? Number((cost * (1 + standardMarkupPct / 100)).toFixed(2)) : 0),
+    })
+    })
     const { error } = await supabase.from('price_list_items').insert(payload)
     setCsvImporting(false)
     if (error) toast(error.message, 'error')
@@ -101,6 +124,11 @@ export function PriceListClient({ companyId, items, kits }: Props) {
           ))}
         </div>
         <div className="flex gap-2">
+          {tab === 'items' && selectedIds.length > 0 && (
+            <Button variant="outline" size="sm" onClick={deleteSelectedItems}>
+              <Trash2 className="h-4 w-4" /> Delete selected ({selectedIds.length})
+            </Button>
+          )}
           {tab === 'items' && (
             <button onClick={() => setCsvOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">
               <Upload className="h-3.5 w-3.5" /> CSV import
@@ -198,10 +226,12 @@ export function PriceListClient({ companyId, items, kits }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {items.map(item => (
-                  <tr key={item.id} onClick={() => setItemDialog(item)} className={`hover:bg-gray-50 cursor-pointer ${!item.is_active ? 'opacity-50' : ''}`}>
+                {items.map(item => {
+                  const selected = selectedIds.includes(item.id)
+                  return (
+                  <tr key={item.id} onClick={() => toggleSelected(item.id)} className={`hover:bg-gray-50 cursor-pointer ${selected ? 'bg-orange-50' : ''} ${!item.is_active ? 'opacity-50' : ''}`}>
                     <td className="px-6 py-3">
-                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="font-medium text-gray-900">{selected && <span className="mr-2 text-orange-500">✓</span>}{item.name}</p>
                       {item.code && <p className="text-xs text-gray-400">{item.code}</p>}
                     </td>
                     <td className="px-6 py-3 text-gray-500 capitalize">{item.type}</td>
@@ -223,7 +253,7 @@ export function PriceListClient({ companyId, items, kits }: Props) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </Card>
@@ -258,6 +288,8 @@ export function PriceListClient({ companyId, items, kits }: Props) {
           <PriceItemForm
             companyId={companyId}
             item={itemDialog === 'new' ? undefined : itemDialog}
+            standardMarkupEnabled={standardMarkupEnabled}
+            standardMarkupPct={standardMarkupPct}
             onSuccess={() => { setItemDialog(null); router.refresh() }}
           />
         )}
@@ -266,7 +298,7 @@ export function PriceListClient({ companyId, items, kits }: Props) {
   )
 }
 
-function PriceItemForm({ companyId, item, onSuccess }: { companyId: string; item?: PriceListItem; onSuccess: () => void }) {
+function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupPct, onSuccess }: { companyId: string; item?: PriceListItem; standardMarkupEnabled: boolean; standardMarkupPct: number; onSuccess: () => void }) {
   const supabase = createClient()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -284,7 +316,16 @@ function PriceItemForm({ companyId, item, onSuccess }: { companyId: string; item
     is_active: item?.is_active ?? true,
   })
 
-  function set(k: string, v: string | boolean) { setForm(f => ({ ...f, [k]: v })) }
+  function set(k: string, v: string | boolean) {
+    setForm(f => {
+      const next = { ...f, [k]: v }
+      if (standardMarkupEnabled && k === 'cost_price' && (!next.sell_price || Number(next.sell_price) === 0)) {
+        const cost = parseFloat(String(v)) || 0
+        next.sell_price = cost ? (cost * (1 + standardMarkupPct / 100)).toFixed(2) : '0'
+      }
+      return next
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -297,7 +338,7 @@ function PriceItemForm({ companyId, item, onSuccess }: { companyId: string; item
       description: form.description || null,
       unit: form.unit,
       cost_price: parseFloat(form.cost_price) || 0,
-      sell_price: parseFloat(form.sell_price) || 0,
+      sell_price: parseFloat(form.sell_price) || (standardMarkupEnabled ? Number(((parseFloat(form.cost_price) || 0) * (1 + standardMarkupPct / 100)).toFixed(2)) : 0),
       supplier_name: form.supplier_name || null,
       quantity_on_hand: form.quantity_on_hand !== '' ? parseFloat(form.quantity_on_hand) : null,
       low_stock_threshold: form.low_stock_threshold !== '' ? parseFloat(form.low_stock_threshold) : null,

@@ -7,13 +7,14 @@ import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { discountLabel } from '@/lib/pricing'
 import { InvoiceDetailClient } from './client'
 import { RecurringInvoiceCard } from './recurring-card'
+import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import Link from 'next/link'
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer)').eq('id', user!.id).single()
 
   const { data: invoice } = await supabase
     .from('invoices')
@@ -25,9 +26,22 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   if (!invoice) notFound()
 
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
-  const co = profile?.companies as unknown as {default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null} | null
+  const co = profile?.companies as unknown as {name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null} | null
   const gstRate = co?.default_gst_rate ?? 0.15
   const xeroConnected = !!co?.xero_tenant_id
+  const printData: InvoicePdfData = {
+    invoice: {
+      ...invoice,
+      payment_instructions: co?.payment_instructions ?? null,
+      invoice_footer: co?.invoice_footer ?? null,
+    },
+    company: {
+      name: co?.name ?? '',
+      email: co?.email ?? null,
+      phone: co?.phone ?? null,
+      gst_number: co?.gst_number ?? null,
+    },
+  }
 
   return (
     <>
@@ -55,6 +69,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             gstRate={gstRate}
             pricesIncludeTax={!!co?.prices_include_tax}
             xeroConnected={xeroConnected}
+            printData={printData}
           />
         </div>
 

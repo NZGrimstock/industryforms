@@ -24,13 +24,14 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
   const [customersRes, priceItemsRes] = await Promise.all([
     supabase.from('customers').select('id, name').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
   ])
   const customers = customersRes.data
   const priceItems = priceItemsRes.data ?? []
+  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
 
   // Board needs all active statuses; list can be filtered
   let query = supabase.from('jobs').select('*, customers(name), profiles(full_name), customer_sites(address)').eq('company_id', profile!.company_id)
@@ -98,7 +99,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </Link>
               ))}
             </div>
-            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
+            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
           </div>
         </div>
 
@@ -113,7 +114,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         {view === 'list' && (
           !jobs?.length ? (
             <EmptyState icon={Briefcase} title="No jobs" description="Create a job to start tracking work" action={
-              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} />
+              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} />
             } />
           ) : (
             <Card className="overflow-hidden">

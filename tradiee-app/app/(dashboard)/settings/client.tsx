@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager } from '@/components/forms/company-lists'
-import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check } from 'lucide-react'
+import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } from 'lucide-react'
 import { getPlan, planForSeats } from '@/lib/plans'
 import { extractAccent } from '@/lib/extract-color'
 
@@ -75,6 +75,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
     review_link: company.review_link ?? '',
     review_request_enabled: company.review_request_enabled ?? true,
+    standard_markup_enabled: (company as Company & { standard_markup_enabled?: boolean }).standard_markup_enabled ?? false,
+    standard_markup_pct: ((company as Company & { standard_markup_pct?: number }).standard_markup_pct ?? 80).toString(),
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -187,6 +189,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       ...companyForm,
       default_gst_rate: parseFloat(companyForm.default_gst_rate) / 100,
       default_terms: companyForm.default_terms || null,
+      standard_markup_enabled: companyForm.standard_markup_enabled,
+      standard_markup_pct: parseFloat(companyForm.standard_markup_pct) || 0,
     }).eq('id', company.id)
     if (error) toast(error.message, 'error')
     else { toast('Company settings saved'); router.refresh() }
@@ -311,6 +315,25 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     toast('Team member updated')
     setEditMember(null)
     setLoading(false)
+  }
+
+  async function archiveTeamMember(member: Profile) {
+    if (member.id === profile.id) {
+      toast('You cannot archive your own account', 'error')
+      return
+    }
+    if (!confirm(`Archive ${member.full_name}? They will no longer appear in assignments or count as active.`)) return
+    setLoading(true)
+    const res = await fetch('/api/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'profiles', id: member.id }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setLoading(false)
+    if (!res.ok) { toast(data.error ?? 'Could not archive staff member', 'error'); return }
+    setTeam(prev => prev.map(m => m.id === member.id ? { ...m, is_active: false } : m))
+    toast('Staff member archived')
   }
 
   const planLabel: Record<string, string> = { trial: 'Trial', solo: 'Solo (1 user)', team: 'Team (up to 10)', pro: 'Pro (unlimited)' }
@@ -459,6 +482,16 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                 <input type="checkbox" checked={companyForm.prices_include_tax} onChange={e => setCompanyForm(f => ({ ...f, prices_include_tax: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
                 Prices include GST (tax-inclusive entry on quotes &amp; invoices)
               </label>
+              <div className="rounded-xl border border-gray-200 p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={companyForm.standard_markup_enabled} onChange={e => setCompanyForm(f => ({ ...f, standard_markup_enabled: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
+                  Use standard markup when an item has cost only
+                </label>
+                <div className="max-w-xs">
+                  <Label>Standard markup (%)</Label>
+                  <Input type="number" min="0" step="0.01" value={companyForm.standard_markup_pct} onChange={e => setC('standard_markup_pct', e.target.value)} />
+                </div>
+              </div>
               <div>
                 <Label>Document number prefixes</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -826,9 +859,16 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                     <td className="px-6 py-3 text-right text-gray-600">{m.hourly_cost_rate ? `$${m.hourly_cost_rate}/hr` : <span className="text-gray-300">—</span>}</td>
                     <td className="px-6 py-3">{m.is_active ? <span className="text-green-600 text-xs font-medium">Active</span> : <span className="text-gray-400 text-xs">Inactive</span>}</td>
                     <td className="px-3 py-3">
-                      <button onClick={() => openEdit(m)} className="text-gray-400 hover:text-gray-600 p-1 rounded">
+                      <div className="flex justify-end gap-1">
+                      <button onClick={() => openEdit(m)} className="text-gray-400 hover:text-gray-600 p-1 rounded" title="Edit staff member">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      {m.is_active && (
+                        <button onClick={() => archiveTeamMember(m)} className="text-gray-400 hover:text-amber-600 p-1 rounded" title="Archive staff member">
+                          <Archive className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}

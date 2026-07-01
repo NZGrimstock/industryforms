@@ -32,14 +32,17 @@ interface Props {
   priceItems: PriceItem[]
   quoteLines?: QuoteLine[]
   quoteNumber?: string | null
+  standardMarkupEnabled?: boolean
+  standardMarkupPct?: number
 }
 
-export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, quoteLines = [], quoteNumber }: Props) {
+export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
   const [showPriceList, setShowPriceList] = useState(false)
   const [search, setSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
 
@@ -66,20 +69,31 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
     router.refresh()
   }
 
-  async function addFromPrice(item: PriceItem) {
+  function toggleSelected(id: string) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function addSelectedFromPriceList() {
+    const selected = priceItems.filter(item => selectedIds.includes(item.id))
+    if (selected.length === 0) return
     setLoading(true)
-    await supabase.from('job_materials').insert({
-      job_id: jobId,
-      company_id: companyId,
-      added_by: profileId,
-      price_list_item_id: item.id,
-      description: item.name,
-      quantity: 1,
-      unit: item.unit,
-      unit_cost: item.cost_price,
-      unit_price: item.sell_price,
-    })
+    const { error } = await supabase.from('job_materials').insert(selected.map(item => {
+      const sellPrice = item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price)
+      return {
+        job_id: jobId,
+        company_id: companyId,
+        added_by: profileId,
+        price_list_item_id: item.id,
+        description: item.name,
+        quantity: 1,
+        unit: item.unit,
+        unit_cost: item.cost_price,
+        unit_price: sellPrice,
+      }
+    }))
     setLoading(false)
+    if (error) return
+    setSelectedIds([])
     setShowPriceList(false)
     setSearch('')
     router.refresh()
@@ -206,13 +220,18 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
             <input className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-orange-400 bg-white" placeholder="Search price list…" value={search} onChange={e => setSearch(e.target.value)} autoFocus />
           </div>
           <div className="max-h-52 overflow-y-auto space-y-0.5">
+            {selectedIds.length > 0 && (
+              <button onClick={addSelectedFromPriceList} disabled={loading} className="w-full mb-2 px-3 py-2 text-xs bg-[var(--accent,#f97316)] text-white rounded-lg disabled:opacity-50">
+                Add selected ({selectedIds.length})
+              </button>
+            )}
             {filtered.map(item => (
-              <button key={item.id} onClick={() => addFromPrice(item)} className="w-full text-left px-3 py-2 rounded-lg hover:bg-white flex items-center justify-between text-sm">
+              <button key={item.id} onClick={() => toggleSelected(item.id)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm ${selectedIds.includes(item.id) ? 'bg-orange-50 text-orange-700' : 'hover:bg-white'}`}>
                 <div>
-                  <span className="text-gray-800">{item.name}</span>
+                  <span className="text-gray-800">{selectedIds.includes(item.id) ? '✓ ' : ''}{item.name}</span>
                   <span className="text-xs text-gray-400 ml-2 capitalize">{item.type} · {item.unit}</span>
                 </div>
-                <span className="text-gray-600 font-medium">{formatCurrency(item.sell_price)}</span>
+                <span className="text-gray-600 font-medium">{formatCurrency(item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price))}</span>
               </button>
             ))}
             {filtered.length === 0 && <p className="text-sm text-gray-400 text-center py-3">No items found</p>}

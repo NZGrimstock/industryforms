@@ -9,7 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Printer } from 'lucide-react'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Undo2, Briefcase } from 'lucide-react'
+import { PrintInvoice } from '@/components/pdf/print-invoice'
+import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 
 interface Props {
   invoice: {
@@ -32,11 +34,12 @@ interface Props {
   gstRate: number
   pricesIncludeTax?: boolean
   xeroConnected?: boolean
+  printData: InvoicePdfData
 }
 
 type Dialog = 'line' | 'payment' | 'discount' | null
 
-export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected }: Props) {
+export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected, printData }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -99,6 +102,63 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     await recompute(invoice.discount_type, invoice.discount_value)
     toast('Line added'); setActiveDialog(null)
     setLineForm({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount', tax_rate: String(gstRate) })
+    router.refresh()
+    setLoading(false)
+  }
+
+  async function addSundries() {
+    const amountText = prompt('Sundries price')
+    if (amountText == null) return
+    const price = parseFloat(amountText) || 0
+    setLoading(true)
+    const { error } = await supabase.from('invoice_line_items').insert({
+      invoice_id: invoice.id,
+      type: 'misc',
+      description: 'Sundries',
+      quantity: 1,
+      unit: 'item',
+      unit_price: price,
+      tax_rate: gstRate,
+      line_total: lineNet(1, price, null, 0, gstRate, pricesIncludeTax),
+      sort_order: 99,
+    })
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
+    await recompute(invoice.discount_type, invoice.discount_value)
+    toast('Sundries added')
+    router.refresh()
+    setLoading(false)
+  }
+
+  async function createFromJob() {
+    if (!invoice.job_id) { toast('This invoice is not linked to a job', 'error'); return }
+    if (!confirm('Pull materials from the linked job into this invoice? Existing invoice lines will be kept.')) return
+    setLoading(true)
+    const { data: materials, error: loadError } = await supabase
+      .from('job_materials')
+      .select('price_list_item_id, description, quantity, unit, unit_price')
+      .eq('job_id', invoice.job_id)
+    if (loadError) { toast(loadError.message, 'error'); setLoading(false); return }
+    const rows = (materials ?? []).filter(m => m.description).map((m, i) => {
+      const qty = Number(m.quantity) || 1
+      const price = Number(m.unit_price) || 0
+      return {
+        invoice_id: invoice.id,
+        price_list_item_id: m.price_list_item_id,
+        type: 'material',
+        description: m.description,
+        quantity: qty,
+        unit: m.unit || 'each',
+        unit_price: price,
+        tax_rate: gstRate,
+        line_total: lineNet(qty, price, null, 0, gstRate, pricesIncludeTax),
+        sort_order: 100 + i,
+      }
+    })
+    if (rows.length === 0) { toast('No job materials to import', 'error'); setLoading(false); return }
+    const { error } = await supabase.from('invoice_line_items').insert(rows)
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
+    await recompute(invoice.discount_type, invoice.discount_value)
+    toast(`Added ${rows.length} job line${rows.length === 1 ? '' : 's'}`)
     router.refresh()
     setLoading(false)
   }
@@ -192,6 +252,20 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     router.push('/invoices')
   }
 
+  async function revertToJob() {
+    if (!invoice.job_id) { toast('This invoice is not linked to a job', 'error'); return }
+    if (invoice.status !== 'draft' || invoice.amount_paid > 0) {
+      toast('Only unpaid draft invoices can be reverted to the job', 'error')
+      return
+    }
+    if (!confirm('Revert back to the job? This will delete the draft invoice and keep the job.')) return
+    setLoading(true)
+    await supabase.from('invoice_line_items').delete().eq('invoice_id', invoice.id)
+    await supabase.from('invoices').delete().eq('id', invoice.id)
+    toast('Invoice reverted back to job')
+    router.push(`/jobs/${invoice.job_id}`)
+  }
+
   const isDraft = invoice.status === 'draft'
   const canSendEmail = ['draft', 'sent', 'overdue'].includes(invoice.status) && !!invoice.customer_email
   const canSendText = ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoice.status) && !!invoice.customer_phone
@@ -200,14 +274,17 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('line')}><Plus className="h-4 w-4" /> Add line</Button>
+      <Button variant="outline" size="sm" onClick={addSundries}><Plus className="h-4 w-4" /> Add sundries</Button>
+      <Button variant="outline" size="sm" onClick={createFromJob} disabled={!invoice.job_id}><Briefcase className="h-4 w-4" /> Create from job</Button>
       <Button variant="outline" size="sm" onClick={() => setActiveDialog('discount')}><Tag className="h-4 w-4" /> {invoice.discount_amount > 0 ? 'Edit discount' : 'Add discount'}</Button>
       {canSendEmail && <Button size="sm" loading={loading} onClick={sendEmail}><Mail className="h-4 w-4" /> Send email</Button>}
       {canSendText && <Button variant="outline" size="sm" loading={loading} onClick={sendText}><MessageSquare className="h-4 w-4" /> Text</Button>}
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
       {isDraft && <Button variant="outline" size="sm" onClick={markSent}><Send className="h-4 w-4" /> Mark sent</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}
-      <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print / PDF</Button>
+      <PrintInvoice data={printData} />
       <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>
+      {invoice.job_id && <Button variant="ghost" size="sm" onClick={revertToJob}><Undo2 className="h-4 w-4" /> Revert back to job</Button>}
 
       <Dialog open={activeDialog === 'line'} onClose={() => setActiveDialog(null)} title="Add line item">
         <form onSubmit={addLine} className="space-y-4">

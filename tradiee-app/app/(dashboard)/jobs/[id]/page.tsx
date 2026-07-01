@@ -28,7 +28,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies(name, phone, email, address, gst_number, default_gst_rate, logo_url, country)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies(name, phone, email, address, gst_number, default_gst_rate, logo_url, country, standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -73,6 +73,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     .from('job_assignees')
     .select('id, profile_id, profiles(full_name, job_title)')
     .eq('job_id', id)
+  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
   const normalizedJobAssignees = (jobAssignees ?? []).map(a => {
     const assigneeProfile = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles
     return {
@@ -367,6 +368,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               profileId={user!.id}
               materials={materialsRes.data ?? []}
               priceItems={(priceItemsRes.data ?? []) as Array<{ id: string; name: string; unit: string; sell_price: number; cost_price: number; type: string }>}
+              standardMarkupEnabled={!!companySettings?.standard_markup_enabled}
+              standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)}
               quoteLines={quoteFillLines}
               quoteNumber={(job.quotes as { quote_number: string } | null)?.quote_number ?? null}
             />

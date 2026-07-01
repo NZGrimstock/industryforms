@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const [jobs, customers, quotes, invoices] = await Promise.all([
     supabase.from('jobs').select('id, job_number, title, customers(name)').eq('company_id', company)
       .or(`job_number.ilike.${like},title.ilike.${like},reference.ilike.${like}`).limit(6),
-    supabase.from('customers').select('id, name, phone, email').eq('company_id', company)
+    supabase.from('customers').select('id, name, phone, email').eq('company_id', company).eq('is_active', true)
       .or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`).limit(6),
     supabase.from('quotes').select('id, quote_number, title, customers(name)').eq('company_id', company)
       .or(`quote_number.ilike.${like},title.ilike.${like},reference.ilike.${like}`).limit(6),

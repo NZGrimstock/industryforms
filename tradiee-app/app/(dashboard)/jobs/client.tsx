@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { VoiceInput } from '@/components/ui/voice-input'
 import { SmartWriteButton } from '@/components/ui/smart-write'
-import { Plus, Trash2, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, ChevronRight, Package } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 type Site = { id: string; label: string | null; address: string }
@@ -33,6 +33,8 @@ interface Props {
   customers: { id: string; name: string }[]
   nextJobNumber: string
   priceItems?: PriceItem[]
+  standardMarkupEnabled?: boolean
+  standardMarkupPct?: number
   initialOpen?: boolean
   initialTitle?: string
   initialDescription?: string
@@ -43,13 +45,16 @@ const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_list_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
+export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], standardMarkupEnabled = false, standardMarkupPct = 80, initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
   const [open, setOpen] = useState(initialOpen)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
   const [createdJobId, setCreatedJobId] = useState<string | null>(null)
   const [lines, setLines] = useState<QuickLine[]>([emptyLine()])
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({})
+  const [showBulkItems, setShowBulkItems] = useState(false)
+  const [bulkSearch, setBulkSearch] = useState('')
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<string[]>([])
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -104,6 +109,9 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
     setNewSite({ label: '', address: '' })
     setLines([emptyLine()])
     setSearchTerms({})
+    setShowBulkItems(false)
+    setBulkSearch('')
+    setBulkSelectedIds([])
     setStep(1)
     setCreatedJobId(null)
   }
@@ -115,12 +123,13 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   }
 
   function pickPriceItem(i: number, item: PriceItem) {
+    const sellPrice = item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price)
     setLines(prev => prev.map((l, idx) => idx === i ? {
       ...l,
       description: item.name,
       unit: item.unit,
       unit_cost: item.cost_price.toString(),
-      sell_price: item.sell_price.toString(),
+      sell_price: sellPrice.toString(),
       price_list_item_id: item.id,
     } : l))
     setSearchTerms(prev => ({ ...prev, [i]: '' }))
@@ -132,6 +141,33 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
 
   function removeLine(i: number) {
     setLines(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function toggleBulkItem(id: string) {
+    setBulkSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function addSelectedPriceItems() {
+    const selected = priceItems.filter(item => bulkSelectedIds.includes(item.id))
+    if (selected.length === 0) return
+    setLines(prev => [
+      ...prev.filter(l => l.description.trim()),
+      ...selected.map(item => {
+        const sellPrice = item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price)
+        return {
+          description: item.name,
+          quantity: '1',
+          unit: item.unit,
+          unit_cost: item.cost_price.toString(),
+          sell_price: sellPrice.toString(),
+          price_list_item_id: item.id,
+          type: 'material' as const,
+        }
+      }),
+    ])
+    setBulkSelectedIds([])
+    setBulkSearch('')
+    setShowBulkItems(false)
   }
 
   // Step 1: create job record
@@ -433,6 +469,15 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
               >
                 <Plus className="h-3.5 w-3.5" /> Material
               </button>
+              {priceItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowBulkItems(true)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 hover:border-gray-400 transition-colors"
+                >
+                  <Package className="h-3.5 w-3.5" /> Pick items
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => addLine('labour')}
@@ -441,6 +486,30 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
                 <Plus className="h-3.5 w-3.5" /> Labour
               </button>
             </div>
+
+            {showBulkItems && (
+              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+                <Input value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} placeholder="Search price list..." className="mb-2" />
+                <div className="max-h-56 overflow-y-auto space-y-1">
+                  {priceItems
+                    .filter(item => !bulkSearch || item.name.toLowerCase().includes(bulkSearch.toLowerCase()))
+                    .map(item => {
+                      const selected = bulkSelectedIds.includes(item.id)
+                      const sellPrice = item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price)
+                      return (
+                        <button key={item.id} type="button" onClick={() => toggleBulkItem(item.id)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm ${selected ? 'bg-orange-50 text-orange-700' : 'hover:bg-white text-gray-700'}`}>
+                          <span>{selected ? '✓ ' : ''}{item.name}</span>
+                          <span className="text-xs text-gray-500">{formatCurrency(sellPrice)}/{item.unit}</span>
+                        </button>
+                      )
+                    })}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Button type="button" size="sm" onClick={addSelectedPriceItems} disabled={bulkSelectedIds.length === 0}>Add selected ({bulkSelectedIds.length})</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => { setShowBulkItems(false); setBulkSelectedIds([]) }}>Cancel</Button>
+                </div>
+              </div>
+            )}
 
             {/* Totals */}
             {lineTotal > 0 && (

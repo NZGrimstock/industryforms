@@ -19,6 +19,8 @@ export interface Company {
   theme_accent: string | null
   review_link: string | null
   review_request_enabled: boolean
+  standard_markup_enabled?: boolean
+  standard_markup_pct?: number
   email: string | null
   phone: string | null
   address: string | null
@@ -64,6 +66,8 @@ export interface Customer {
   phone: string | null
   billing_address: string | null
   notes: string | null
+  is_active?: boolean
+  archived_at?: string | null
   created_at: string
   updated_at: string
 }
