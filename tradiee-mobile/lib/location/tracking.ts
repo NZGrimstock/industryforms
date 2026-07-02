@@ -5,11 +5,13 @@ import { createClient } from '@supabase/supabase-js'
 
 export const LOCATION_TASK = 'TRADIEE_LOCATION_TRACKING'
 
-const SPEED_START_MS  = 15 / 3.6   // 15 km/h in m/s — start a trip
-const SPEED_STOP_MS   = 4  / 3.6   // 4 km/h in m/s  — considered stopped
-const STOP_DURATION_MS = 2 * 60 * 1000  // 2 minutes stationary → end trip
+const SPEED_START_MS   = 15 / 3.6   // 15 km/h — start a trip
+const SPEED_STOP_MS    =  4 / 3.6   //  4 km/h — considered stopped
+const STOP_DURATION_MS = 5 * 60 * 1000  // 5 min stationary → end trip (avoids traffic lights)
 
-const STORAGE_KEY = 'TRADIEE_ACTIVE_TRIP'
+const STORAGE_KEY     = 'TRADIEE_ACTIVE_TRIP'
+const SESSION_KEY     = 'TRADIEE_SESSION'          // mirrored by supabase.ts for BG task access
+export const TRIP_FOLLOWUP_KEY = 'TRADIEE_TRIP_FOLLOWUP'  // consumed by timesheets tab
 
 type TripState = {
   tripId: string
@@ -19,6 +21,13 @@ type TripState = {
   lastLat: number
   lastLng: number
   lastMovingAt: string
+  distanceKm: number
+}
+
+export type TripFollowup = {
+  tripId: string
+  startTime: string
+  endTime: string
   distanceKm: number
 }
 
@@ -49,10 +58,10 @@ async function setState(state: TripState | null) {
 }
 
 async function getSupabase() {
-  const url  = process.env.EXPO_PUBLIC_SUPABASE_URL!
-  const key  = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-  // We need auth token — read from storage key supabase uses
-  const stored = await AsyncStorage.getItem('supabase.auth.token')
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL!
+  const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  // Session is mirrored here by supabase.ts; SecureStore is unavailable in BG tasks
+  const stored = await AsyncStorage.getItem(SESSION_KEY)
   const session = stored ? JSON.parse(stored) : null
   const client = createClient(url, key, { auth: { persistSession: false } })
   if (session?.access_token) {
@@ -72,21 +81,33 @@ async function endTrip(state: TripState, endLat: number, endLng: number) {
     .eq('id', user.id)
     .single()
 
-  const finalDistance = state.distanceKm + haversineKm(state.lastLat, state.lastLng, endLat, endLng)
+  const finalDistance = Math.round(
+    (state.distanceKm + haversineKm(state.lastLat, state.lastLng, endLat, endLng)) * 100
+  ) / 100
+  const endTime = new Date().toISOString()
 
   await supabase.from('travel_logs').insert({
     id:          state.tripId,
     company_id:  profile?.company_id,
     profile_id:  user.id,
     started_at:  state.startTime,
-    ended_at:    new Date().toISOString(),
+    ended_at:    endTime,
     start_lat:   state.startLat,
     start_lng:   state.startLng,
     end_lat:     endLat,
     end_lng:     endLng,
-    distance_km: Math.round(finalDistance * 100) / 100,
+    distance_km: finalDistance,
     is_auto:     true,
   })
+
+  // Signal the timesheets tab to prompt the user to start a job timer
+  const followup: TripFollowup = {
+    tripId:      state.tripId,
+    startTime:   state.startTime,
+    endTime,
+    distanceKm:  finalDistance,
+  }
+  await AsyncStorage.setItem(TRIP_FOLLOWUP_KEY, JSON.stringify(followup))
 }
 
 // Must be defined at module scope — called before any component mounts
@@ -104,26 +125,22 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   const state = await getState()
 
   if (speedMs >= SPEED_START_MS) {
-    // Moving
     if (!state) {
-      // Start new trip
       await setState({
-        tripId:      uuid(),
-        startLat:    lat,
-        startLng:    lng,
-        startTime:   now,
-        lastLat:     lat,
-        lastLng:     lng,
+        tripId:       uuid(),
+        startLat:     lat,
+        startLng:     lng,
+        startTime:    now,
+        lastLat:      lat,
+        lastLng:      lng,
         lastMovingAt: now,
-        distanceKm:  0,
+        distanceKm:   0,
       })
     } else {
-      // Continue trip — accumulate distance
       const added = haversineKm(state.lastLat, state.lastLng, lat, lng)
       await setState({ ...state, lastLat: lat, lastLng: lng, lastMovingAt: now, distanceKm: state.distanceKm + added })
     }
   } else if (speedMs < SPEED_STOP_MS && state) {
-    // Slow/stopped — check if we've been stopped long enough
     const stoppedMs = Date.now() - new Date(state.lastMovingAt).getTime()
     if (stoppedMs >= STOP_DURATION_MS) {
       await endTrip(state, lat, lng)
@@ -132,7 +149,7 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   }
 })
 
-// ── Public API ─────────────────────────────────────────────────────────────
+// ── Public API ──────────────────────────────────────────────────────────────
 
 export async function requestPermissions(): Promise<boolean> {
   const { status: fg } = await Location.requestForegroundPermissionsAsync()
@@ -146,8 +163,8 @@ export async function startTracking() {
   if (already) return
   await Location.startLocationUpdatesAsync(LOCATION_TASK, {
     accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 50,          // update every 50m
-    timeInterval: 30_000,          // or every 30s
+    distanceInterval: 50,         // update every 50 m
+    timeInterval: 30_000,         // or every 30 s
     foregroundService: {
       notificationTitle: 'IndustryForms',
       notificationBody:  'Auto-tracking travel for your logbook',
@@ -161,7 +178,6 @@ export async function startTracking() {
 export async function stopTracking() {
   const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
   if (!running) return
-  // End any active trip
   const state = await getState()
   if (state) {
     const loc = await Location.getLastKnownPositionAsync()

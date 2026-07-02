@@ -8,8 +8,9 @@ import { useFocusEffect } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
-import { startTracking, stopTracking, isTracking, requestPermissions } from '@/lib/location/tracking'
+import { startTracking, stopTracking, isTracking, requestPermissions, TRIP_FOLLOWUP_KEY, type TripFollowup } from '@/lib/location/tracking'
 
+const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 const TRADING_HOURS_KEY = 'TRADIEE_TRADING_HOURS'
 type TradingHours = { enabled: boolean; startHour: number; endHour: number; days: number[] }
 const DEFAULT_TRADING_HOURS: TradingHours = { enabled: false, startHour: 7, endHour: 18, days: [1, 2, 3, 4, 5] }
@@ -69,6 +70,11 @@ export default function TimesheetsScreen() {
   const [breakMin, setBreakMin] = useState('0')
   const [saving, setSaving] = useState(false)
   const [jobSearch, setJobSearch] = useState('')
+  const [tripFollowup, setTripFollowup] = useState<TripFollowup | null>(null)
+  const [showStartTimer, setShowStartTimer] = useState(false)
+  const [timerJob, setTimerJob] = useState<Job | null>(null)
+  const [timerJobSearch, setTimerJobSearch] = useState('')
+  const [startingTimer, setStartingTimer] = useState(false)
 
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [travelLogs, setTravelLogs] = useState<TravelLog[]>([])
@@ -86,6 +92,10 @@ export default function TimesheetsScreen() {
   }, [])
 
   useFocusEffect(useCallback(() => {
+    // Check for a completed trip waiting for job timer follow-up
+    AsyncStorage.getItem(TRIP_FOLLOWUP_KEY).then(raw => {
+      if (raw) setTripFollowup(JSON.parse(raw))
+    })
     AsyncStorage.getItem(TRADING_HOURS_KEY).then(async raw => {
       const hours: TradingHours = raw ? JSON.parse(raw) : DEFAULT_TRADING_HOURS
       if (!hours.enabled) return
@@ -196,6 +206,33 @@ export default function TimesheetsScreen() {
     fetchAll()
   }
 
+  async function dismissFollowup() {
+    await AsyncStorage.removeItem(TRIP_FOLLOWUP_KEY)
+    setTripFollowup(null)
+  }
+
+  async function startJobTimer(job: Job) {
+    setStartingTimer(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setStartingTimer(false); return }
+    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+    if (!profile) { setStartingTimer(false); return }
+    const now = new Date().toISOString()
+    const { data: ts } = await supabase.from('timesheets').insert({
+      job_id: job.id, profile_id: user.id, company_id: profile.company_id,
+      started_at: now, ended_at: null, break_minutes: 0, is_billable: true,
+    }).select('id').single()
+    if (ts) {
+      await AsyncStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ jobId: job.id, timesheetId: ts.id, startedAt: now }))
+    }
+    setStartingTimer(false)
+    setShowStartTimer(false)
+    setTimerJob(null)
+    setTimerJobSearch('')
+    await dismissFollowup()
+    fetchAll()
+  }
+
   async function allocate(log: TravelLog, purpose: 'work' | 'personal' | 'ignore', jobId?: string) {
     const { error } = await supabase.from('travel_logs')
       .update({ purpose, job_id: jobId ?? null })
@@ -236,6 +273,21 @@ export default function TimesheetsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {tripFollowup && (
+        <View style={styles.tripBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tripBannerTitle}>Trip recorded — {tripFollowup.distanceKm.toFixed(1)} km</Text>
+            <Text style={styles.tripBannerSub}>Arrived {formatTime(tripFollowup.endTime)} · Start job timer?</Text>
+          </View>
+          <TouchableOpacity style={styles.tripBannerBtn} onPress={() => { setShowStartTimer(true) }}>
+            <Text style={styles.tripBannerBtnText}>Start timer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={dismissFollowup} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="x" size={16} color="#9ca3af" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.tabs}>
         <TouchableOpacity style={[styles.tab, tab === TAB_TIME && styles.tabActive]} onPress={() => setTab(TAB_TIME)}>
@@ -330,6 +382,60 @@ export default function TimesheetsScreen() {
           )}
         </>
       )}
+
+      {/* Start job timer modal (after trip) */}
+      <Modal visible={showStartTimer} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStartTimer(false)}>
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Start job timer</Text>
+            <TouchableOpacity onPress={() => setShowStartTimer(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            {tripFollowup && (
+              <View style={{ backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <Feather name="navigation" size={16} color="#f97316" />
+                <Text style={{ fontSize: 13, color: '#c2410c', fontWeight: '500' }}>
+                  Trip ended · {tripFollowup.distanceKm.toFixed(1)} km · arrived {formatTime(tripFollowup.endTime)}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.fieldLabel}>Select job to start timing</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Search jobs…"
+              placeholderTextColor="#9ca3af"
+              value={timerJobSearch}
+              onChangeText={setTimerJobSearch}
+              autoCorrect={false}
+            />
+            {timerJob ? (
+              <TouchableOpacity style={styles.selectedJob} onPress={() => setTimerJob(null)}>
+                <Text style={styles.selectedJobText}>{timerJob.job_number} — {timerJob.title}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 12 }}>Tap to change</Text>
+              </TouchableOpacity>
+            ) : (
+              activeJobs
+                .filter(j => j.title.toLowerCase().includes(timerJobSearch.toLowerCase()) || j.job_number.toLowerCase().includes(timerJobSearch.toLowerCase()))
+                .slice(0, 30)
+                .map(job => (
+                  <TouchableOpacity key={job.id} style={styles.jobRow} onPress={() => { setTimerJob(job); setTimerJobSearch('') }}>
+                    <Text style={styles.jobRowNum}>{job.job_number}</Text>
+                    <Text style={styles.jobRowTitle} numberOfLines={1}>{job.title}</Text>
+                  </TouchableOpacity>
+                ))
+            )}
+            {timerJob && (
+              <TouchableOpacity
+                style={[styles.saveBtn, startingTimer && { opacity: 0.6 }]}
+                onPress={() => startJobTimer(timerJob)}
+                disabled={startingTimer}
+              >
+                <Text style={styles.saveBtnText}>{startingTimer ? 'Starting…' : 'Start timer'}</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Trading hours modal */}
       <Modal visible={showTradingHours} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTradingHours(false)}>
@@ -571,4 +677,9 @@ const styles = StyleSheet.create({
   allocLabel: { fontSize: 15, fontWeight: '600', color: '#111827' },
   allocDesc: { fontSize: 12, color: '#9ca3af' },
   allocCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12 },
+  tripBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 6, backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa' },
+  tripBannerTitle: { fontSize: 13, fontWeight: '700', color: '#c2410c' },
+  tripBannerSub: { fontSize: 12, color: '#9a3412', marginTop: 1 },
+  tripBannerBtn: { backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
+  tripBannerBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 })
