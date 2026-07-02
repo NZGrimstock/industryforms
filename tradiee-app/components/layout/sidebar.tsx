@@ -1,11 +1,12 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useSidebar } from './sidebar-context'
 import {
   LayoutDashboard, Users, FileText, Briefcase, Calendar,
-  Clock, Receipt, BarChart3, Settings, Wrench, Package,
+  Clock, Receipt, BarChart3, Settings, Package,
   MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight,
   Truck, ShoppingCart, FileMinus, Globe, FolderKanban
 } from 'lucide-react'
@@ -106,23 +107,16 @@ export function Sidebar({ isStaff = false }: { isStaff?: boolean }) {
       {/* Logo */}
       <div className={cn(
         'h-16 flex items-center border-b border-gray-100 shrink-0',
-        collapsed ? 'justify-center px-0' : 'px-5 justify-between'
+        collapsed ? 'justify-center px-0' : 'px-4 justify-between'
       )}>
         {collapsed ? (
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center shadow-sm">
-            <Wrench className="h-4 w-4 text-white" />
-          </div>
+          <Image src="/Logo.png" alt="IndustryForms" width={36} height={20} className="object-contain" />
         ) : (
           <>
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center shadow-sm shrink-0">
-                <Wrench className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-gray-900 font-bold text-[15px] tracking-tight truncate">IndustryForms</span>
-            </div>
+            <Image src="/Logo.png" alt="IndustryForms" width={140} height={76} className="object-contain h-9 w-auto" />
             <button
               onClick={() => setCollapsed(true)}
-              className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded"
+              className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded shrink-0"
               title="Collapse sidebar"
             >
               <ChevronLeft className="h-4 w-4" />

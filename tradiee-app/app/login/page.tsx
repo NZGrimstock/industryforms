@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Wrench, Eye, EyeOff } from 'lucide-react'
+import Image from 'next/image'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
 
 export default function LoginPage() {
@@ -29,11 +30,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
-            <Wrench className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">IndustryForms</span>
+        <div className="flex justify-center mb-8">
+          <Image src="/Logo.png" alt="IndustryForms" width={200} height={109} className="object-contain h-14 w-auto" />
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <h1 className="text-lg font-semibold text-gray-900 mb-6">Sign in to your account</h1>
