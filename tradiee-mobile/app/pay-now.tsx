@@ -6,10 +6,8 @@ import {
 import { Stack, useLocalSearchParams, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
-import { useStripeTerminal } from '@stripe/stripe-terminal-react-native'
 import { supabase } from '@/lib/supabase'
 
-const LOCATION_ID = process.env.EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID ?? ''
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
 type InvoiceSummary = {
@@ -52,14 +50,6 @@ export default function PayNowScreen() {
   const [selected, setSelected] = useState<InvoiceSummary | null>(null)
   const [stage, setStage] = useState<PayStage>(preselectedId ? 'confirm' : 'select')
   const [errorMsg, setErrorMsg] = useState('')
-
-  const {
-    easyConnect,
-    retrievePaymentIntent,
-    collectPaymentMethod,
-    confirmPaymentIntent,
-    cancelEasyConnect,
-  } = useStripeTerminal()
 
   const fetchInvoices = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -136,64 +126,8 @@ export default function PayNowScreen() {
     setStage('confirm')
   }
 
-  async function startPayment() {
-    if (!selected) return
-    if (!LOCATION_ID) {
-      Alert.alert(
-        'Setup Required',
-        'Add EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID to your .env file.\n\nCreate a Terminal Location in your Stripe Dashboard → Terminal → Locations.',
-      )
-      return
-    }
-
-    setStage('connecting')
-    setErrorMsg('')
-
-    try {
-      // 1. Connect to the phone's built-in tap-to-pay reader
-      const connectResult = await easyConnect({
-        discoveryMethod: 'tapToPay',
-        locationId: LOCATION_ID,
-        merchantDisplayName: 'TradeHub',
-      })
-      if ('error' in connectResult) throw new Error(connectResult.error.message)
-
-      // 2. Create payment intent on the server
-      const { data: { session } } = await supabase.auth.getSession()
-      const piRes = await fetch(`${API_BASE}/api/stripe/terminal/payment-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ invoice_id: selected.id }),
-      })
-      if (!piRes.ok) {
-        const err = await piRes.json()
-        throw new Error(err.error ?? 'Could not create payment')
-      }
-      const { client_secret } = await piRes.json()
-
-      // 3. Retrieve the PaymentIntent
-      const piResult = await retrievePaymentIntent(client_secret)
-      if ('error' in piResult) throw new Error(piResult.error.message)
-      const { paymentIntent } = piResult
-
-      // 4. Collect payment (SDK shows native tap UI)
-      setStage('collecting')
-      const collectResult = await collectPaymentMethod({ paymentIntent })
-      if ('error' in collectResult) throw new Error(collectResult.error.message)
-
-      // 5. Confirm and capture
-      setStage('confirming')
-      const confirmResult = await confirmPaymentIntent({ paymentIntent: collectResult.paymentIntent })
-      if ('error' in confirmResult) throw new Error(confirmResult.error.message)
-
-      setStage('success')
-    } catch (e: any) {
-      setErrorMsg(e.message ?? 'Payment failed')
-      setStage('error')
-    }
+  function startPayment() {
+    Alert.alert('Coming Soon', 'Tap to Pay will be available in a future update.')
   }
 
   function reset() {
@@ -273,7 +207,7 @@ export default function PayNowScreen() {
           {stage === 'collecting' && (
             <TouchableOpacity
               style={s.cancelBtn}
-              onPress={() => { cancelEasyConnect(); reset() }}
+              onPress={reset}
             >
               <Text style={s.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
