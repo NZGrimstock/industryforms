@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, FileText, Briefcase, Calendar,
   Clock, Receipt, BarChart3, Settings, Package,
   MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight,
-  Truck, ShoppingCart, FileMinus, Globe, FolderKanban
+  Truck, ShoppingCart, FileMinus, Globe, FolderKanban, Inbox
 } from 'lucide-react'
 
 // Top-level items shown above the groups. Each owns its own gradient.
@@ -43,6 +43,7 @@ const groups: Group[] = [
     activeGradient: 'bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500',
     iconColor: 'text-sky-600',
     items: [
+      { href: '/messages', label: 'Messages', icon: Inbox },
       { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
       { href: '/customers', label: 'Customers', icon: Users },
       { href: '/quotes', label: 'Quotes', icon: FileText },
