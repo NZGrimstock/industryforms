@@ -14,10 +14,11 @@ interface Message {
 // Threaded SMS view shown on the customer detail page. Inbound rows arrive
 // via the Twilio webhook (/api/sms/inbound) and we re-fetch on a 15s timer;
 // good enough without realtime subscriptions and free of WS plumbing.
-export function SmsThread({ customerId, customerPhone, initial }: {
+export function SmsThread({ customerId, customerPhone, initial, twilioLive = true }: {
   customerId: string
   customerPhone: string | null
   initial: Message[]
+  twilioLive?: boolean
 }) {
   const supabase = createClient()
   const { toast } = useToast()
@@ -83,19 +84,25 @@ export function SmsThread({ customerId, customerPhone, initial }: {
           </div>
         ))}
       </div>
-      <form onSubmit={send} className="border-t border-gray-100 p-2 flex gap-2">
-        <input
-          value={body}
-          onChange={e => setBody(e.target.value)}
-          placeholder={customerPhone ? `Text ${customerPhone}` : 'Customer has no phone on file'}
-          disabled={!customerPhone || sending}
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-gray-300 disabled:bg-gray-50"
-        />
-        <button type="submit" disabled={!body.trim() || !customerPhone || sending}
-          className="inline-flex items-center gap-1.5 bg-[var(--accent,#f97316)] hover:bg-[var(--accent-hover,#ea580c)] text-white px-3 rounded-lg text-sm font-medium disabled:opacity-50">
-          <Send className="h-4 w-4" /> Send
-        </button>
-      </form>
+      {twilioLive ? (
+        <form onSubmit={send} className="border-t border-gray-100 p-2 flex gap-2">
+          <input
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder={customerPhone ? `Text ${customerPhone}` : 'Customer has no phone on file'}
+            disabled={!customerPhone || sending}
+            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-gray-300 disabled:bg-gray-50"
+          />
+          <button type="submit" disabled={!body.trim() || !customerPhone || sending}
+            className="inline-flex items-center gap-1.5 bg-[var(--accent,#f97316)] hover:bg-[var(--accent-hover,#ea580c)] text-white px-3 rounded-lg text-sm font-medium disabled:opacity-50">
+            <Send className="h-4 w-4" /> Send
+          </button>
+        </form>
+      ) : (
+        <div className="border-t border-gray-100 p-3 text-center text-xs text-gray-400 bg-gray-50">
+          SMS not enabled — configure Twilio in Settings → Integrations
+        </div>
+      )}
     </div>
   )
 }

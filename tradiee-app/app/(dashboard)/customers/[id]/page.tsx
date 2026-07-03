@@ -7,6 +7,7 @@ import { formatDate, formatCurrency, formatDateTime } from '@/lib/utils'
 import Link from 'next/link'
 import { CustomerDetailClient } from './client'
 import { SmsThread } from '@/components/customers/sms-thread'
+import { smsConfigured } from '@/lib/sms'
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -138,6 +139,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 customerId={id}
                 customerPhone={customer.phone ?? null}
                 initial={(messagesRes.data ?? []) as { id: string; direction: 'inbound' | 'outbound'; body: string; created_at: string }[]}
+                twilioLive={smsConfigured()}
               />
             </CardContent>
           </Card>
