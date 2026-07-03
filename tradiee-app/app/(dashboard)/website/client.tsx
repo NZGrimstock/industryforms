@@ -6,7 +6,7 @@ import {
   type WebsiteSection, type WebsiteSectionType, type WebsiteTheme,
 } from '@/lib/website'
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw, Pipette, Sparkles,
+  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw, Pipette, Sparkles, Calendar, Upload, Ban,
 } from 'lucide-react'
 import { extractPalette, samplePixel } from '@/lib/extract-color'
 
@@ -21,10 +21,13 @@ type Initial = {
   seoDescription: string
   customDomain: string
   domainStatus: string
+  bookingsEnabled: boolean
+  siteMode: 'builder' | 'custom'
+  customSiteStatus: string
   exists: boolean
 }
 
-const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery', 'testimonials', 'contact']
+const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery', 'testimonials', 'contact', 'booking']
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
 
 export function WebsiteClient({
@@ -52,6 +55,11 @@ export function WebsiteClient({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [bookingsEnabled, setBookingsEnabled] = useState(initial.bookingsEnabled)
+  const [siteMode, setSiteMode] = useState(initial.siteMode)
+  const [customSiteStatus, setCustomSiteStatus] = useState(initial.customSiteStatus)
+  const [uploading, setUploading] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null)
 
   function patchSection(idx: number, patch: Partial<WebsiteSection>) {
     setSections(prev => prev.map((s, i) => (i === idx ? ({ ...s, ...patch } as WebsiteSection) : s)))
@@ -73,7 +81,7 @@ export function WebsiteClient({
     setAddOpen(false)
   }
 
-  async function save(publishState = isPublished) {
+  async function save(publishState = isPublished, bookingsState = bookingsEnabled) {
     setSaving(true)
     setMsg(null)
     const cleanSlug = slugify(slug)
@@ -89,6 +97,7 @@ export function WebsiteClient({
         seo_description: seoDescription || null,
         custom_domain: customDomain || null,
         is_published: publishState,
+        bookings_enabled: bookingsState,
       }, { onConflict: 'company_id' })
     setSaving(false)
     if (error) {
@@ -104,6 +113,40 @@ export function WebsiteClient({
     const next = !isPublished
     const ok = await save(next)
     if (ok) setIsPublished(next)
+  }
+
+  async function toggleBookings() {
+    if (!canPublish) return // gated by the same add-on
+    const next = !bookingsEnabled
+    const ok = await save(isPublished, next)
+    if (ok) setBookingsEnabled(next)
+  }
+
+  async function uploadCustomSite(file: File) {
+    if (!canPublish) return
+    setUploading(true)
+    setUploadMsg(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/site/custom/upload', { method: 'POST', body: form })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setUploadMsg(data.error ?? 'Upload failed'); return }
+      setSiteMode('custom')
+      setCustomSiteStatus('active')
+      setUploadMsg('Uploaded — your custom site is live.')
+    } catch {
+      setUploadMsg('Network error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function switchToBuilder() {
+    setSaving(true)
+    const { error } = await supabase.from('company_websites').update({ site_mode: 'builder' }).eq('company_id', companyId)
+    setSaving(false)
+    if (!error) setSiteMode('builder')
   }
 
   async function domainCall(method: 'POST' | 'PUT' | 'DELETE') {
@@ -132,7 +175,7 @@ export function WebsiteClient({
     const res = await fetch('/api/stripe/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: 'website' }),
+      body: JSON.stringify({ plan: 'bookings_website' }),
     })
     const data = await res.json().catch(() => ({}))
     if (data.url) window.location.href = data.url
@@ -175,14 +218,14 @@ export function WebsiteClient({
               </button>
             ) : (
               <button onClick={subscribe} className="rounded-lg bg-[var(--accent,#f97316)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover,#ea580c)]">
-                Publish — $9/mo
+                Publish — $19/mo
               </button>
             )}
           </div>
         </div>
         {!canPublish && !isPublished && (
           <p className="mt-3 text-sm text-gray-500">
-            Build your site for free. Publishing it to the web (and connecting your own domain) is part of the <strong>$9/month Website add-on</strong>.
+            Build your site for free. Publishing it to the web — plus online bookings and custom hosting — is part of the <strong>$19/month Bookings Website add-on</strong>.
           </p>
         )}
       </div>
@@ -245,6 +288,83 @@ export function WebsiteClient({
             <p className="mt-1.5 text-xs text-gray-400">Connect a domain you already own. We&apos;ll issue the SSL certificate automatically once DNS is set.</p>
           )}
         </div>
+      </Card>
+
+      {/* Bookings toggle */}
+      <Card title="Online bookings">
+        <label className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-2 text-sm text-gray-700">
+            <Calendar className="h-4 w-4 text-gray-400" />
+            Show a booking button on your site
+          </span>
+          <button
+            type="button"
+            onClick={toggleBookings}
+            disabled={!canPublish || saving}
+            role="switch"
+            aria-checked={bookingsEnabled}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40 ${bookingsEnabled ? 'bg-[var(--accent,#f97316)]' : 'bg-gray-200'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${bookingsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </label>
+        <p className="mt-1.5 text-xs text-gray-400">
+          {canPublish
+            ? 'Independent of publishing — you can run the site without bookings if you prefer.'
+            : 'Part of the Bookings Website add-on.'}
+        </p>
+      </Card>
+
+      {/* Custom site hosting */}
+      <Card title="Site hosting">
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${siteMode === 'builder' ? 'bg-orange-50 text-[var(--accent,#f97316)]' : 'bg-gray-100 text-gray-500'}`}>Builder</span>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${siteMode === 'custom' ? 'bg-orange-50 text-[var(--accent,#f97316)]' : 'bg-gray-100 text-gray-500'}`}>Custom upload</span>
+        </div>
+        {siteMode === 'builder' ? (
+          <>
+            <p className="text-sm text-gray-600 mb-3">Using the section builder above. Instead, you can upload your own single-page static site as one HTML file (inline your CSS/JS, or link to assets you host elsewhere).</p>
+            {canPublish ? (
+              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Upload static site
+                <input
+                  type="file"
+                  accept=".html"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadCustomSite(f) }}
+                />
+              </label>
+            ) : (
+              <p className="text-xs text-gray-400">Requires the Bookings Website add-on.</p>
+            )}
+          </>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
+              Serving your uploaded static site.
+              {customSiteStatus === 'disabled' && <span className="ml-2 inline-flex items-center gap-1 text-red-600 font-medium"><Ban className="h-3.5 w-3.5" /> Disabled by support</span>}
+            </p>
+            <div className="flex gap-2">
+              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Replace upload
+                <input
+                  type="file"
+                  accept=".html"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadCustomSite(f) }}
+                />
+              </label>
+              <button onClick={switchToBuilder} disabled={saving} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Switch back to builder
+              </button>
+            </div>
+          </div>
+        )}
+        {uploadMsg && <p className="mt-2 text-xs text-gray-500">{uploadMsg}</p>}
       </Card>
 
       {/* Theme */}
@@ -549,6 +669,15 @@ function SectionEditor({
             <input type="checkbox" checked={section.showForm} onChange={e => patch(idx, { showForm: e.target.checked })} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
             Show enquiry form (submissions appear in Enquiries)
           </label>
+        </div>
+      )
+    case 'booking':
+      return (
+        <div className="space-y-3">
+          <Field label="Heading"><input value={section.heading} onChange={e => patch(idx, { heading: e.target.value })} className={inputCls} /></Field>
+          <Field label="Subheading"><input value={section.subheading ?? ''} onChange={e => patch(idx, { subheading: e.target.value })} className={inputCls} /></Field>
+          <Field label="Button label"><input value={section.ctaLabel ?? ''} onChange={e => patch(idx, { ctaLabel: e.target.value })} className={inputCls} /></Field>
+          <p className="text-xs text-gray-400">Only shows on the live site when Online bookings is turned on above.</p>
         </div>
       )
   }

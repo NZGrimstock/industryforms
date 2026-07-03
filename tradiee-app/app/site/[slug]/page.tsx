@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
@@ -14,6 +14,10 @@ type SiteRow = {
   sections: WebsiteSection[]
   seo_title: string | null
   seo_description: string | null
+  bookings_enabled: boolean
+  site_mode: 'builder' | 'custom'
+  custom_site_key: string | null
+  custom_site_status: string
   companies: { name: string; logo_url: string | null; email: string | null; phone: string | null } | null
 }
 
@@ -21,7 +25,7 @@ async function getSite(slug: string): Promise<SiteRow | null> {
   const service = createServiceClient()
   const { data } = await service
     .from('company_websites')
-    .select('company_id, slug, is_published, theme, sections, seo_title, seo_description, companies(name, logo_url, email, phone)')
+    .select('company_id, slug, is_published, theme, sections, seo_title, seo_description, bookings_enabled, site_mode, custom_site_key, custom_site_status, companies(name, logo_url, email, phone)')
     .eq('slug', slug)
     .single()
   return (data as unknown as SiteRow) ?? null
@@ -64,9 +68,20 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
   const site = await getSite(slug)
   if (!site || !site.is_published) notFound()
 
+  // Direct /site/<slug> access (the in-app Preview link) bypasses proxy.ts's
+  // reverse-proxy for custom-hosted sites — redirect to the CDN copy instead.
+  if (site.site_mode === 'custom') {
+    if (site.custom_site_status === 'disabled') notFound()
+    if (site.custom_site_key) {
+      const base = (process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL ?? '').replace(/\/$/, '')
+      redirect(`${base}/${site.custom_site_key}`)
+    }
+  }
+
   const theme = { ...DEFAULT_THEME, ...(site.theme ?? {}) }
   const company = site.companies
   const fontFamily = theme.font === 'serif' ? 'Georgia, "Times New Roman", serif' : 'system-ui, -apple-system, sans-serif'
+  const sections = (site.sections ?? []).filter(s => s.type !== 'booking' || site.bookings_enabled)
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily }}>
@@ -85,7 +100,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
         </div>
       </header>
 
-      {(site.sections ?? []).map((section, i) => (
+      {sections.map((section, i) => (
         <SectionBlock
           key={i}
           section={section}

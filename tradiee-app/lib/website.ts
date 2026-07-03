@@ -84,7 +84,7 @@ export function blankSection(type: WebsiteSectionType): WebsiteSection {
     case 'contact':
       return { type, heading: 'Get in touch', showForm: true }
     case 'booking':
-      return { type, heading: 'Book a visit', subheading: 'Pick a time that suits — we&apos;ll confirm by phone or email.', ctaLabel: 'Request booking' }
+      return { type, heading: 'Book a visit', subheading: "Pick a time that suits — we'll confirm by phone or email.", ctaLabel: 'Request booking' }
   }
 }
 
