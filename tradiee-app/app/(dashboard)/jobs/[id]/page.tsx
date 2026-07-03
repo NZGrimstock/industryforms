@@ -47,7 +47,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     .eq('customer_id', job.customer_id)
     .order('created_at')
 
-  const [visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes] = await Promise.all([
+  const [visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes] = await Promise.all([
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
     supabase.from('job_notes').select('*, profiles(full_name)').eq('job_id', id).order('created_at', { ascending: false }),
     supabase.from('timesheets').select('*, profiles(full_name)').eq('job_id', id).order('started_at', { ascending: false }),
@@ -55,6 +55,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
     supabase.from('job_materials').select('*').eq('job_id', id).order('created_at'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, type').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
+    supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('job_photos').select('id, storage_path, caption, created_at').eq('job_id', id).order('created_at'),
     supabase.from('form_templates').select('id, name, fields').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('form_submissions').select('id, template_name, submitted_at, answers').eq('job_id', id).order('created_at'),
@@ -375,6 +376,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               profileId={user!.id}
               materials={materialsRes.data ?? []}
               priceItems={(priceItemsRes.data ?? []) as Array<{ id: string; name: string; unit: string; sell_price: number; cost_price: number; type: string }>}
+              kits={kitsRes.data ?? []}
               standardMarkupEnabled={!!companySettings?.standard_markup_enabled}
               standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)}
               quoteLines={quoteFillLines}

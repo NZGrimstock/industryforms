@@ -1,33 +1,33 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-06-22. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-03. Catch-up doc for a fresh session. Read this first.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
 competitor). Monorepo at `D:\TRADIEE`:
 - `tradiee-app/` — **Next.js 16** web app (App Router, Turbopack)
 - `tradiee-mobile/` — **Expo SDK 56** mobile app (bare workflow, native `android/` dir)
-- `supabase/migrations/` — database migrations (001–042)
+- `supabase/migrations/` — database migrations (001–046)
 - Root docs: this file, `POWERSYNC_SETUP.md`, `R2_SETUP.md`, `SUPABASE_CLOUD_MIGRATION.md`, `VERCEL_DEPLOY.md`, `sync-rules.yaml`
 
 GitHub: **https://github.com/NZGrimstock/industryforms** (branch `main`, auto-deploys to Vercel).
 
 ### Where work lives right now
-**`main` is current** — sprint-3 merged 2026-06-22 (`52eeac2`). Latest APK is
+**`main` is current** — sprint-6 merged 2026-07-03. Latest APK is
 `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(Jun 22 13:34, 116 MB). Migrations 001–042 all applied to cloud Supabase.
+(Jun 25, 145 MB). Migrations 001–046 all applied to cloud Supabase.
 PowerSync sync rules switched to **streams (edition 3)** — already validated +
 deployed via the PowerSync Dashboard.
 
 ## Live infrastructure (all provisioned)
 | Piece | Detail |
 |---|---|
-| **Supabase** | Cloud project ref `cfltbpwrojtlpkjvresd` (Sydney/SEA). **New API keys**: publishable (client) + secret (server) — NOT legacy anon/service_role. Migrations 001–042 all applied to cloud. |
+| **Supabase** | Cloud project ref `cfltbpwrojtlpkjvresd` (Sydney/SEA). **New API keys**: publishable (client) + secret (server) — NOT legacy anon/service_role. Migrations 001–046 all applied to cloud. |
 | **Web hosting** | **Vercel**, custom domain **app.industryforms.app**. Vercel **Root Directory = `tradiee-app`**, **Framework Preset = Next.js**. `tradiee-app/vercel.json` defines two daily crons (`/api/reminders` 20:00 UTC, `/api/daily-todos` 18:00 UTC = 6am NZ). |
 | **Storage** | **Cloudflare R2** (S3-compatible). Buckets: `industry-forms-public` (logos, job photos, customer sign-offs — via **cdn.industryforms.app**) and `industry-forms` (private compliance PDFs via presigned URLs). |
 | **Offline sync** | **PowerSync** `https://6a33b406deeddd0df605d498.powersync.journeyapps.com`, connected to cloud DB, JWKS auth via Supabase. `sync-rules.yaml` is now **edition-3 sync streams** (deployed). |
 | **SMS** | **Twilio** — credentials live (configured by user 2026-06-22). Inbound webhook → `/api/sms/inbound`. |
-| **Mobile** | Expo `@grimstock/industryforms` (EAS, logged in as `grimstock`). APK builds via **local Gradle**: `cd tradiee-mobile/android && ./gradlew assembleRelease --no-daemon`. Don't run release builds back-to-back — flaky `packageRelease` lock errors; if it fails run `./gradlew clean assembleRelease`. |
+| **Mobile** | Expo `@grimstock/industryforms` (EAS, logged in as `grimstock`). APK builds via **local Gradle**: `cd tradiee-mobile/android && gradlew.bat assembleRelease --no-daemon`. EAS free plan resets **2026-07-01** — use EAS for future cloud builds then, or use local Gradle on Windows. Don't run release builds back-to-back — flaky `packageRelease` lock errors; if it fails run `gradlew.bat clean assembleRelease`. |
 
 ## Env vars (NEVER commit real secret values)
 **Set in Vercel → Project Settings → Environment Variables** (Production +
@@ -38,6 +38,7 @@ on each of these so the owner sees what's missing without peeking at env vars.
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`
 - `R2_ACCOUNT_ID`, `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `R2_PUBLIC_*`/`R2_PRIVATE_*` keys, `NEXT_PUBLIC_R2_PUBLIC_BASE_URL=https://cdn.industryforms.app`
 - `NEXT_PUBLIC_APP_URL=https://app.industryforms.app`, `NEXT_PUBLIC_POWERSYNC_URL`, `CRON_SECRET`
+- **LocationIQ** — `NEXT_PUBLIC_LOCATIONIQ_KEY` for geocoding (address autocomplete + job map pins). Falls back to Nominatim (rate-limited in prod) if unset.
 - **Twilio (live)** — `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`. Point the number's "A MESSAGE COMES IN" webhook at `https://app.industryforms.app/api/sms/inbound` (POST).
 - **Resend (pending)** — `RESEND_API_KEY`, `EMAIL_FROM` (verified sender domain).
 - **Stripe (pending)** — `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`. Webhook target: `/api/stripe/webhook`. Needed for online invoice payments, plan upgrades, and Tap to Pay.
@@ -62,7 +63,117 @@ mode, payments incl. **Stripe**, **Xero** sync, recurring invoices, bulk
 invoicing, email/SMS, public `/i/[token]`) → **Payments** → **Review request
 email** auto-sent after paid.
 
-### Sprint 3 (2026-06-22) — competitor-parity + UX polish, all on `main`
+### Sprint 6 (2026-07-03) — mobile nav/quote fixes + kits + signup, all on `main`
+
+**Mobile: fixed quote creation crash**
+`tradiee-mobile/app/quotes/new.tsx` inserted quotes without `quote_number`,
+violating the not-null constraint. Now generates the number the same way the
+web app does (`companies.quote_prefix` + running count). Also added an
+**expiry-days picker** (7/14/30/60, was hardcoded to 30 with no UI) and a
+**job site selector** (populated from the chosen customer's `customer_sites`,
+writes `quotes.site_id`) — both were previously missing from the mobile form.
+
+**Mobile: mandatory customer fields on quick-add**
+The inline "new customer" mini-forms in `tradiee-mobile/app/jobs/new.tsx` and
+`tradiee-mobile/app/quotes/new.tsx` now require name, email, phone, and
+billing address (jobs' quick-add previously only collected name+phone). A
+`customer_sites` row is auto-created from the billing address, same as the
+web customer form.
+
+**Web: mandatory customer fields**
+`tradiee-app/components/forms/customer-form.tsx` — email, phone, and billing
+address are now required (previously only name was required).
+
+**Mobile: navigation fix for More-tab screens**
+Customers, Invoices, Time Logs, Job Map, and Invitations were registered as
+*hidden tabs* inside the `(tabs)` navigator (`href: null`), so opening them
+from the More menu did a tab-switch rather than a stack push — Android back
+button jumped to Home instead of returning to More. Moved all five out of
+`(tabs)/` into top-level stack routes (`app/customers/index.tsx`,
+`app/invoices/index.tsx`, `app/timesheets.tsx`, `app/job-map.tsx`,
+`app/invitations.tsx`), registered with native headers in root
+`app/_layout.tsx`. Back button now works correctly. Also fixed
+`invitations.tsx`'s hardcoded `paddingTop: 56` (no `SafeAreaView`) — now uses
+`SafeAreaView` like every other screen.
+
+**Mobile: increased top padding**
+Bumped `paddingTop` from 8→20 on the header row of `jobs.tsx`, `quotes.tsx`,
+`schedule.tsx`, and added explicit top padding to `home.tsx` and `more.tsx`
+(both lacked any — content sat flush against the safe-area edge since the
+header bars were removed in a prior sprint).
+
+**Web: kits in job materials & invoice line items**
+Kits (bundles of price-list items) were quote-only. Added the same "From
+kit" picker to `tradiee-app/app/(dashboard)/jobs/[id]/materials.tsx` (job
+materials) and the invoice "Add line item" dialog in
+`tradiee-app/app/(dashboard)/invoices/[id]/client.tsx`, alongside a
+price-list search that pre-fills the manual line form.
+
+**Web: signup — new trade options + profession tracking**
+Added "Automotive" and "Engineer" to the trade/industry dropdown in
+`tradiee-app/app/signup/page.tsx` (also now validated as required client-side,
+previously bypassable). `trade_type` is logged server-side on signup
+(`app/api/auth/signup/route.ts`) and now shown as a "Trade" column on
+`/admin/companies`.
+
+### Sprint 5 (2026-06-25) — mobile completeness + web parity, all on `main`
+
+**Mobile: New job — inline new customer**
+`tradiee-mobile/app/jobs/new.tsx`: "New customer" button in the customer picker
+FlatList header. Switches to an inline form (name, phone); taps "Create &
+select" → `POST /api/customers` → auto-selects. "← Back" returns to customer
+list. Job creation now goes through `/api/jobs` (was a direct Supabase insert)
+so `nextDocNumber()` runs server-side — fixes null `job_number` on mobile.
+
+**Mobile: Photo prompt before sign-off/invoice**
+`tradiee-mobile/app/jobs/[id].tsx`: `promptCompleteWithSignoff()` and
+`promptCompleteAndInvoice()` check if the job has any photos. If none, fires an
+Alert: "Add photos" (opens camera), "Skip & continue", "Cancel". Existing
+"Complete & get sign-off" and "Complete & Invoice" buttons now call these wrappers.
+
+**Mobile: "Customer Signature" label in sign-off modal**
+Same file: label rendered above the WebView signature pad — uppercase, letter-spaced,
+styled to match the section headers.
+
+**Mobile: Auto-track trading hours schedule**
+`tradiee-mobile/app/(tabs)/timesheets.tsx`: configurable start/end hour + active
+days. Persisted in `AsyncStorage` under key `TRADIEE_TRADING_HOURS`. `useFocusEffect`
+reads the schedule and auto-starts/stops GPS tracking when the app comes to
+foreground. Gear icon on the auto-track row (orange when enabled); opens settings
+modal. Row label changes to "Auto-track (scheduled)" when active.
+
+**Web: Job site picker in new-job dialog**
+`tradiee-app/app/(dashboard)/jobs/client.tsx`: when a customer is selected, loads
+their `customer_sites` and shows a dropdown. "Add site" button reveals an inline
+form (label + address). For new-customer mode, "Add as job site" checkbox +
+address field creates a site immediately after the customer is created, then links
+`jobs.site_id`. Job insert now carries `site_id`.
+
+**Web: Project subcontractors — company field + required phone/email**
+`tradiee-app/app/(dashboard)/projects/[id]/client.tsx`: added "Company *"
+required field to the subcontractor form. Phone and email are now required.
+Subcontractor list shows `Name · Company (Trade)`. Migration **044** adds
+`project_subcontractors.company text`.
+
+**Web: Geocoding → LocationIQ**
+`tradiee-app/lib/geocode.ts`: prefers `NEXT_PUBLIC_LOCATIONIQ_KEY`
+(`us1.locationiq.com/v1/search`, `countrycodes=nz,au`) over Nominatim. Nominatim
+remains as a fallback with `User-Agent: TradeHub/1.0`.
+
+**Web: Configurable default project stages**
+`tradiee-app/app/(dashboard)/settings/client.tsx`: "Default project stages" card
+in the Workflow tab. Enable toggle, editable stage list, add input, save. Saves to
+`companies.default_project_stages` (null = system defaults, `[]` = none, non-empty
+= use these). `projects/client.tsx` reads the company setting on new-project
+creation. Migration **045** adds `companies.default_project_stages text[]`.
+
+**Web: Logbook trip verification**
+`tradiee-app/app/(dashboard)/logbook/client.tsx`: "Verify" button (Circle icon,
+orange) on auto-detected trips; clicking sets `travel_logs.verified_at = now()` and
+`verified_by = user.id`. Turns to a green "Verified" badge (CheckCircle2). Migration
+**046** adds `travel_logs.verified_at timestamptz` + `verified_by uuid`.
+
+### Sprint 3 / Sprint 4 (2026-06-22) — competitor-parity + UX polish, all on `main`
 
 **Quick-action menus** — Tradify-style per-row `⋯` on Customers (→ New quote,
 New job pre-filled) and Suppliers (→ New PO, New bill pre-filled). New
@@ -202,12 +313,14 @@ Tabs: Jobs (My/All), Map, Invitations, Schedule, **Quotes/Invoices (admin
 only)**, Customers, Timesheets, More. Lists read **direct Supabase**; detail
 screens use **PowerSync** `useQuery`; photos via presigned R2.
 - **Job detail**: tap-to-call phone, tap-to-map address, custom-status
-  badge + picker, **Complete job & get sign-off**.
-- **Timesheets**: auto GPS travel logbook → allocate trips
-  (Personal/Ignore/Work→job).
-- **Tap to Pay** (scaffolding only — see Sprint 3 above).
+  badge + picker, **Complete job & get sign-off** (with photo prompt), **Complete & Invoice**.
+- **New job**: inline new-customer create, uses `/api/jobs` for correct `job_number`.
+- **Timesheets**: auto GPS travel logbook → allocate trips (Personal/Ignore/Work→job).
+  Auto-track with **trading hours schedule** (configurable per day + hour window).
+- **Sign-off modal**: "Customer Signature" label + photo prompt if no photos yet.
+- **Tap to Pay** (scaffolding only — see Sprint 3/4 above).
 
-## Migrations (supabase/migrations/) — all 043 applied to cloud
+## Migrations (supabase/migrations/) — all 046 applied to cloud
 001–021 base schema. **022** PowerSync. **023** billing_exempt. **024**
 visit reminder_sent_at. **025** suppliers/POs. **026** bills. **027** invoice
 last_reminder_at. **028** company_websites. **029** cf_hostname_id. **030**
@@ -220,7 +333,9 @@ inbound_email_token. **037** custom job statuses. **038** auto-generated todos.
 + jobs/invoices.project_id/project_stage_id + companies.addons. **040**
 companies.theme_accent. **041** review_link + review_request_enabled +
 invoices.review_request_sent_at. **042** customer_messages. **043**
-profiles.vehicle_registration.
+profiles.vehicle_registration. **044** project_subcontractors.company. **045**
+companies.default_project_stages text[]. **046** travel_logs.verified_at +
+travel_logs.verified_by.
 
 ## Key decisions & gotchas
 - **Next 16** uses `proxy.ts` (not `middleware.ts`) + `allowedDevOrigins` in
@@ -235,6 +350,9 @@ profiles.vehicle_registration.
   all `/api/*` routes from a stale manifest. Restart the dev server.
 - **Supabase clients must share the session** — use
   `@/lib/supabase/browser`/`server`, not a fresh `@supabase/supabase-js`.
+- **Bearer auth fallback pattern (mobile API routes)**: try cookie auth via
+  `createClient()`, then `createServiceClient().auth.getUser(bearer.slice(7))`.
+  Used in `/api/jobs`, `/api/invoices`, `/api/storage/signature`, etc.
 - **PostgREST to-one embeds infer as arrays** under the typed client —
   cast `as unknown as {…} | null`.
 - **Lucide icon name collisions**: `import { Map }` shadows JS `Map` —
@@ -252,6 +370,13 @@ profiles.vehicle_registration.
   full literal class strings on data objects.
 - **Plans** in `lib/plans.ts`. Add-ons are JSONB on `companies.addons`,
   keyed by slug — `lib/billing.ts hasAddon()`.
+- **`nextDocNumber(supabase, companyId, kind)`** in `tradiee-app/lib/numbering.ts`
+  — count-based job/quote/invoice numbers. Always call it server-side via the API
+  routes, never from client-side Supabase inserts.
+- **EAS free plan** resets 2026-07-01. Until then, build APKs with
+  `tradiee-mobile/android/gradlew.bat assembleRelease --no-daemon`. Output:
+  `android/app/build/outputs/apk/release/app-release.apk`. Local EAS
+  (`eas build --local`) requires macOS/Linux — won't work on Windows.
 
 ## How to run / verify
 - **Web dev**: `npm run dev` in `tradiee-app` (port 3000) — talks to cloud
@@ -262,7 +387,9 @@ profiles.vehicle_registration.
   (auto-deploys): `npx next build`.
 - **DB**: `supabase db push`. One-off DB scripts: `node --env-file=.env.local
   <x>.mjs` with `@supabase/supabase-js` + secret key.
-- **Commits** end with `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>`.
+- **APK (Windows)**: `cd tradiee-mobile/android && gradlew.bat assembleRelease --no-daemon`
+  (Java 17 + Android SDK required; Android Studio handles SDK).
+- **Commits** end with `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
 
 ## Accounts
 - **E2E test** (exists): `claude-e2e-20260620@grimstock.co.nz` /
@@ -294,14 +421,18 @@ profiles.vehicle_registration.
    dev/super-admin; needs a Stripe checkout + webhook for prod.
 
 ### Building next
-The user has flagged the next sprint will be on **the website / public
-marketing site** (industryforms.app — different from the tenant Instant
-Websites). No work started yet; brief expected next session.
+No explicit next sprint scoped yet. Leading candidates:
+- **Marketing site** (industryforms.app — separate from tenant Instant Websites). No work started.
+- **Configurable dashboard widgets** (swappable widget system).
+- **Job maps: geocode-on-save** when a new site address is set.
 
 ### Future backlog (in priority order)
 - **Tap to Pay finish** — install `@stripe/stripe-terminal-react-native` in
   the mobile app, get Apple's proximity-reader entitlement, wire the
   collect-confirm flow per `tradiee-mobile/lib/tap-to-pay.ts`.
+- **Google Calendar sync** — not yet implemented.
+- **GPS geo-fence time clock** — auto check-in on site arrival.
+- **Customer portal login** — customers view their own job/invoice history.
 - **Pricing levels** (per-customer-group pricing). **MYOB/QuickBooks** sync
   (have Xero). **Reminder-cron comms logging** (manual sends are logged;
   cron sends aren't). **Invoice templates** standalone (currently lean on

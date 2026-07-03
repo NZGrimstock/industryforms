@@ -4,7 +4,7 @@ import {
   TextInput, Alert, ActivityIndicator, Modal, ScrollView, Switch, RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, Stack } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
@@ -255,7 +255,8 @@ export default function TimesheetsScreen() {
   const unallocated = travelLogs.filter(l => !l.purpose).length
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Stack.Screen options={{ title: 'Time Logs', headerTintColor: '#f97316' }} />
       <View style={styles.header}>
         <Text style={styles.heading}>Time</Text>
         <View style={styles.trackingRow}>

@@ -9,9 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Undo2, Briefcase } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Undo2, Briefcase, Search } from 'lucide-react'
 import { PrintInvoice } from '@/components/pdf/print-invoice'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
+
+type PriceItem = { id: string; name: string; unit: string; sell_price: number; cost_price: number; type: string }
+type Kit = { id: string; name: string; kit_items: { quantity: number; price_list_items: PriceItem | null }[] }
 
 interface Props {
   invoice: {
@@ -35,11 +39,13 @@ interface Props {
   pricesIncludeTax?: boolean
   xeroConnected?: boolean
   printData: InvoicePdfData
+  priceItems?: PriceItem[]
+  kits?: Kit[]
 }
 
 type Dialog = 'line' | 'payment' | 'discount' | null
 
-export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected, printData }: Props) {
+export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected, printData, priceItems = [], kits = [] }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -47,6 +53,8 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   const [loading, setLoading] = useState(false)
 
   const [lineForm, setLineForm] = useState({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount' as 'amount' | 'percent', tax_rate: String(gstRate) })
+  const [priceSearch, setPriceSearch] = useState('')
+  const filteredPriceItems = priceItems.filter(p => p.name.toLowerCase().includes(priceSearch.toLowerCase()))
 
   // Company tax rates for the line tax picker (fallback: GST + GST Free).
   const [taxRates, setTaxRates] = useState<{ name: string; rate: number }[]>([{ name: 'GST', rate: gstRate }, { name: 'GST Free', rate: 0 }])
@@ -102,6 +110,39 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     await recompute(invoice.discount_type, invoice.discount_value)
     toast('Line added'); setActiveDialog(null)
     setLineForm({ description: '', quantity: '1', unit: 'each', unit_price: '0', discount_value: '0', discount_type: 'amount', tax_rate: String(gstRate) })
+    router.refresh()
+    setLoading(false)
+  }
+
+  function pickPriceItem(item: PriceItem) {
+    setLineForm(f => ({ ...f, description: item.name, unit: item.unit, unit_price: String(item.sell_price || item.cost_price) }))
+    setPriceSearch('')
+  }
+
+  async function addKit(kit: Kit) {
+    const rows = kit.kit_items.filter(ki => ki.price_list_items).map((ki, i) => {
+      const item = ki.price_list_items!
+      const price = item.sell_price || item.cost_price
+      return {
+        invoice_id: invoice.id,
+        price_list_item_id: item.id,
+        type: 'material',
+        description: item.name,
+        quantity: ki.quantity,
+        unit: item.unit,
+        unit_price: price,
+        tax_rate: gstRate,
+        line_total: lineNet(ki.quantity, price, null, 0, gstRate, pricesIncludeTax),
+        sort_order: 99 + i,
+      }
+    })
+    if (rows.length === 0) return
+    setLoading(true)
+    const { error } = await supabase.from('invoice_line_items').insert(rows)
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
+    await recompute(invoice.discount_type, invoice.discount_value)
+    toast(`Added ${rows.length} line${rows.length === 1 ? '' : 's'} from ${kit.name}`)
+    setActiveDialog(null)
     router.refresh()
     setLoading(false)
   }
@@ -287,6 +328,34 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       {invoice.job_id && <Button variant="ghost" size="sm" onClick={revertToJob}><Undo2 className="h-4 w-4" /> Revert back to job</Button>}
 
       <Dialog open={activeDialog === 'line'} onClose={() => setActiveDialog(null)} title="Add line item">
+        {(priceItems.length > 0 || kits.length > 0) && (
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <input className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-orange-400" placeholder="Search price list to fill in the form below…" value={priceSearch} onChange={e => setPriceSearch(e.target.value)} />
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-0.5">
+              {!priceSearch && kits.length > 0 && (
+                <>
+                  <p className="px-1 pt-1 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Kits</p>
+                  {kits.map(kit => (
+                    <button key={kit.id} type="button" onClick={() => addKit(kit)} disabled={loading} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-gray-50 disabled:opacity-50">
+                      <span className="text-gray-800">{kit.name}</span>
+                      <span className="text-xs text-gray-400">{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span>
+                    </button>
+                  ))}
+                  <p className="px-1 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Items</p>
+                </>
+              )}
+              {filteredPriceItems.map(item => (
+                <button key={item.id} type="button" onClick={() => pickPriceItem(item)} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-gray-50">
+                  <span className="text-gray-800">{item.name}</span>
+                  <span className="text-gray-500 text-xs">{formatCurrency(item.sell_price || item.cost_price)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <form onSubmit={addLine} className="space-y-4">
           <div><Label>Description <span className="text-red-400">*</span></Label><Input value={lineForm.description} onChange={e => setLineForm(f => ({ ...f, description: e.target.value }))} required /></div>
           <div className="grid grid-cols-3 gap-3">

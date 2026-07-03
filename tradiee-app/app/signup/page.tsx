@@ -39,12 +39,14 @@ export default function SignupPage() {
     'Solar / Renewable energy',
     'Security / Alarm systems',
     'Cleaning services',
+    'Automotive',
+    'Engineer',
     'Other trades',
   ]
 
   async function handleSubmit() {
-    if (!fullName || !email || !password || !companyName || !phone) {
-      setError('Please fill in all required fields including phone number.')
+    if (!fullName || !email || !password || !companyName || !phone || !tradeType) {
+      setError('Please fill in all required fields, including phone number and trade.')
       return
     }
     setError('')

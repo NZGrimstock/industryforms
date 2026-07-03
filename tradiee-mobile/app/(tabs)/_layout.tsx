@@ -18,10 +18,7 @@ const BOTTOM_TABS: { name: string; label: string; icon: FeatherName }[] = [
   { name: 'more',     label: 'More',     icon: 'more-horizontal' },
 ]
 
-// Still-registered routes, hidden from bottom bar
-const HIDDEN_TABS = ['map', 'invoices', 'customers', 'timesheets', 'invitations']
-
-const ADMIN_ONLY = new Set(['quotes', 'invoices'])
+const ADMIN_ONLY = new Set(['quotes'])
 
 // Sticky timer badge — shown in every tab header when a job timer is running.
 // Polls AsyncStorage every 8 s; tapping navigates back to the active job.
@@ -136,13 +133,6 @@ export default function TabLayout() {
             ),
             href: isStaff && ADMIN_ONLY.has(tab.name) ? null : undefined,
           }}
-        />
-      ))}
-      {HIDDEN_TABS.map(name => (
-        <Tabs.Screen
-          key={name}
-          name={name}
-          options={{ href: null }}
         />
       ))}
     </Tabs>

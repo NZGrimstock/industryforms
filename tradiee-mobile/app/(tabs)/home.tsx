@@ -174,7 +174,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={s.container}>
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
       >
         {/* Greeting */}

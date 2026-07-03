@@ -25,8 +25,9 @@ export default function NewJobScreen() {
   const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
-  const [newCust, setNewCust] = useState({ name: '', phone: '' })
+  const [newCust, setNewCust] = useState({ name: '', phone: '', email: '', billing_address: '' })
   const [creatingCust, setCreatingCust] = useState(false)
+  const newCustValid = !!(newCust.name.trim() && newCust.phone.trim() && newCust.email.trim() && newCust.billing_address.trim())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -52,24 +53,31 @@ export default function NewJobScreen() {
   )
 
   async function createCustomer() {
-    if (!newCust.name.trim()) { Alert.alert('Name required'); return }
+    if (!newCustValid) { Alert.alert('Missing details', 'Name, email, phone, and billing address are all required.'); return }
     if (!companyId) return
     setCreatingCust(true)
     const { data, error } = await supabase.from('customers').insert({
       name: newCust.name.trim(),
-      phone: newCust.phone.trim() || null,
+      phone: newCust.phone.trim(),
+      email: newCust.email.trim(),
+      billing_address: newCust.billing_address.trim(),
       company_id: companyId,
       is_active: true,
     }).select('id, name, phone').single()
+    if (error) { setCreatingCust(false); Alert.alert('Error', error.message); return }
+    await supabase.from('customer_sites').insert({
+      customer_id: data.id,
+      address: newCust.billing_address.trim(),
+      label: 'Billing address',
+    })
     setCreatingCust(false)
-    if (error) { Alert.alert('Error', error.message); return }
     setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setCustomerId(data.id)
     setCustomerName(data.name)
     setShowNewCustomer(false)
     setShowPicker(false)
     setCustomerSearch('')
-    setNewCust({ name: '', phone: '' })
+    setNewCust({ name: '', phone: '', email: '', billing_address: '' })
   }
 
   async function save() {
@@ -165,7 +173,7 @@ export default function NewJobScreen() {
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>{showNewCustomer ? 'New Customer' : 'Select Customer'}</Text>
             <TouchableOpacity onPress={() => {
-              if (showNewCustomer) { setShowNewCustomer(false); setNewCust({ name: '', phone: '' }) }
+              if (showNewCustomer) { setShowNewCustomer(false); setNewCust({ name: '', phone: '', email: '', billing_address: '' }) }
               else { setShowPicker(false); setCustomerSearch('') }
             }}>
               <Text style={s.modalClose}>{showNewCustomer ? '← Back' : 'Done'}</Text>
@@ -186,14 +194,30 @@ export default function NewJobScreen() {
                 style={s.input}
                 value={newCust.phone}
                 onChangeText={v => setNewCust(p => ({ ...p, phone: v }))}
-                placeholder="Phone number"
+                placeholder="Phone number *"
                 placeholderTextColor="#9ca3af"
                 keyboardType="phone-pad"
               />
+              <TextInput
+                style={s.input}
+                value={newCust.email}
+                onChangeText={v => setNewCust(p => ({ ...p, email: v }))}
+                placeholder="Email *"
+                placeholderTextColor="#9ca3af"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={s.input}
+                value={newCust.billing_address}
+                onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))}
+                placeholder="Billing address *"
+                placeholderTextColor="#9ca3af"
+              />
               <TouchableOpacity
-                style={[s.btn, (!newCust.name.trim() || creatingCust) && { opacity: 0.5 }]}
+                style={[s.btn, (!newCustValid || creatingCust) && { opacity: 0.5 }]}
                 onPress={createCustomer}
-                disabled={!newCust.name.trim() || creatingCust}
+                disabled={!newCustValid || creatingCust}
                 activeOpacity={0.85}
               >
                 {creatingCust

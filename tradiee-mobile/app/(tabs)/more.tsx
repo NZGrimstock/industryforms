@@ -48,14 +48,14 @@ export default function MoreScreen() {
   }
 
   const workItems: MenuItem[] = [
-    { icon: 'users',       label: 'Customers',   route: '/(tabs)/customers' },
-    { icon: 'credit-card', label: 'Invoices',     route: '/(tabs)/invoices' },
+    { icon: 'users',       label: 'Customers',   route: '/customers' },
+    { icon: 'credit-card', label: 'Invoices',     route: '/invoices' },
     { icon: 'zap',         label: 'Tap to Pay',   route: '/pay-now' },
-    { icon: 'clock',       label: 'Time Logs',    route: '/(tabs)/timesheets' },
-    { icon: 'map',         label: 'Job Map',      route: '/(tabs)/map' },
+    { icon: 'clock',       label: 'Time Logs',    route: '/timesheets' },
+    { icon: 'map',         label: 'Job Map',      route: '/job-map' },
     { icon: 'check-square',label: 'To-do List',   route: '/todos' },
     { icon: 'inbox',       label: 'Enquiries',    route: '/enquiries' },
-    { icon: 'mail',        label: 'Invitations',  route: '/(tabs)/invitations', badge: pendingCount > 0 ? pendingCount : undefined },
+    { icon: 'mail',        label: 'Invitations',  route: '/invitations', badge: pendingCount > 0 ? pendingCount : undefined },
   ]
 
   const accountItems: MenuItem[] = [
@@ -86,7 +86,7 @@ export default function MoreScreen() {
 
   return (
     <SafeAreaView style={s.container}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 40 }}>
 
         {profile && (
           <TouchableOpacity style={s.profileCard} onPress={() => router.push('/profile')} activeOpacity={0.8}>

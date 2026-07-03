@@ -40,6 +40,11 @@ export function CustomerForm({ companyId, customer, onSuccess }: Props) {
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
   async function doSave() {
+    if (!form.email.trim() || !form.phone.trim() || !form.billing_address.trim()) {
+      toast('Email, phone, and billing address are required', 'error')
+      setLoading(false)
+      return
+    }
     const payload = {
       ...form,
       company_id: companyId,
@@ -140,17 +145,17 @@ export function CustomerForm({ companyId, customer, onSuccess }: Props) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>Email</Label>
-            <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} />
+            <Label>Email <span className="text-red-400">*</span></Label>
+            <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} required />
           </div>
           <div>
-            <Label>Phone</Label>
-            <Input value={form.phone} onChange={e => set('phone', e.target.value)} />
+            <Label>Phone <span className="text-red-400">*</span></Label>
+            <Input value={form.phone} onChange={e => set('phone', e.target.value)} required />
           </div>
         </div>
         <div>
-          <Label>Billing address</Label>
-          <AddressAutocomplete value={form.billing_address} onChange={v => set('billing_address', v)} placeholder="Start typing an address…" />
+          <Label>Billing address <span className="text-red-400">*</span></Label>
+          <AddressAutocomplete value={form.billing_address} onChange={v => set('billing_address', v)} placeholder="Start typing an address…" required />
           {form.billing_address.trim() && (
             <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
               <input type="checkbox" checked={addAsJobSite} onChange={e => setAddAsJobSite(e.target.checked)} className="rounded" />

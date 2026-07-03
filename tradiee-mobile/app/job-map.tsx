@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
-import { router, useFocusEffect } from 'expo-router'
+import { router, useFocusEffect, Stack } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 import { getJobStatuses } from '@/lib/job-statuses'
 
@@ -119,6 +119,7 @@ export default function MapScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Stack.Screen options={{ title: 'Job Map', headerTintColor: '#f97316' }} />
       <View style={styles.toggleRow}>
         <TouchableOpacity onPress={() => setMine(true)} style={[styles.toggle, mine && styles.toggleOn]}>
           <Text style={[styles.toggleText, mine && styles.toggleTextOn]}>My jobs</Text>

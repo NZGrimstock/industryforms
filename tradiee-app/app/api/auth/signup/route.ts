@@ -60,6 +60,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 400 })
     }
 
+    console.log(`[signup] ${companyName} (${company.id}) — trade: ${tradeType || 'not specified'}`)
+
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     console.error('Signup error:', err)

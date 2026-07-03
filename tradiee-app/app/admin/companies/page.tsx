@@ -7,7 +7,7 @@ export default async function AdminCompanies() {
   const { data: companies } = await s
     .from('companies')
     .select(`
-      id, name, country, created_at,
+      id, name, country, trade_type, created_at,
       profiles(id, full_name, email, role, is_super_admin)
     `)
     .order('created_at', { ascending: false })
@@ -27,6 +27,7 @@ export default async function AdminCompanies() {
             <tr className="border-b border-gray-800">
               <th className="text-left px-5 py-3 text-gray-400 font-medium">Company</th>
               <th className="text-left px-5 py-3 text-gray-400 font-medium">Country</th>
+              <th className="text-left px-5 py-3 text-gray-400 font-medium">Trade</th>
               <th className="text-left px-5 py-3 text-gray-400 font-medium">Users</th>
               <th className="text-left px-5 py-3 text-gray-400 font-medium">Joined</th>
               <th className="px-5 py-3" />
@@ -42,6 +43,7 @@ export default async function AdminCompanies() {
                     <p className="text-xs text-gray-500 font-mono">{c.id.slice(0, 8)}…</p>
                   </td>
                   <td className="px-5 py-3 text-gray-400">{c.country ?? '—'}</td>
+                  <td className="px-5 py-3 text-gray-400">{c.trade_type ?? '—'}</td>
                   <td className="px-5 py-3">
                     <span className="text-white font-medium">{users.length}</span>
                     {users.length > 0 && (
@@ -65,7 +67,7 @@ export default async function AdminCompanies() {
               )
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-500">No companies yet</td></tr>
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500">No companies yet</td></tr>
             )}
           </tbody>
         </table>

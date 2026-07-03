@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, RefreshControl,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 
@@ -88,10 +88,10 @@ export default function InvoicesScreen() {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Stack.Screen options={{ title: 'Invoices', headerTintColor: '#f97316' }} />
       <View style={styles.header}>
-        <Text style={styles.heading}>Invoices</Text>
-        <Text style={styles.count}>{filtered.length}</Text>
+        <Text style={styles.count}>{filtered.length} invoice{filtered.length === 1 ? '' : 's'}</Text>
       </View>
 
       <View style={styles.searchBox}>

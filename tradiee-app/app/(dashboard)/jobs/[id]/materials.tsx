@@ -23,6 +23,11 @@ type QuoteLine = {
   type: string
   price_list_item_id: string | null
 }
+type Kit = {
+  id: string
+  name: string
+  kit_items: { quantity: number; price_list_items: PriceItem | null }[]
+}
 
 interface Props {
   jobId: string
@@ -30,13 +35,14 @@ interface Props {
   profileId: string
   materials: Material[]
   priceItems: PriceItem[]
+  kits?: Kit[]
   quoteLines?: QuoteLine[]
   quoteNumber?: string | null
   standardMarkupEnabled?: boolean
   standardMarkupPct?: number
 }
 
-export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
+export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [showForm, setShowForm] = useState(false)
@@ -96,6 +102,31 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
     setSelectedIds([])
     setShowPriceList(false)
     setSearch('')
+    router.refresh()
+  }
+
+  async function addKit(kit: Kit) {
+    const rows = kit.kit_items.filter(ki => ki.price_list_items).map(ki => {
+      const item = ki.price_list_items!
+      const sellPrice = item.sell_price || (standardMarkupEnabled ? Number((item.cost_price * (1 + standardMarkupPct / 100)).toFixed(2)) : item.cost_price)
+      return {
+        job_id: jobId,
+        company_id: companyId,
+        added_by: profileId,
+        price_list_item_id: item.id,
+        description: item.name,
+        quantity: ki.quantity,
+        unit: item.unit,
+        unit_cost: item.cost_price,
+        unit_price: sellPrice,
+      }
+    })
+    if (rows.length === 0) return
+    setLoading(true)
+    const { error } = await supabase.from('job_materials').insert(rows)
+    setLoading(false)
+    if (error) return
+    setShowPriceList(false)
     router.refresh()
   }
 
@@ -224,6 +255,18 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
               <button onClick={addSelectedFromPriceList} disabled={loading} className="w-full mb-2 px-3 py-2 text-xs bg-[var(--accent,#f97316)] text-white rounded-lg disabled:opacity-50">
                 Add selected ({selectedIds.length})
               </button>
+            )}
+            {!search && kits.length > 0 && (
+              <>
+                <p className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Kits</p>
+                {kits.map(kit => (
+                  <button key={kit.id} onClick={() => addKit(kit)} disabled={loading} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-white disabled:opacity-50">
+                    <span className="text-gray-800">{kit.name}</span>
+                    <span className="text-xs text-gray-400">{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span>
+                  </button>
+                ))}
+                <p className="px-3 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Items</p>
+              </>
             )}
             {filtered.map(item => (
               <button key={item.id} onClick={() => toggleSelected(item.id)} className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm ${selectedIds.includes(item.id) ? 'bg-orange-50 text-orange-700' : 'hover:bg-white'}`}>

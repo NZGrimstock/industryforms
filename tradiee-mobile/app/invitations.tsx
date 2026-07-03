@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, Stack } from 'expo-router'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 
 type InvitationItem = {
@@ -115,17 +116,16 @@ export default function InvitationsTab() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered} edges={['bottom']}>
+        <Stack.Screen options={{ title: 'Invitations', headerTintColor: '#f97316' }} />
         <ActivityIndicator size="large" color="#f97316" />
-      </View>
+      </SafeAreaView>
     )
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Invitations</Text>
-      </View>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Stack.Screen options={{ title: 'Invitations', headerTintColor: '#f97316' }} />
       <FlatList
         data={invitations}
         keyExtractor={(item) => item.id}
@@ -144,7 +144,7 @@ export default function InvitationsTab() {
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   )
 }
 
@@ -157,19 +157,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 56,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111827',
   },
   list: {
     padding: 16,

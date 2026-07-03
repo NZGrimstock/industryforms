@@ -25,6 +25,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   if (!invoice) notFound()
 
+  const [priceItemsRes, kitsRes] = await Promise.all([
+    supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, type').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
+    supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
+  ])
+
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const co = profile?.companies as unknown as {name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null} | null
   const gstRate = co?.default_gst_rate ?? 0.15
@@ -70,6 +75,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             pricesIncludeTax={!!co?.prices_include_tax}
             xeroConnected={xeroConnected}
             printData={printData}
+            priceItems={priceItemsRes.data ?? []}
+            kits={kitsRes.data ?? []}
           />
         </div>
 

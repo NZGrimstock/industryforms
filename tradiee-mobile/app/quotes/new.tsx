@@ -10,6 +10,9 @@ import { supabase } from '@/lib/supabase'
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null }
 type LineItem = { id: string; description: string; quantity: string; unit_price: string }
+type Site = { id: string; label: string | null; address: string }
+
+const EXPIRY_OPTIONS = [7, 14, 30, 60]
 
 let _id = 0
 function uid() { return String(++_id) }
@@ -23,6 +26,11 @@ export default function NewQuoteScreen() {
   const [search, setSearch] = useState('')
   const [customers, setCustomers] = useState<Customer[]>([])
   const [showPicker, setShowPicker] = useState(false)
+  const [sites, setSites] = useState<Site[]>([])
+  const [siteId, setSiteId] = useState<string | null>(null)
+  const [showSitePicker, setShowSitePicker] = useState(false)
+  const [expiryDays, setExpiryDays] = useState(30)
+  const [quoteNumber, setQuoteNumber] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [showAddItem, setShowAddItem] = useState(false)
   const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' })
@@ -31,8 +39,9 @@ export default function NewQuoteScreen() {
   const [gstRate, setGstRate] = useState(0.15)
   const [saving, setSaving] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
-  const [newCust, setNewCust] = useState({ name: '', email: '', phone: '' })
+  const [newCust, setNewCust] = useState({ name: '', email: '', phone: '', billing_address: '' })
   const [creatingCust, setCreatingCust] = useState(false)
+  const newCustValid = !!(newCust.name.trim() && newCust.email.trim() && newCust.phone.trim() && newCust.billing_address.trim())
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -43,11 +52,14 @@ export default function NewQuoteScreen() {
           if (!prof) return
           setCompanyId(prof.company_id)
           Promise.all([
-            supabase.from('companies').select('default_gst_rate').eq('id', prof.company_id).single(),
+            supabase.from('companies').select('default_gst_rate, quote_prefix').eq('id', prof.company_id).single(),
             supabase.from('customers').select('id, name, phone, email').eq('company_id', prof.company_id).eq('is_active', true).order('name').limit(300),
-          ]).then(([coRes, custRes]) => {
+            supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('company_id', prof.company_id),
+          ]).then(([coRes, custRes, countRes]) => {
             if (coRes.data) setGstRate(Number(coRes.data.default_gst_rate) || 0.15)
             setCustomers(custRes.data ?? [])
+            const prefix = coRes.data?.quote_prefix ?? 'Q-'
+            setQuoteNumber(`${prefix}${String((countRes.count ?? 0) + 1).padStart(4, '0')}`)
           })
         })
     })
@@ -56,6 +68,21 @@ export default function NewQuoteScreen() {
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   )
+
+  useEffect(() => {
+    if (!customerId) { setSites([]); setSiteId(null); return }
+    setSiteId(null)
+    supabase.from('customer_sites').select('id, label, address').eq('customer_id', customerId).order('created_at')
+      .then(({ data }) => setSites(data ?? []))
+  }, [customerId])
+
+  function selectCustomer(c: Customer) {
+    setCustomerId(c.id)
+    setCustomerName(c.name)
+    setCustomerEmail(c.email)
+    setShowPicker(false)
+    setSearch('')
+  }
 
   function addItem() {
     if (!newItem.description.trim() || !newItem.unit_price) return
@@ -69,26 +96,28 @@ export default function NewQuoteScreen() {
   const total = subtotal + gst
 
   async function createCustomer() {
-    if (!newCust.name.trim() || !companyId) return
+    if (!newCustValid || !companyId) { Alert.alert('Missing details', 'Name, email, phone, and billing address are all required.'); return }
     setCreatingCust(true)
     const { data, error } = await supabase.from('customers').insert({
       name: newCust.name.trim(),
-      email: newCust.email.trim() || null,
-      phone: newCust.phone.trim() || null,
+      email: newCust.email.trim(),
+      phone: newCust.phone.trim(),
+      billing_address: newCust.billing_address.trim(),
       company_id: companyId,
     }).select('id, name, phone, email').single()
-    setCreatingCust(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (error) { setCreatingCust(false); Alert.alert('Error', error.message); return }
     if (data) {
+      await supabase.from('customer_sites').insert({
+        customer_id: data.id,
+        address: newCust.billing_address.trim(),
+        label: 'Billing address',
+      })
       setCustomers(prev => [data, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
-      setCustomerId(data.id)
-      setCustomerName(data.name)
-      setCustomerEmail(data.email)
-      setNewCust({ name: '', email: '', phone: '' })
+      selectCustomer(data)
+      setNewCust({ name: '', email: '', phone: '', billing_address: '' })
       setShowNewCustomer(false)
-      setShowPicker(false)
-      setSearch('')
     }
+    setCreatingCust(false)
   }
 
   async function save(andSend: boolean) {
@@ -105,12 +134,14 @@ export default function NewQuoteScreen() {
         customer_message: message.trim() || null,
         company_id: companyId,
         customer_id: customerId,
+        site_id: siteId,
         created_by: userId,
         status: 'draft',
+        quote_number: quoteNumber,
         subtotal,
         gst_amount: gst,
         total,
-        expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+        expires_at: new Date(Date.now() + expiryDays * 86400000).toISOString(),
       }).select('id').single()
       if (error || !quote) throw new Error(error?.message ?? 'Failed to create quote')
 
@@ -173,6 +204,33 @@ export default function NewQuoteScreen() {
             <Text style={customerId ? s.pickerVal : s.pickerPh}>{customerName || 'Select a customer…'}</Text>
             <Feather name="chevron-down" size={16} color="#9ca3af" />
           </TouchableOpacity>
+        </View>
+
+        {customerId && sites.length > 0 && (
+          <View style={s.field}>
+            <Text style={s.label}>Job site</Text>
+            <TouchableOpacity style={s.picker} onPress={() => setShowSitePicker(true)} activeOpacity={0.7}>
+              <Text style={siteId ? s.pickerVal : s.pickerPh}>
+                {siteId ? (sites.find(s2 => s2.id === siteId)?.label || sites.find(s2 => s2.id === siteId)?.address) : 'No site selected…'}
+              </Text>
+              <Feather name="chevron-down" size={16} color="#9ca3af" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={s.field}>
+          <Text style={s.label}>Expires in</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {EXPIRY_OPTIONS.map(days => (
+              <TouchableOpacity
+                key={days}
+                style={[s.expiryChip, expiryDays === days && s.expiryChipActive]}
+                onPress={() => setExpiryDays(days)}
+              >
+                <Text style={[s.expiryChipText, expiryDays === days && s.expiryChipTextActive]}>{days} days</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <View style={s.field}>
@@ -280,13 +338,7 @@ export default function NewQuoteScreen() {
                   </TouchableOpacity>
                 }
                 renderItem={({ item }) => (
-                  <TouchableOpacity style={s.custRow} onPress={() => {
-                    setCustomerId(item.id)
-                    setCustomerName(item.name)
-                    setCustomerEmail(item.email)
-                    setShowPicker(false)
-                    setSearch('')
-                  }} activeOpacity={0.6}>
+                  <TouchableOpacity style={s.custRow} onPress={() => selectCustomer(item)} activeOpacity={0.6}>
                     <Text style={s.custName}>{item.name}</Text>
                     {item.email && <Text style={s.custSub}>{item.email}</Text>}
                   </TouchableOpacity>
@@ -302,19 +354,44 @@ export default function NewQuoteScreen() {
               </TouchableOpacity>
               <Text style={s.label}>Name *</Text>
               <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.name} onChangeText={v => setNewCust(p => ({ ...p, name: v }))} placeholder="Customer name" placeholderTextColor="#9ca3af" autoFocus />
-              <Text style={s.label}>Email</Text>
+              <Text style={s.label}>Email *</Text>
               <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.email} onChangeText={v => setNewCust(p => ({ ...p, email: v }))} placeholder="customer@email.com" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
-              <Text style={s.label}>Phone</Text>
-              <TextInput style={[s.input, { marginBottom: 24 }]} value={newCust.phone} onChangeText={v => setNewCust(p => ({ ...p, phone: v }))} placeholder="+64 21 000 0000" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+              <Text style={s.label}>Phone *</Text>
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.phone} onChangeText={v => setNewCust(p => ({ ...p, phone: v }))} placeholder="+64 21 000 0000" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+              <Text style={s.label}>Billing address *</Text>
+              <TextInput style={[s.input, { marginBottom: 24 }]} value={newCust.billing_address} onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))} placeholder="Start typing an address…" placeholderTextColor="#9ca3af" />
               <TouchableOpacity
-                style={[s.btn, (!newCust.name.trim() || creatingCust) && { opacity: 0.5 }]}
+                style={[s.btn, (!newCustValid || creatingCust) && { opacity: 0.5 }]}
                 onPress={createCustomer}
-                disabled={!newCust.name.trim() || creatingCust}
+                disabled={!newCustValid || creatingCust}
               >
                 {creatingCust ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>Create customer</Text>}
               </TouchableOpacity>
             </ScrollView>
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Job site picker */}
+      <Modal visible={showSitePicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSitePicker(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Select Job Site</Text>
+            <TouchableOpacity onPress={() => setShowSitePicker(false)}>
+              <Text style={s.modalClose}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={sites}
+            keyExtractor={site => site.id}
+            contentContainerStyle={{ padding: 12 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={s.custRow} onPress={() => { setSiteId(item.id); setShowSitePicker(false) }} activeOpacity={0.6}>
+                <Text style={s.custName}>{item.label || 'Site'}</Text>
+                <Text style={s.custSub}>{item.address}</Text>
+              </TouchableOpacity>
+            )}
+          />
         </SafeAreaView>
       </Modal>
     </KeyboardAvoidingView>
@@ -329,6 +406,10 @@ const s = StyleSheet.create({
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
   pickerVal: { fontSize: 15, color: '#111827' },
   pickerPh: { fontSize: 15, color: '#9ca3af' },
+  expiryChip: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  expiryChipActive: { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+  expiryChipText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
+  expiryChipTextActive: { color: '#f97316' },
   section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
