@@ -15,19 +15,67 @@ GitHub: **https://github.com/NZGrimstock/industryforms** (branch `main`, auto-de
 ### Where work lives right now
 **`main` is current** — Growth Engine Sprints A, B, and C merged 2026-07-03/04,
 executing `SPRINTS_GROWTH_ENGINE_RESCOPED.md` (see that file +
-`SPRINT_A_INBOX_EXECUTION.md` for the full sprint plan). **Sprint D is
-blocked on a business decision, not a technical one**: the doc requires a
-deposit refund/cancellation policy be decided before building real
-Stripe-deposit-taking (NZ Fair Trading / CGA consideration) — see "Open
-decisions" at the bottom of `SPRINTS_GROWTH_ENGINE_RESCOPED.md`. Don't build
-Sprint D's public booking widget or deposit flow until that's answered.
-Sprint E (automations + reporting) also not started. Latest APK is
-`tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(Jun 25, 145 MB — mobile untouched by the Growth Engine sprints). Migrations
-now use timestamped filenames (`YYYYMMDDHHMMSS_description.sql`), not the old
-`0XX_` numbering — latest is `20260703155109_bookings_slot_index_null_fix.sql`, all
+`SPRINT_A_INBOX_EXECUTION.md` for the full sprint plan). Migrations now use
+timestamped filenames (`YYYYMMDDHHMMSS_description.sql`), not the old `0XX_`
+numbering — latest is `20260703155109_bookings_slot_index_null_fix.sql`, all
 applied to cloud Supabase. PowerSync sync rules switched to **streams
 (edition 3)** — already validated + deployed via the PowerSync Dashboard.
+Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
+(Jun 25, 145 MB — mobile untouched by the Growth Engine sprints).
+
+**Sprint D (public booking widget + Stripe deposits) is next, not started —
+no code written yet, only recon.** The blocking decision is now resolved:
+
+> **Deposit refund policy (decided 2026-07-04): full refund if the booking is
+> cancelled more than 24 hours before `starts_at`; deposit is forfeited for a
+> late cancellation or no-show.** Hardcode a 24h window constant for now
+> (per-company configurability wasn't asked for). Admin triggers the refund
+> manually via a button that's only enabled outside the forfeit window —
+> don't auto-refund on cancellation, the doc wants an admin action.
+
+Recon already done for Sprint D, not yet acted on:
+- `app/api/stripe/payment-intent/route.ts` — the pattern to mirror for
+  `/api/bookings/deposit-intent`: `getStripe()`, create a PaymentIntent with
+  `metadata` carrying the linking id (use `booking_id`), return `clientSecret`.
+- `app/i/[token]/pay-button.tsx` — the client-side Stripe Elements pattern to
+  mirror for the widget's payment step: dynamic `import('@stripe/stripe-js')`,
+  `loadStripe(NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)`, `stripe.elements({
+  clientSecret })`, mount a `PaymentElement`, `stripe.confirmPayment({
+  elements, redirect: 'if_required' })`. Has some dead leftover code
+  (`openPayment`/`getCardElement`) — pre-existing, unrelated, left alone.
+- `lib/email.ts` exports `sendEmail()` plus HTML builders for quote/invoice/
+  review-request/reminder — no booking-confirmation template yet, needs one.
+  Sprint E's `notify()` channel-aware helper doesn't exist yet either — per
+  the sprint doc, Sprint D should call `sendEmail()` directly (email only,
+  simple), not build the `notify()` abstraction early; that's explicitly
+  Sprint E's job.
+- `lib/bookings/availability.ts` already has `tryHoldSlot()` — Sprint D's
+  widget flow is: pick a slot → call a **new** `/api/bookings/hold` route
+  wrapping `tryHoldSlot()` (returns a `bookings` row id in `slot_held`) →
+  collect customer details → `/api/bookings/create` updates that same row
+  (customer match by email first then phone per the doc, else create a new
+  customer) and transitions status per the package's rules
+  (`requires_deposit` → `deposit_pending`; else `auto_confirm` → `confirmed`
+  + create job/visit; else → `requested`, manual approval) → if a deposit's
+  required, `/api/bookings/deposit-intent` creates the PaymentIntent and
+  **stores `stripe_payment_intent_id` on the booking immediately** (before
+  payment completes) so the webhook can find it later.
+- `app/api/stripe/webhook/route.ts` needs a new `payment_intent.succeeded`
+  branch: find the booking by `stripe_payment_intent_id`, set `deposit_paid`,
+  transition status to `confirmed`, create job/visit if not already created,
+  fire the confirmation email — every step guarded so a Stripe retry is a
+  no-op (mirror the existing invoice-payment branch in the same file, which
+  already does exactly this idempotency pattern for invoices).
+- Matching-conflict UX (doc's other open decision, still unresolved): if
+  email and phone match *different* existing customers, create the booking
+  and flag it for admin review — never silently attach to the wrong one.
+
+Files to create: `app/site/[slug]/book/[packageSlug]/page.tsx` + client
+widget, `app/api/bookings/hold/route.ts`, `app/api/bookings/create/route.ts`,
+`app/api/bookings/deposit-intent/route.ts`, `app/api/bookings/refund/route.ts`,
+a booking-confirmation email template in `lib/email.ts`, and the webhook
+extension above. No new migration needed — Sprint C already created the full
+`bookings` table.
 
 **Correction to a long-standing assumption**: Twilio and Stripe are **both
 already live** (real credentials in `.env.local`/Vercel), not dark/pending as
