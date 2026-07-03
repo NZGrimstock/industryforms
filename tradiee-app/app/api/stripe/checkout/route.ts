@@ -30,9 +30,10 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   // Price lookup keys: solo_monthly, team_monthly, pro_monthly (main plan) and
-  // website_monthly (the $15/mo Website add-on) — set these up in Stripe.
+  // bookings_website_monthly (the $19/mo Bookings Website add-on — website
+  // builder + custom hosting + bookings, all gated together) — set these up in Stripe.
   const priceKey = `${plan}_monthly`
-  const isWebsiteAddon = plan === 'website'
+  const isWebsiteAddon = plan === 'bookings_website'
   const returnPath = isWebsiteAddon ? '/website' : '/settings'
 
   const session = await stripe.checkout.sessions.create({
@@ -42,9 +43,9 @@ export async function POST(req: NextRequest) {
     success_url: `${appUrl}${returnPath}?subscribed=1`,
     cancel_url: `${appUrl}${returnPath}`,
     allow_promotion_codes: true,
-    // The website add-on is a separate subscription from the main plan; tag it so
-    // the webhook updates company_websites instead of the company's main plan.
-    subscription_data: { metadata: { company_id: profile.company_id, ...(isWebsiteAddon ? { addon: 'website' } : {}) } },
+    // The add-on is a separate subscription from the main plan; tag it so the
+    // webhook flips companies.addons.bookings_website instead of the main plan.
+    subscription_data: { metadata: { company_id: profile.company_id, ...(isWebsiteAddon ? { addon: 'bookings_website' } : {}) } },
   })
 
   return NextResponse.json({ url: session.url })

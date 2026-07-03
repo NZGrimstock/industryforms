@@ -3,6 +3,7 @@ import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { maybeSendReviewRequest } from '@/lib/review-request'
+import { setAddonActive } from '@/lib/billing'
 
 export async function POST(req: NextRequest) {
   const stripe = getStripe()
@@ -56,12 +57,11 @@ export async function POST(req: NextRequest) {
       const stripeCustomerId = sub.customer as string
       const status = sub.status
 
-      // The Website add-on is a separate subscription — gate publishing, don't
-      // touch the company's main plan.
-      if (sub.metadata?.addon === 'website') {
+      // The Bookings Website add-on ($19/mo — website builder + bookings) is a
+      // separate subscription from the company's main plan.
+      if (sub.metadata?.addon === 'bookings_website') {
         const active = status === 'active' || status === 'trialing'
-        await service.from('company_websites').update({ subscription_active: active })
-          .eq('company_id', sub.metadata.company_id)
+        await setAddonActive(service, sub.metadata.company_id, 'bookings_website', active)
         break
       }
 
@@ -76,9 +76,8 @@ export async function POST(req: NextRequest) {
 
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription
-      if (sub.metadata?.addon === 'website') {
-        await service.from('company_websites').update({ subscription_active: false })
-          .eq('company_id', sub.metadata.company_id)
+      if (sub.metadata?.addon === 'bookings_website') {
+        await setAddonActive(service, sub.metadata.company_id, 'bookings_website', false)
         break
       }
       await service.from('companies').update({

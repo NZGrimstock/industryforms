@@ -2,18 +2,19 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { WebsiteClient } from './client'
 import { DEFAULT_THEME, defaultSections, slugify, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
+import { hasAddon } from '@/lib/billing'
 
 export default async function WebsitePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role, is_super_admin, companies(id, name, trade_type, address, logo_url, billing_exempt, subscription_status)')
+    .select('full_name, role, is_super_admin, companies(id, name, trade_type, address, logo_url, billing_exempt, subscription_status, addons)')
     .eq('id', user!.id)
     .single()
 
   const company = (profile as unknown as {
-    companies: { id: string; name: string; trade_type: string | null; address: string | null; logo_url: string | null; billing_exempt: boolean | null; subscription_status: string | null }
+    companies: { id: string; name: string; trade_type: string | null; address: string | null; logo_url: string | null; billing_exempt: boolean | null; subscription_status: string | null; addons: Record<string, { active?: boolean }> | null }
   }).companies
   const isSuperAdmin = (profile as unknown as { is_super_admin: boolean | null }).is_super_admin ?? false
 
@@ -35,12 +36,13 @@ export default async function WebsitePage() {
   const existing = site as null | {
     slug: string; is_published: boolean; theme: WebsiteTheme; sections: WebsiteSection[]
     seo_title: string | null; seo_description: string | null
-    custom_domain: string | null; domain_status: string; subscription_active: boolean
+    custom_domain: string | null; domain_status: string
+    bookings_enabled: boolean; site_mode: 'builder' | 'custom'; custom_site_status: string
   }
 
-  // Publishing is allowed when the website add-on is active, or for comped /
-  // super-admin accounts (so the feature is testable without live Stripe).
-  const canPublish = (existing?.subscription_active ?? false) || isSuperAdmin || !!company.billing_exempt
+  // Publishing (and bookings, and custom hosting) all gate on the single
+  // Bookings Website add-on — or comped/super-admin accounts.
+  const canPublish = hasAddon(isSuperAdmin, company, 'bookings_website')
 
   return (
     <>
@@ -60,6 +62,9 @@ export default async function WebsitePage() {
           seoDescription: existing?.seo_description ?? '',
           customDomain: existing?.custom_domain ?? '',
           domainStatus: existing?.domain_status ?? 'none',
+          bookingsEnabled: existing?.bookings_enabled ?? false,
+          siteMode: existing?.site_mode ?? 'builder',
+          customSiteStatus: existing?.custom_site_status ?? 'none',
           exists: !!existing,
         }}
       />

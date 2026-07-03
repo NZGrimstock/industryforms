@@ -4,6 +4,7 @@ import {
   cloudflareConfigured, createCustomHostname, getCustomHostname, deleteCustomHostname,
   dnsInstructions, isHostnameActive,
 } from '@/lib/cloudflare'
+import { hasAddon } from '@/lib/billing'
 
 // Resolve the caller's website row + whether they're allowed the add-on features.
 async function ctx() {
@@ -13,17 +14,17 @@ async function ctx() {
   const service = createServiceClient()
   const { data: profile } = await service
     .from('profiles')
-    .select('is_super_admin, companies(id, billing_exempt)')
+    .select('is_super_admin, companies(id, billing_exempt, addons)')
     .eq('id', user.id)
     .single()
-  const company = profile?.companies as unknown as { id: string; billing_exempt: boolean | null } | null
+  const company = profile?.companies as unknown as { id: string; billing_exempt: boolean | null; addons: Record<string, { active?: boolean }> | null } | null
   if (!company) return { error: 'Profile not found' as const }
   const { data: site } = await service
     .from('company_websites')
-    .select('id, custom_domain, cf_hostname_id, domain_status, subscription_active')
+    .select('id, custom_domain, cf_hostname_id, domain_status')
     .eq('company_id', company.id)
     .maybeSingle()
-  const entitled = !!site?.subscription_active || !!profile?.is_super_admin || !!company.billing_exempt
+  const entitled = hasAddon(!!profile?.is_super_admin, company, 'bookings_website')
   return { service, companyId: company.id, site, entitled }
 }
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   const c = await ctx()
   if ('error' in c) return NextResponse.json({ error: c.error }, { status: 401 })
   if (!c.site) return NextResponse.json({ error: 'Save your website first' }, { status: 400 })
-  if (!c.entitled) return NextResponse.json({ error: 'The Website add-on is required to connect a custom domain' }, { status: 402 })
+  if (!c.entitled) return NextResponse.json({ error: 'The Bookings Website add-on is required to connect a custom domain' }, { status: 402 })
   if (!cloudflareConfigured()) return NextResponse.json({ error: 'Custom domains are not enabled yet (Cloudflare not configured)' }, { status: 503 })
 
   let { domain } = await req.json()

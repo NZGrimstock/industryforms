@@ -35,3 +35,16 @@ export function hasAddon(isSuperAdmin: boolean, company: CompanyWithAddons | nul
   if (company.billing_exempt) return true
   return company.addons?.[slug]?.active === true
 }
+
+/**
+ * Flip a company's add-on flag in the companies.addons JSONB. Read-modify-write
+ * on a single boolean is naturally idempotent — safe to call repeatedly for the
+ * same (companyId, slug, active), which Stripe webhook retries require.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function setAddonActive(supabase: any, companyId: string, slug: string, active: boolean): Promise<void> {
+  const { data: company } = await supabase.from('companies').select('addons').eq('id', companyId).single()
+  const addons = { ...((company?.addons ?? {}) as Record<string, { active?: boolean }>) }
+  addons[slug] = { active }
+  await supabase.from('companies').update({ addons }).eq('id', companyId)
+}
