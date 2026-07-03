@@ -13,15 +13,19 @@ competitor). Monorepo at `D:\TRADIEE`:
 GitHub: **https://github.com/NZGrimstock/industryforms** (branch `main`, auto-deploys to Vercel).
 
 ### Where work lives right now
-**`main` is current** — Growth Engine Sprint A (Unified Inbox) and Sprint B
-(Bookings Website add-on) merged 2026-07-03/04, executing
-`SPRINTS_GROWTH_ENGINE_RESCOPED.md` (see that file + `SPRINT_A_INBOX_EXECUTION.md`
-for the full sprint plan; Sprint C/D/E not started — availability engine,
-booking widget + deposits, automations + reporting). Latest APK is
+**`main` is current** — Growth Engine Sprints A, B, and C merged 2026-07-03/04,
+executing `SPRINTS_GROWTH_ENGINE_RESCOPED.md` (see that file +
+`SPRINT_A_INBOX_EXECUTION.md` for the full sprint plan). **Sprint D is
+blocked on a business decision, not a technical one**: the doc requires a
+deposit refund/cancellation policy be decided before building real
+Stripe-deposit-taking (NZ Fair Trading / CGA consideration) — see "Open
+decisions" at the bottom of `SPRINTS_GROWTH_ENGINE_RESCOPED.md`. Don't build
+Sprint D's public booking widget or deposit flow until that's answered.
+Sprint E (automations + reporting) also not started. Latest APK is
 `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
 (Jun 25, 145 MB — mobile untouched by the Growth Engine sprints). Migrations
 now use timestamped filenames (`YYYYMMDDHHMMSS_description.sql`), not the old
-`0XX_` numbering — latest is `20260703114752_bookings_website_addon.sql`, all
+`0XX_` numbering — latest is `20260703155109_bookings_slot_index_null_fix.sql`, all
 applied to cloud Supabase. PowerSync sync rules switched to **streams
 (edition 3)** — already validated + deployed via the PowerSync Dashboard.
 
@@ -74,6 +78,29 @@ recurring) → **Scheduling** (visits, Google Calendar sync) → **Invoicing**
 mode, payments incl. **Stripe**, **Xero** sync, recurring invoices, bulk
 invoicing, email/SMS, public `/i/[token]`) → **Payments** → **Review request
 email** auto-sent after paid.
+
+### Growth Engine Sprint C (2026-07-04) — bookable packages + availability engine
+
+Schema: `bookable_packages`, `booking_settings`, `booking_availability_rules`,
+`booking_blackouts`, and (brought forward from Sprint D — the concurrency
+guarantee can't be tested without it) `bookings` with only its hold-related
+columns exercised. Concurrency guard is a **partial unique index** on
+`(company_id, coalesce(assigned_to, sentinel), starts_at)` for live statuses
+— the insert IS the mutex. **Caught before shipping**: Postgres unique
+indexes treat `NULL <> NULL`, so the first version of that index silently
+didn't protect "any staff" bookings (`assigned_to null`, the common case) at
+all — fixed with the `coalesce` expression, verified by firing 5 truly
+concurrent inserts at the same slot: exactly 1 succeeded, 4 got `23505`.
+
+`lib/bookings/timezone.ts` — DST-safe wall-clock↔UTC conversion via
+`Intl.DateTimeFormat` only, no new dependency. `lib/bookings/availability.ts`
+generates slots from hours + blackouts + `job_visits` + live bookings,
+respecting per-package buffers; resolves against one staff context at a time
+(specific `profileId`, or company-wide when none given) — documented scope
+reduction, not a correctness shortcut. `tryHoldSlot()` reaps an expired hold
+on the exact slot inline on retry; new hourly `/api/bookings/reap-holds` cron
+handles broader cleanup. Admin UI at `/bookings` (packages, weekly hours,
+blackouts), gated on `bookings_website` like the rest of Sprint B.
 
 ### Growth Engine Sprint A + B (2026-07-03/04) — unified inbox + bookings website add-on
 
