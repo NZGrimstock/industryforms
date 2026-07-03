@@ -1,11 +1,33 @@
 // SMS via Twilio. Mirrors lib/email.ts: a guarded sender that no-ops (without
 // throwing) when not configured, so builds/runtime never depend on SMS being set up.
+import { createHmac, timingSafeEqual } from 'crypto'
+
 const SID = process.env.TWILIO_ACCOUNT_SID
 const TOKEN = process.env.TWILIO_AUTH_TOKEN
 const FROM = process.env.TWILIO_FROM_NUMBER
 
 export function smsConfigured(): boolean {
   return !!(SID && TOKEN && FROM)
+}
+
+/**
+ * Verify Twilio's X-Twilio-Signature on an inbound webhook request.
+ * Algorithm (no SDK — the `twilio` package isn't a dependency here, and this
+ * is a single well-documented HMAC-SHA1 computation):
+ * https://www.twilio.com/docs/usage/security#validating-requests
+ */
+export function validateTwilioSignature(
+  authToken: string,
+  signature: string,
+  url: string,
+  params: Record<string, string>
+): boolean {
+  const data = Object.keys(params).sort().reduce((acc, key) => acc + key + params[key], url)
+  const expected = createHmac('sha1', authToken).update(data, 'utf8').digest('base64')
+  const a = Buffer.from(expected)
+  const b = Buffer.from(signature)
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }
 
 /**
