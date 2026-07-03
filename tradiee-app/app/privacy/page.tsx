@@ -93,6 +93,10 @@ export default function PrivacyPage() {
           Postal Address: 349 Mangakura Road, Helensville 0875, New Zealand
         </address>
         <p className="mt-3 text-sm text-gray-500">We aim to respond to all privacy enquiries within 20 working days.</p>
+        <p className="mt-3 text-sm text-gray-500">
+          To request deletion of your account and associated data, use our{' '}
+          <a href="/account-deletion" className="text-orange-600 hover:underline">account deletion request form</a>.
+        </p>
       </section>
     </div>
   )
