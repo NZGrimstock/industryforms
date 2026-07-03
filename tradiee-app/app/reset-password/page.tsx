@@ -1,21 +1,32 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
 
 export default function ResetPasswordPage() {
+  const [supabase] = useState(() => createClient())
+  const [ready, setReady] = useState<'checking' | 'ready' | 'expired'>('checking')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
+  useEffect(() => {
+    // The recovery link puts tokens in the URL hash; the client above consumes
+    // them on init, so give it a tick before checking for a session.
+    const timer = setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      setReady(session ? 'ready' : 'expired')
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [supabase])
+
   async function handleSubmit() {
     if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     setError('')
     setLoading(true)
-    const supabase = createClient()
     const { error: authError } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (authError) { setError(authError.message); return }
@@ -32,6 +43,15 @@ export default function ResetPasswordPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           {done ? (
             <p className="text-sm text-gray-600">Password updated. Redirecting…</p>
+          ) : ready === 'checking' ? (
+            <p className="text-sm text-gray-600">Checking your link…</p>
+          ) : ready === 'expired' ? (
+            <>
+              <h1 className="text-lg font-semibold text-gray-900 mb-2">Link expired</h1>
+              <p className="text-sm text-gray-600">
+                This password reset link is invalid or has expired. Request a new one from the sign-in page.
+              </p>
+            </>
           ) : (
             <>
               <h1 className="text-lg font-semibold text-gray-900 mb-6">Set a new password</h1>
