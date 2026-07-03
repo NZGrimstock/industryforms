@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-03. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-04. Catch-up doc for a fresh session. Read this first.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -13,11 +13,23 @@ competitor). Monorepo at `D:\TRADIEE`:
 GitHub: **https://github.com/NZGrimstock/industryforms** (branch `main`, auto-deploys to Vercel).
 
 ### Where work lives right now
-**`main` is current** — sprint-6 merged 2026-07-03. Latest APK is
+**`main` is current** — Growth Engine Sprint A (Unified Inbox) and Sprint B
+(Bookings Website add-on) merged 2026-07-03/04, executing
+`SPRINTS_GROWTH_ENGINE_RESCOPED.md` (see that file + `SPRINT_A_INBOX_EXECUTION.md`
+for the full sprint plan; Sprint C/D/E not started — availability engine,
+booking widget + deposits, automations + reporting). Latest APK is
 `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(Jun 25, 145 MB). Migrations 001–046 all applied to cloud Supabase.
-PowerSync sync rules switched to **streams (edition 3)** — already validated +
-deployed via the PowerSync Dashboard.
+(Jun 25, 145 MB — mobile untouched by the Growth Engine sprints). Migrations
+now use timestamped filenames (`YYYYMMDDHHMMSS_description.sql`), not the old
+`0XX_` numbering — latest is `20260703114752_bookings_website_addon.sql`, all
+applied to cloud Supabase. PowerSync sync rules switched to **streams
+(edition 3)** — already validated + deployed via the PowerSync Dashboard.
+
+**Correction to a long-standing assumption**: Twilio and Stripe are **both
+already live** (real credentials in `.env.local`/Vercel), not dark/pending as
+older docs (including early Growth Engine planning) assumed. Signature
+verification on `/api/sms/inbound` was missing until Sprint A — a real gap
+against live traffic, not just go-live prep.
 
 ## Live infrastructure (all provisioned)
 | Piece | Detail |
@@ -62,6 +74,62 @@ recurring) → **Scheduling** (visits, Google Calendar sync) → **Invoicing**
 mode, payments incl. **Stripe**, **Xero** sync, recurring invoices, bulk
 invoicing, email/SMS, public `/i/[token]`) → **Payments** → **Review request
 email** auto-sent after paid.
+
+### Growth Engine Sprint A + B (2026-07-03/04) — unified inbox + bookings website add-on
+
+Executing `SPRINTS_GROWTH_ENGINE_RESCOPED.md`. Full detail in commit messages
+(`git log`); summary below. **Reality check that changed scope**: Twilio and
+Stripe are both already live — this wasn't prep-for-future-go-live, it closed
+active gaps against real traffic.
+
+**Sprint A — `/messages` unified inbox**
+New owner/admin page merging `customer_messages` (SMS, grouped by customer)
+and `enquiries` (web leads) into one feed with tabs (Open/Unread/Bookings/
+Enquiries/Unmatched/Closed), normalized in `lib/messages.ts` and shared
+between the SSR page and a 15s-polled `/api/messages/conversations`. Triage
+actions in `/api/messages/action` (mark read/closed/spam, create-customer-
+from-unmatched with thread re-homing). `components/customers/sms-thread.tsx`
+(pre-existing, already used on `/customers/[id]`) extended with a
+`twilioLive` prop for a dark-aware disabled reply box.
+Real fixes along the way: `/api/sms/inbound` had **no signature
+verification** despite live Twilio credentials (added HMAC-SHA1 check in
+`lib/sms.ts`, no new dependency — 503 dark/unset, 403 invalid signature); it
+was also **silently dropping unmatched inbound** (comment claimed otherwise,
+code didn't) — now persists with `customer_id null` so it surfaces in the
+Unmatched tab. Added `TWILIO_OWNER_COMPANY_ID` env var for unmatched-sender
+company resolution (**add this to Vercel** — local-only in `.env.local` right
+now, no per-company Twilio number mapping exists yet). Also fixed
+`enquiry_source` enum missing `'booking'` — `/api/site/lead` had been
+inserting an invalid value for every booking-kind lead since the
+`BookingForm` component was added (found while normalizing enquiry sources
+for the inbox feed).
+
+**Sprint B — Bookings Website add-on ($19/mo)**
+Found two parallel gating mechanisms for what should've been one add-on:
+`companies.addons.website` (JSONB, unused for gating) and
+`company_websites.subscription_active` (the real one, driven by a live
+Stripe webhook). Consolidated onto `hasAddon('bookings_website')` for both
+site-publish and custom-domain gates; migration backfills existing
+subscribers so nobody loses access. Added a **bookings on/off toggle**
+(independent of publishing) and exposed the `'booking'` website-section type
+in the builder — it existed in the type system and render path but had no
+UI to add one. Added **custom static-site hosting**: single-HTML-file
+upload (zip support deliberately deferred — needs its own zip-slip/zip-bomb
+security pass), served via `proxy.ts`'s native external-URL middleware
+rewrite (true edge reverse-proxy, visitor's address bar stays on their
+domain). Verified cookie isolation before shipping (no wildcard cookie
+domain anywhere — Supabase auth cookies are host-only scoped to
+`app.industryforms.app`), added CSP on served custom content, and — since it
+was missing entirely — added global `X-Frame-Options`/`frame-ancestors` on
+the main app in `next.config.ts` (any page including `/login` could
+previously be framed by any third-party site). Super-admin takedown control
+lives on a new `/admin/companies/[id]` detail page — the companies list had
+been linking to that route already, 404ing, since no detail page existed.
+
+**Not started**: Sprint C (bookable packages + concurrency-safe availability
+engine — the hardest sprint, needs a slot-hold design before any slot code),
+Sprint D (public booking widget + Stripe deposits), Sprint E (automations +
+reporting).
 
 ### Sprint 6 (2026-07-03) — mobile nav/quote fixes + kits + signup, all on `main`
 
