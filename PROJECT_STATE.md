@@ -183,8 +183,14 @@ on each of these so the owner sees what's missing without peeking at env vars.
 - `NEXT_PUBLIC_APP_URL=https://app.industryforms.app`, `NEXT_PUBLIC_POWERSYNC_URL`, `CRON_SECRET`
 - **LocationIQ** — `NEXT_PUBLIC_LOCATIONIQ_KEY` for geocoding (address autocomplete + job map pins). Falls back to Nominatim (rate-limited in prod) if unset.
 - **Twilio (live)** — `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`. Point the number's "A MESSAGE COMES IN" webhook at `https://app.industryforms.app/api/sms/inbound` (POST).
-- **Resend (pending)** — `RESEND_API_KEY`, `EMAIL_FROM` (verified sender domain).
-- **Stripe (pending)** — `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`. Webhook target: `/api/stripe/webhook`. Needed for online invoice payments, plan upgrades, and Tap to Pay.
+- **Resend (set locally but broken — confirmed 2026-07-06)** — `RESEND_API_KEY` is present in
+  `.env.local` but every real send during Sprint E testing returned `API key is invalid` from
+  Resend itself (not a config-missing no-op — a real rejected key). **Every email in the app is
+  silently failing** if the same key is live in Vercel. Check the Vercel value too; rotate the key
+  in the Resend dashboard if it's stale/revoked. `EMAIL_FROM` (verified sender domain) still needed either way.
+- **Stripe (live — confirmed 2026-07-04)** — `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
+  `STRIPE_WEBHOOK_SECRET` are all live; Sprint D's testing created and refunded real test-mode
+  PaymentIntents successfully. Webhook target: `/api/stripe/webhook`.
 - **Anthropic (live)** — `ANTHROPIC_API_KEY` for SmartWrite / AI quote drafting / daily AI to-dos.
 - **Other placeholders** — `XERO_CLIENT_ID/SECRET`, `GOOGLE_CLIENT_ID/SECRET` (real value present), `CLOUDFLARE_API_TOKEN`+`CLOUDFLARE_ZONE_ID` (+optional `CLOUDFLARE_SAAS_FALLBACK_HOSTNAME`), `INBOUND_EMAIL_SECRET`.
 
@@ -621,17 +627,17 @@ travel_logs.verified_by.
 ## Outstanding / next steps
 
 ### Imminent (before going fully live)
-1. **Resend** — set `RESEND_API_KEY` + `EMAIL_FROM` in Vercel, then redeploy.
-   Quote/invoice/reminder/review-request emails all no-op cleanly until this
-   is set. Settings → Integrations shows the live status.
-2. **Stripe** — set `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
-   `STRIPE_WEBHOOK_SECRET`. Webhook target: `/api/stripe/webhook`. Create
-   Stripe prices including `website_monthly` (\$9/mo) and `projects_monthly`
-   (\$19/mo). Without this: online invoice pay + plan upgrades + Tap to Pay
-   are all dark.
-3. **Twilio inbound signature verification** — currently disabled in
-   `/api/sms/inbound` (see TODO). Verify `X-Twilio-Signature` before going
-   live so the webhook can't be spoofed.
+1. **Resend — fix the key, don't just "set" it** (this list previously said
+   Resend was unconfigured; confirmed 2026-07-06 that's wrong — a key is
+   present but Resend itself rejects it as invalid). Get a working
+   `RESEND_API_KEY` + verified `EMAIL_FROM` sender domain into Vercel, then
+   redeploy. Every quote/invoice/reminder/review-request/booking email in the
+   app is currently silently failing on this.
+2. ~~Stripe~~ — **done, live since before 2026-07-04.** Still need to create
+   the `website_monthly` ($9/mo) and `projects_monthly` ($19/mo) Stripe
+   Prices if they don't already exist in the Stripe dashboard.
+3. ~~Twilio inbound signature verification~~ — **done in Sprint A** (see
+   `lib/sms.ts validateTwilioSignature()`, wired into `/api/sms/inbound`).
 4. **Wildcard domain `*.industryforms.app`** in Vercel + DNS for free
    per-tenant website subdomains.
 5. **Cloudflare for SaaS** — `CLOUDFLARE_API_TOKEN`+`CLOUDFLARE_ZONE_ID`
