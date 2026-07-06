@@ -36,19 +36,28 @@ export async function POST(req: Request) {
   }
   if (!message?.trim()) return NextResponse.json({ error: 'message required' }, { status: 400 })
 
-  const client = new Anthropic()
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'AI assistant not configured — set ANTHROPIC_API_KEY in Vercel environment variables' }, { status: 503 })
+  }
+
+  const client = new Anthropic({ apiKey })
   const prior = (history ?? []).slice(-8).map(m => ({
     role: m.role,
     content: m.text,
   })) as Anthropic.MessageParam[]
 
-  const msg = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 600,
-    system: SYSTEM,
-    messages: [...prior, { role: 'user', content: message.trim() }],
-  })
-
-  const reply = msg.content[0]?.type === 'text' ? msg.content[0].text.trim() : 'Sorry, I could not generate a response.'
-  return NextResponse.json({ reply })
+  try {
+    const msg = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system: SYSTEM,
+      messages: [...prior, { role: 'user', content: message.trim() }],
+    })
+    const reply = msg.content[0]?.type === 'text' ? msg.content[0].text.trim() : 'Sorry, I could not generate a response.'
+    return NextResponse.json({ reply })
+  } catch (e: unknown) {
+    const m = e instanceof Error ? e.message : 'AI assistant failed'
+    return NextResponse.json({ error: m }, { status: 500 })
+  }
 }

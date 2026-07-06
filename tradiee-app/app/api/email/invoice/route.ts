@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('*, customers(name, email), companies(name, email, phone), jobs(title)')
+    .select('*, customers(name, email), companies(name, email, phone, logo_url), jobs(title)')
     .eq('id', invoiceId)
     .single()
 
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   const customer = invoice.customers as { name: string; email: string | null }
   if (!customer?.email) return NextResponse.json({ error: 'Customer has no email address' }, { status: 400 })
 
-  const company = invoice.companies as { name: string; email: string | null; phone: string | null }
+  const company = invoice.companies as { name: string; email: string | null; phone: string | null; logo_url: string | null }
   const job = invoice.jobs as { title: string } | null
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     viewUrl,
     companyPhone: company.phone,
     companyEmail: company.email,
+    logoUrl: company.logo_url,
   })
 
   const result = await sendEmail({

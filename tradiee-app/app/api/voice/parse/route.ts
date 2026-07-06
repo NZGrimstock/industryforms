@@ -46,7 +46,12 @@ export async function POST(request: Request) {
     const prompt = PROMPTS[mode]
     if (!prompt) return NextResponse.json({ error: 'Unknown mode' }, { status: 400 })
 
-    const client = new Anthropic()
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: 'AI voice parsing not configured — set ANTHROPIC_API_KEY in Vercel environment variables' }, { status: 503 })
+    }
+
+    const client = new Anthropic({ apiKey })
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,

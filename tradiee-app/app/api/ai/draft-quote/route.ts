@@ -68,8 +68,13 @@ export async function POST(req: Request) {
     description.trim(),
   ].join('\n')
 
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'AI drafting not configured — set ANTHROPIC_API_KEY in Vercel environment variables' }, { status: 503 })
+  }
+
   try {
-    const client = new Anthropic()
+    const client = new Anthropic({ apiKey })
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1500,

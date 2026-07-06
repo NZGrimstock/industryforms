@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { hasAccess, type BillingCompany } from '@/lib/billing'
+import { getConversations } from '@/lib/messages'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
@@ -28,17 +29,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Field staff get a focused nav (their jobs/schedule/time) — no financials.
   const isStaff = profile?.role === 'staff'
 
+  // Messages nav badge (owner/admin only — staff don't get the Messages tab).
+  const unreadMessages = isStaff ? 0 : (await getConversations(supabase)).filter(c => c.unread).length
+
   return (
     <PowerSyncProvider>
       <SidebarProvider>
         <div className="flex h-full">
-          <Sidebar isStaff={isStaff} />
+          <Sidebar isStaff={isStaff} unreadMessages={unreadMessages} />
           <DashboardShell brandAccent={brandAccent} testMode={testMode}>
             <SyncStatusBar />
             {children}
           </DashboardShell>
         </div>
-        <MobileNav isStaff={isStaff} />
+        <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />
       </SidebarProvider>
     </PowerSyncProvider>
   )

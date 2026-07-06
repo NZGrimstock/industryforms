@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const { data: quote } = await service
     .from('quotes')
-    .select('*, customers(name, email), companies(name, email, phone), quote_sections(quote_line_items(quantity, unit_price))')
+    .select('*, customers(name, email), companies(name, email, phone, logo_url), quote_sections(quote_line_items(quantity, unit_price))')
     .eq('id', quoteId)
     .single()
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const customer = quote.customers as { name: string; email: string | null }
   if (!customer?.email) return NextResponse.json({ error: 'Customer has no email address' }, { status: 400 })
 
-  const company = quote.companies as { name: string; email: string | null; phone: string | null }
+  const company = quote.companies as { name: string; email: string | null; phone: string | null; logo_url: string | null }
 
   const sections = (quote.quote_sections ?? []) as Array<{ quote_line_items: Array<{ quantity: number; unit_price: number }> }>
   const subtotal = sections.flatMap(s => s.quote_line_items).reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0)
@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     viewUrl,
     companyPhone: company.phone,
     companyEmail: company.email,
+    logoUrl: company.logo_url,
   })
 
   const result = await sendEmail({

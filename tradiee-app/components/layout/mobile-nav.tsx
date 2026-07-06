@@ -33,7 +33,7 @@ const more = [
 
 const STAFF_HREFS = new Set(['/dashboard', '/jobs', '/jobs/map', '/schedule', '/timesheets', '/forms', '/todos', '/settings'])
 
-export function MobileNav({ isStaff = false }: { isStaff?: boolean }) {
+export function MobileNav({ isStaff = false, unreadMessages = 0 }: { isStaff?: boolean; unreadMessages?: number }) {
   const pathname = usePathname()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const moreItems = isStaff ? more.filter(i => STAFF_HREFS.has(i.href)) : more
@@ -69,11 +69,16 @@ export function MobileNav({ isStaff = false }: { isStaff?: boolean }) {
           <button
             onClick={() => setDrawerOpen(true)}
             className={cn(
-              'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium transition-colors',
+              'relative flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-medium transition-colors',
               drawerOpen ? 'text-orange-500' : 'text-gray-400'
             )}
           >
-            <MoreHorizontal className="h-5 w-5" />
+            <span className="relative">
+              <MoreHorizontal className="h-5 w-5" />
+              {!isStaff && unreadMessages > 0 && (
+                <span className="absolute -top-1 -right-1.5 h-2 w-2 rounded-full bg-red-500" />
+              )}
+            </span>
             More
           </button>
         </div>
@@ -105,13 +110,20 @@ export function MobileNav({ isStaff = false }: { isStaff?: boolean }) {
                   href={href}
                   onClick={() => setDrawerOpen(false)}
                   className={cn(
-                    'flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs font-medium transition-colors',
+                    'relative flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs font-medium transition-colors',
                     isActive(href)
                       ? 'bg-orange-50 text-[var(--accent,#f97316)]'
                       : 'text-gray-600 hover:bg-gray-50'
                   )}
                 >
-                  <Icon className={cn('h-5 w-5', isActive(href) ? 'text-orange-500' : 'text-gray-400')} />
+                  <span className="relative">
+                    <Icon className={cn('h-5 w-5', isActive(href) ? 'text-orange-500' : 'text-gray-400')} />
+                    {href === '/messages' && unreadMessages > 0 && (
+                      <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-semibold flex items-center justify-center">
+                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                      </span>
+                    )}
+                  </span>
                   {label}
                 </Link>
               ))}

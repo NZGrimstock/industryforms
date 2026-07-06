@@ -35,6 +35,7 @@ export function quoteEmailHtml({
   viewUrl,
   companyPhone,
   companyEmail,
+  logoUrl,
 }: {
   companyName: string
   customerName: string
@@ -45,6 +46,7 @@ export function quoteEmailHtml({
   viewUrl: string
   companyPhone?: string | null
   companyEmail?: string | null
+  logoUrl?: string | null
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -52,7 +54,7 @@ export function quoteEmailHtml({
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
     <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
+      ${logoUrl ? `<img src="${logoUrl}" alt="${companyName}" style="max-height:32px;max-width:200px;display:block" />` : `<p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>`}
     </div>
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
@@ -88,6 +90,7 @@ export function invoiceEmailHtml({
   viewUrl,
   companyPhone,
   companyEmail,
+  logoUrl,
 }: {
   companyName: string
   customerName: string
@@ -99,6 +102,7 @@ export function invoiceEmailHtml({
   viewUrl: string
   companyPhone?: string | null
   companyEmail?: string | null
+  logoUrl?: string | null
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -106,7 +110,7 @@ export function invoiceEmailHtml({
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
     <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
+      ${logoUrl ? `<img src="${logoUrl}" alt="${companyName}" style="max-height:32px;max-width:200px;display:block" />` : `<p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>`}
     </div>
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>

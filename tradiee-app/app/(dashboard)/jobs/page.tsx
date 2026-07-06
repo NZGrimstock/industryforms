@@ -33,10 +33,17 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const priceItems = priceItemsRes.data ?? []
   const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
 
-  // Board needs all active statuses; list can be filtered
+  const jobStatuses = await getJobStatuses(supabase, profile!.company_id)
+  const terminalKeys = jobStatuses.filter(s => s.is_terminal).map(s => s.key)
+
+  // Board needs all active statuses; list can be filtered.
+  // Default list view ("Active", no status param) hides terminal statuses
+  // (completed/cancelled) so finished work doesn't clutter the working list —
+  // still reachable via their own status pill, or the explicit "All" pill.
   let query = supabase.from('jobs').select('*, customers(name), profiles(full_name), customer_sites(address)').eq('company_id', profile!.company_id)
   if (tab === 'recurring') query = query.eq('is_recurring', true)
-  if (view === 'list' && sp.status) query = query.eq('status', sp.status)
+  if (view === 'list' && sp.status && sp.status !== '__all__') query = query.eq('status', sp.status)
+  else if (view === 'list' && !sp.status && terminalKeys.length) query = query.not('status', 'in', `(${terminalKeys.join(',')})`)
   if (view === 'list' && sp.q) query = query.or(`job_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
   if (view === 'board' && tab === 'jobs') query = query.not('status', 'in', '(cancelled)')
   const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
@@ -44,7 +51,6 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
   const { data: jobs } = await query.order(sortCol, { ascending: asc })
 
-  const jobStatuses = await getJobStatuses(supabase, profile!.company_id)
   const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
@@ -76,7 +82,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           {/* Status filters (list view only) */}
           {view === 'list' && (
             <div className="flex gap-1 overflow-x-auto">
-              <Link href="/jobs?view=list" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
+              <Link href="/jobs?view=list" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Active</Link>
+              <Link href="/jobs?view=list&status=__all__" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === '__all__' ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
               {jobStatuses.map(s => (
                 <Link key={s.key} href={`/jobs?view=list&status=${s.key}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === s.key ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   {s.label}

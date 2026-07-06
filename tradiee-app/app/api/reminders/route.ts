@@ -227,7 +227,7 @@ async function runReminders() {
     if (job?.status !== 'completed') continue
 
     try {
-      const { data: co } = await service.from('companies').select('default_gst_rate, name, email, phone').eq('id', b.company_id).single()
+      const { data: co } = await service.from('companies').select('default_gst_rate, name, email, phone, logo_url').eq('id', b.company_id).single()
       const gstRate = Number(co?.default_gst_rate ?? 0.15)
       const subtotal = Number(pkg.price)
       const gst = subtotal * gstRate
@@ -252,7 +252,7 @@ async function runReminders() {
         const html = invoiceEmailHtml({
           companyName: co.name, customerName: customer.name, invoiceNumber, jobTitle: pkg.name,
           total: `$${total.toFixed(2)}`, amountDue: `$${total.toFixed(2)}`, dueDate: null,
-          viewUrl: `${appUrl}/i/${inv.public_token}`, companyPhone: co.phone, companyEmail: co.email,
+          viewUrl: `${appUrl}/i/${inv.public_token}`, companyPhone: co.phone, companyEmail: co.email, logoUrl: co.logo_url,
         })
         await notify({
           service, companyId: b.company_id, customerId: b.customer_id, bookingId: b.id, eventType: 'post_completion_invoice',

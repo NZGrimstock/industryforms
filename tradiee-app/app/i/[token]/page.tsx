@@ -20,7 +20,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
     await supabase.from('invoices').update({ viewed_at: new Date().toISOString() }).eq('id', invoice.id)
   }
 
-  const company = invoice.companies as { name: string; email: string | null; phone: string | null; gst_number: string | null; payment_instructions: string | null; invoice_footer: string | null }
+  const company = invoice.companies as { name: string; email: string | null; phone: string | null; gst_number: string | null; logo_url: string | null; payment_instructions: string | null; invoice_footer: string | null }
   const customer = invoice.customers as { name: string; email: string | null; billing_address: string | null }
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
 
@@ -29,9 +29,14 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
-              <Wrench className="h-4 w-4 text-white" />
-            </div>
+            {company.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={company.logo_url} alt={company.name} className="h-7 w-auto object-contain" />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
+                <Wrench className="h-4 w-4 text-white" />
+              </div>
+            )}
             <span className="font-semibold text-gray-900">{company.name}</span>
           </div>
           <div className="text-right text-xs text-gray-400">

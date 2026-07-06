@@ -1,12 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   blankSection, slugify, SECTION_LABELS,
   type WebsiteSection, type WebsiteSectionType, type WebsiteTheme,
 } from '@/lib/website'
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw, Pipette, Sparkles, Calendar, Upload, Ban,
+  Plus, Trash2, ChevronUp, ChevronDown, ExternalLink, Globe, Check, Loader2, RefreshCw, Pipette, Sparkles, Calendar, Upload, Ban, X,
 } from 'lucide-react'
 import { extractPalette, samplePixel } from '@/lib/extract-color'
 
@@ -31,7 +31,7 @@ const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery',
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
 
 export function WebsiteClient({
-  companyId, appUrl, canPublish, photoUrls, initial, logoUrl,
+  companyId, appUrl, canPublish, photoUrls: initialPhotoUrls, initial, logoUrl: initialLogoUrl,
 }: {
   companyId: string
   appUrl: string
@@ -41,6 +41,8 @@ export function WebsiteClient({
   logoUrl: string | null
 }) {
   const supabase = createClient()
+  const [photoUrls, setPhotoUrls] = useState(initialPhotoUrls)
+  const [logoUrl, setLogoUrl] = useState(initialLogoUrl)
   const [slug, setSlug] = useState(initial.slug)
   const [theme, setTheme] = useState<WebsiteTheme>(initial.theme)
   const [sections, setSections] = useState<WebsiteSection[]>(initial.sections)
@@ -79,6 +81,25 @@ export function WebsiteClient({
   function add(type: WebsiteSectionType) {
     setSections(prev => [...prev, blankSection(type)])
     setAddOpen(false)
+  }
+
+  // Hide a photo from the picker (doesn't delete the underlying job photo) —
+  // also clears it from any section currently using it, and persists the
+  // exclusion immediately so it stays hidden after a reload.
+  async function excludePhoto(url: string) {
+    setPhotoUrls(prev => prev.filter(u => u !== url))
+    setSections(prev => prev.map(s => {
+      const withImages = s as WebsiteSection & { imageUrl?: string; images?: string[] }
+      const next = { ...s } as WebsiteSection & { imageUrl?: string; images?: string[] }
+      if (withImages.imageUrl === url) next.imageUrl = undefined
+      if (withImages.images?.includes(url)) next.images = withImages.images.filter(u => u !== url)
+      return next
+    }))
+    const { data } = await supabase.from('company_websites').select('excluded_photo_urls').eq('company_id', companyId).maybeSingle()
+    const existing: string[] = data?.excluded_photo_urls ?? []
+    if (!existing.includes(url)) {
+      await supabase.from('company_websites').update({ excluded_photo_urls: [...existing, url] }).eq('company_id', companyId)
+    }
   }
 
   async function save(publishState = isPublished, bookingsState = bookingsEnabled) {
@@ -373,6 +394,8 @@ export function WebsiteClient({
           theme={theme}
           setTheme={setTheme}
           logoUrl={logoUrl}
+          companyId={companyId}
+          setLogoUrl={setLogoUrl}
         />
       </Card>
 
@@ -390,7 +413,7 @@ export function WebsiteClient({
               </div>
             }
           >
-            <SectionEditor section={section} idx={idx} patch={patchSection} photoUrls={photoUrls} />
+            <SectionEditor section={section} idx={idx} patch={patchSection} photoUrls={photoUrls} onExcludePhoto={excludePhoto} />
           </Card>
         ))}
 
@@ -451,16 +474,56 @@ function Card({ title, actions, children }: { title: string; actions?: React.Rea
 //   2. Native EyeDropper API (Chrome/Edge only — feature-detected).
 //   3. AI palette: dominant colours extracted from the logo as one-click swatches.
 function ThemeCard({
-  theme, setTheme, logoUrl,
+  theme, setTheme, logoUrl, companyId, setLogoUrl,
 }: {
   theme: WebsiteTheme
   setTheme: (t: WebsiteTheme) => void
   logoUrl: string | null
+  companyId: string
+  setLogoUrl: (url: string | null) => void
 }) {
+  const supabase = createClient()
+  const logoInputRef = useRef<HTMLInputElement>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoMsg, setLogoMsg] = useState<string | null>(null)
   const [palette, setPalette] = useState<string[]>([])
   const [paletteLoading, setPaletteLoading] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
   const supportsEyedropper = typeof window !== 'undefined' && 'EyeDropper' in window
+
+  // Uploads to the company's logo_url — the same logo shown on invoices,
+  // quotes, and Settings → Business (there's one company logo, not a
+  // website-specific one), so this stays in sync everywhere.
+  async function uploadLogo(file: File) {
+    setLogoUploading(true)
+    setLogoMsg(null)
+    const ext = file.name.split('.').pop() ?? 'png'
+    const res = await fetch('/api/storage/upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'company-logo', ext, contentType: file.type }),
+    })
+    if (!res.ok) { setLogoMsg((await res.json().catch(() => ({}))).error ?? 'Upload failed'); setLogoUploading(false); return }
+    const { url, publicUrl } = await res.json()
+
+    const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
+    if (!put.ok) { setLogoMsg('Upload to storage failed'); setLogoUploading(false); return }
+
+    const bustedUrl = `${publicUrl}?v=${Date.now()}`
+    const { error } = await supabase.from('companies').update({ logo_url: bustedUrl }).eq('id', companyId)
+    setLogoUploading(false)
+    if (error) { setLogoMsg(error.message); return }
+    setLogoUrl(bustedUrl)
+    setLogoMsg('Logo updated')
+  }
+
+  async function removeLogo() {
+    const { error } = await supabase.from('companies').update({ logo_url: null }).eq('id', companyId)
+    if (error) { setLogoMsg(error.message); return }
+    setLogoUrl(null)
+    setPalette([])
+    setLogoMsg('Logo removed')
+  }
 
   // Auto-suggest a palette the first time we render with a logo. Refreshable
   // via the Sparkles button.
@@ -500,21 +563,47 @@ function ThemeCard({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Your logo</label>
           {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt="Logo"
-              onClick={onLogoClick}
-              title="Click anywhere on the logo to pick that colour"
-              className="h-16 w-auto max-w-[180px] object-contain rounded-lg border border-gray-200 bg-white p-1 cursor-crosshair"
-              crossOrigin="anonymous"
-            />
+            <div className="relative w-fit">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt="Logo"
+                onClick={onLogoClick}
+                title="Click anywhere on the logo to pick that colour"
+                className="h-16 w-auto max-w-[180px] object-contain rounded-lg border border-gray-200 bg-white p-1 cursor-crosshair"
+              />
+              <button
+                type="button"
+                onClick={removeLogo}
+                title="Remove logo"
+                className="absolute -top-2 -right-2 bg-white border border-gray-200 rounded-full p-0.5 hover:bg-red-50 hover:border-red-200 transition-colors"
+              >
+                <X className="h-3.5 w-3.5 text-gray-400 hover:text-red-400" />
+              </button>
+            </div>
           ) : (
             <div className="h-16 w-32 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-xs text-gray-400">
               No logo yet
             </div>
           )}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f) }}
+          />
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={logoUploading}
+            className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            <Upload className="h-3 w-3" />
+            {logoUploading ? 'Uploading...' : logoUrl ? 'Change logo' : 'Upload logo'}
+          </button>
           {logoUrl && <p className="text-[11px] text-gray-400 mt-1">Click the logo to grab that colour</p>}
+          {logoMsg && <p className="text-[11px] text-gray-400 mt-1">{logoMsg}</p>}
         </div>
 
         <div>
@@ -594,12 +683,13 @@ function ThemeCard({
 }
 
 function SectionEditor({
-  section, idx, patch, photoUrls,
+  section, idx, patch, photoUrls, onExcludePhoto,
 }: {
   section: WebsiteSection
   idx: number
   patch: (idx: number, p: Partial<WebsiteSection>) => void
   photoUrls: string[]
+  onExcludePhoto: (url: string) => void
 }) {
   switch (section.type) {
     case 'hero':
@@ -609,7 +699,7 @@ function SectionEditor({
           <Field label="Subheading"><input value={section.subheading} onChange={e => patch(idx, { subheading: e.target.value })} className={inputCls} /></Field>
           <Field label="Button label"><input value={section.ctaLabel} onChange={e => patch(idx, { ctaLabel: e.target.value })} className={inputCls} /></Field>
           <Field label="Background image (optional)">
-            <PhotoPicker photoUrls={photoUrls} selected={section.imageUrl ? [section.imageUrl] : []} onToggle={url => patch(idx, { imageUrl: section.imageUrl === url ? undefined : url })} single />
+            <PhotoPicker photoUrls={photoUrls} selected={section.imageUrl ? [section.imageUrl] : []} onToggle={url => patch(idx, { imageUrl: section.imageUrl === url ? undefined : url })} onExclude={onExcludePhoto} single />
           </Field>
         </div>
       )
@@ -641,7 +731,7 @@ function SectionEditor({
         <div className="space-y-3">
           <Field label="Heading"><input value={section.heading} onChange={e => patch(idx, { heading: e.target.value })} className={inputCls} /></Field>
           <Field label="Choose photos from your jobs">
-            <PhotoPicker photoUrls={photoUrls} selected={section.images} onToggle={url => patch(idx, { images: section.images.includes(url) ? section.images.filter(u => u !== url) : [...section.images, url] })} />
+            <PhotoPicker photoUrls={photoUrls} selected={section.images} onToggle={url => patch(idx, { images: section.images.includes(url) ? section.images.filter(u => u !== url) : [...section.images, url] })} onExclude={onExcludePhoto} />
           </Field>
         </div>
       )
@@ -692,19 +782,29 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function PhotoPicker({ photoUrls, selected, onToggle, single }: { photoUrls: string[]; selected: string[]; onToggle: (url: string) => void; single?: boolean }) {
+function PhotoPicker({ photoUrls, selected, onToggle, onExclude, single }: { photoUrls: string[]; selected: string[]; onToggle: (url: string) => void; onExclude: (url: string) => void; single?: boolean }) {
   if (!photoUrls.length) return <p className="text-sm text-gray-400">No job photos yet — add photos to jobs to use them here.</p>
   return (
     <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
       {photoUrls.map(url => {
         const on = selected.includes(url)
         return (
-          <button key={url} type="button" onClick={() => onToggle(url)} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${on ? 'border-[var(--accent,#f97316)]' : 'border-transparent'}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" className="h-full w-full object-cover" />
-            {on && <span className="absolute inset-0 flex items-center justify-center bg-[var(--accent,#f97316)]/30"><Check className="h-5 w-5 text-white" /></span>}
-            {single && on && <span className="absolute right-1 top-1 rounded bg-[var(--accent,#f97316)] px-1 text-[9px] font-bold text-white">BG</span>}
-          </button>
+          <div key={url} className="group relative aspect-square">
+            <button type="button" onClick={() => onToggle(url)} className={`relative h-full w-full overflow-hidden rounded-lg border-2 ${on ? 'border-[var(--accent,#f97316)]' : 'border-transparent'}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-full w-full object-cover" />
+              {on && <span className="absolute inset-0 flex items-center justify-center bg-[var(--accent,#f97316)]/30"><Check className="h-5 w-5 text-white" /></span>}
+              {single && on && <span className="absolute right-1 top-1 rounded bg-[var(--accent,#f97316)] px-1 text-[9px] font-bold text-white">BG</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => onExclude(url)}
+              title="Hide this photo from the website picker"
+              className="absolute -top-1.5 -left-1.5 hidden group-hover:flex h-5 w-5 items-center justify-center rounded-full bg-gray-900/80 text-white hover:bg-red-600"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         )
       })}
     </div>

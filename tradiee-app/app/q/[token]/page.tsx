@@ -33,9 +33,14 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
-              <Wrench className="h-4 w-4 text-white" />
-            </div>
+            {company.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={company.logo_url} alt={company.name} className="h-7 w-auto object-contain" />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
+                <Wrench className="h-4 w-4 text-white" />
+              </div>
+            )}
             <span className="font-semibold text-gray-900">{company.name}</span>
           </div>
           <div className="text-right text-xs text-gray-400">

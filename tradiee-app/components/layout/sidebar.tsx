@@ -93,7 +93,7 @@ function isActive(pathname: string, href: string) {
 const STAFF_HREFS = new Set(['/dashboard', '/jobs', '/jobs/map', '/schedule', '/time-logs', '/forms', '/todos', '/settings'])
 const STAFF_TOP_HREFS = new Set(['/dashboard'])
 
-export function Sidebar({ isStaff = false }: { isStaff?: boolean }) {
+export function Sidebar({ isStaff = false, unreadMessages = 0 }: { isStaff?: boolean; unreadMessages?: number }) {
   const pathname = usePathname()
   const { collapsed, setCollapsed } = useSidebar()
   const visibleGroups = isStaff
@@ -163,21 +163,35 @@ export function Sidebar({ isStaff = false }: { isStaff?: boolean }) {
             <ul className="space-y-0.5">
               {group.items.map(({ href, label, icon: Icon }) => {
                 const active = isActive(pathname, href)
+                const badge = href === '/messages' ? unreadMessages : 0
                 return (
                   <li key={href}>
                     <Link
                       href={href}
                       title={collapsed ? label : undefined}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg text-sm font-medium transition-all',
+                        'flex items-center gap-3 rounded-lg text-sm font-medium transition-all relative',
                         collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2',
                         active
                           ? `${group.activeGradient} text-white shadow-sm`
                           : `text-gray-700 ${group.hover} hover:text-gray-900`
                       )}
                     >
-                      <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-white' : group.iconColor)} />
-                      {!collapsed && label}
+                      <span className="relative shrink-0">
+                        <Icon className={cn('h-4 w-4', active ? 'text-white' : group.iconColor)} />
+                        {badge > 0 && collapsed && (
+                          <span className="absolute -top-1.5 -right-1.5 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                      </span>
+                      {!collapsed && <span className="flex-1">{label}</span>}
+                      {badge > 0 && !collapsed && (
+                        <span className={cn(
+                          'text-[10px] font-semibold rounded-full px-1.5 py-0.5 min-w-[18px] text-center',
+                          active ? 'bg-white/25 text-white' : 'bg-red-500 text-white'
+                        )}>
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 )
