@@ -46,6 +46,7 @@ export async function POST(request: Request) {
         subscription_plan: 'trial',
         subscription_status: 'trialing',
         trial_ends_at: trialEndsAt,
+        test_mode: true,
       })
       .select()
       .single()

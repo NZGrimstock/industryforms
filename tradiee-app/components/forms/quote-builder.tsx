@@ -98,12 +98,14 @@ function LineDescriptionInput({
   priceItems,
   onTextChange,
   onPick,
+  onEnter,
 }: {
   value: string
   placeholder: string
   priceItems: PriceListItem[]
   onTextChange: (value: string) => void
   onPick: (item: PriceListItem) => void
+  onEnter: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -132,6 +134,7 @@ function LineDescriptionInput({
         value={value}
         onFocus={() => setOpen(true)}
         onChange={e => { onTextChange(e.target.value); setOpen(true) }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } }}
         className="h-7 text-sm"
         placeholder={placeholder}
       />
@@ -313,6 +316,18 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
 
   function addLabour(sectionId: string) {
     setSections(ss => ss.map(s => s.id !== sectionId ? s : { ...s, lines: [...s.lines, labourLine()] }))
+  }
+
+  function focusNextLineControl(e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, sectionId: string) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const row = e.currentTarget.closest('tr')
+    const controls = Array.from(row?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select') ?? [])
+      .filter(control => !control.disabled && control.type !== 'checkbox')
+    const index = controls.indexOf(e.currentTarget)
+    const next = controls[index + 1]
+    if (next) next.focus()
+    else addLine(sectionId)
   }
 
   function addSundry(sectionId: string) {
@@ -555,12 +570,12 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                   </thead>
                   <tbody>
                     {s.lines.map(l => (
-                      <tr key={l.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${l.type === 'labour' ? 'bg-blue-50/30' : ''}`}>
+                      <tr key={l.id} data-line-id={l.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${l.type === 'labour' ? 'bg-blue-50/30' : ''}`}>
                         <td className="px-4 py-2">
                           <div className="flex items-center gap-2">
                             {l.type === 'labour' && <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
                             {l.type === 'labour' ? (
-                              <Input value={l.description} onChange={e => updateLine(s.id, l.id, 'description', e.target.value)} className="h-7 text-sm" placeholder="Labour description..." />
+                              <Input value={l.description} onChange={e => updateLine(s.id, l.id, 'description', e.target.value)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm" placeholder="Labour description..." />
                             ) : (
                               <LineDescriptionInput
                                 value={l.description}
@@ -568,6 +583,11 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                                 priceItems={priceItems}
                                 onTextChange={value => updateLine(s.id, l.id, 'description', value)}
                                 onPick={item => updateLineFromPriceList(s.id, l.id, item)}
+                                onEnter={() => {
+                                  const row = document.querySelector(`tr[data-line-id="${l.id}"]`)
+                                  const first = row?.querySelectorAll<HTMLInputElement>('input')[1]
+                                  first?.focus()
+                                }}
                               />
                             )}
                             {l.type === 'labour' && billingRates.length > 0 && (
@@ -590,18 +610,19 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                             step="any"
                             value={l.quantity}
                             onChange={e => updateLine(s.id, l.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            onKeyDown={e => focusNextLineControl(e, s.id)}
                             className="h-7 text-sm text-right"
                           />
                         </td>
                         <td className="px-3 py-2">
-                          <Input value={l.unit} onChange={e => updateLine(s.id, l.id, 'unit', e.target.value)} className="h-7 text-sm" />
+                          <Input value={l.unit} onChange={e => updateLine(s.id, l.id, 'unit', e.target.value)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm" />
                         </td>
                         <td className="px-3 py-2">
-                          <Input type="number" step="0.01" value={l.unit_price} onChange={e => updateLine(s.id, l.id, 'unit_price', parseFloat(e.target.value) || 0)} className="h-7 text-sm text-right" />
+                          <Input type="number" step="0.01" value={l.unit_price} onChange={e => updateLine(s.id, l.id, 'unit_price', parseFloat(e.target.value) || 0)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm text-right" />
                         </td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1">
-                            <Input type="number" min="0" step="any" value={l.discount_value || ''} placeholder="0" onChange={e => updateLine(s.id, l.id, 'discount_value', parseFloat(e.target.value) || 0)} className="h-7 text-sm text-right" />
+                            <Input type="number" min="0" step="any" value={l.discount_value || ''} placeholder="0" onChange={e => updateLine(s.id, l.id, 'discount_value', parseFloat(e.target.value) || 0)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm text-right" />
                             <button type="button" onClick={() => updateLine(s.id, l.id, 'discount_type', l.discount_type === 'percent' ? 'amount' : 'percent')} className="h-7 px-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded hover:bg-gray-200 shrink-0" title="Toggle $ / %">
                               {l.discount_type === 'percent' ? '%' : '$'}
                             </button>
@@ -612,6 +633,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                             className="h-7 text-xs border border-gray-200 rounded px-1 text-gray-600 w-full"
                             value={String(l.tax_rate ?? gstRate)}
                             onChange={e => updateLine(s.id, l.id, 'tax_rate', parseFloat(e.target.value))}
+                            onKeyDown={e => focusNextLineControl(e, s.id)}
                           >
                             {taxOptions.map(t => <option key={t.id} value={String(t.rate)}>{t.name} ({Math.round(t.rate * 100)}%)</option>)}
                           </select>
@@ -637,7 +659,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
                     <Plus className="h-3.5 w-3.5" /> Add sundry
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'items' })}>
-                    <Package className="h-3.5 w-3.5" /> From price list
+                    <Package className="h-3.5 w-3.5" /> Price List Lookup
                   </Button>
                   {kits.length > 0 && (
                     <Button variant="ghost" size="sm" onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'kits' })}>

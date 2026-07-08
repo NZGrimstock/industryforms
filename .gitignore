@@ -32,6 +32,7 @@ eslint-report.json
 # ---- Supabase local ----
 supabase/.branches/
 supabase/.temp/
+.supabasehome/
 
 # ---- OS / editor ----
 .DS_Store

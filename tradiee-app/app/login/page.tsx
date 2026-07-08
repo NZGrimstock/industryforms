@@ -67,7 +67,7 @@ export default function LoginPage() {
           {mfaFactorId ? (
             <>
               <h1 className="text-lg font-semibold text-gray-900 mb-6">Enter your authenticator code</h1>
-              <div className="space-y-4">
+              <form className="space-y-4" onSubmit={e => { e.preventDefault(); void handleMfaSubmit() }}>
                 <input
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-orange-500"
                   value={mfaCode} onChange={e => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -75,18 +75,18 @@ export default function LoginPage() {
                 />
                 {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
                 <button
-                  onClick={handleMfaSubmit}
+                  type="submit"
                   disabled={loading || mfaCode.length < 6}
                   className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors"
                 >
                   {loading ? 'Verifying…' : 'Verify'}
                 </button>
-              </div>
+              </form>
             </>
           ) : (
             <>
               <h1 className="text-lg font-semibold text-gray-900 mb-6">Sign in to your account</h1>
-              <div className="space-y-4">
+              <form className="space-y-4" onSubmit={e => { e.preventDefault(); void handleSubmit() }}>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
@@ -118,13 +118,13 @@ export default function LoginPage() {
                 {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
                 <button
-                  onClick={handleSubmit}
+                  type="submit"
                   disabled={loading}
                   className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors"
                 >
                   {loading ? 'Signing in…' : 'Sign in'}
                 </button>
-              </div>
+              </form>
             </>
           )}
         </div>

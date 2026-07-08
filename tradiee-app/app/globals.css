@@ -24,3 +24,37 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+@media print {
+  body {
+    background: white;
+  }
+
+  aside,
+  nav,
+  header,
+  .print-hidden {
+    display: none !important;
+  }
+
+  .report-page {
+    padding: 0 !important;
+  }
+
+  .report-page a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .report-page > *,
+  .report-page [class*="rounded"],
+  .report-page table,
+  .report-page li {
+    break-inside: avoid;
+  }
+
+  .report-page [class*="shadow"],
+  .report-page [class*="border"] {
+    box-shadow: none !important;
+  }
+}

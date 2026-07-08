@@ -62,11 +62,13 @@ function DescriptionLookup({
   items,
   onText,
   onPick,
+  onEnter,
 }: {
   value: string
   items: PriceItem[]
   onText: (value: string) => void
   onPick: (item: PriceItem) => void
+  onEnter: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -93,6 +95,7 @@ function DescriptionLookup({
         value={value}
         onFocus={() => setOpen(true)}
         onChange={e => { onText(e.target.value); setOpen(true) }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } }}
         placeholder="Description..."
       />
       {open && matches.length > 0 && (
@@ -120,15 +123,26 @@ function DescriptionLookup({
 export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [showForm, setShowForm] = useState(false)
+  const [showForm, setShowForm] = useState(true)
   const [picker, setPicker] = useState<'items' | 'kits' | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
+  const qtyRef = useRef<HTMLInputElement>(null)
+  const unitRef = useRef<HTMLInputElement>(null)
+  const priceRef = useRef<HTMLInputElement>(null)
 
   const filteredItems = priceItems.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.code ?? '').toLowerCase().includes(search.toLowerCase()))
   const filteredKits = kits.filter(k => !search || k.name.toLowerCase().includes(search.toLowerCase()) || (k.code ?? '').toLowerCase().includes(search.toLowerCase()))
   const total = materials.reduce((sum, m) => sum + Number(m.quantity) * Number(m.unit_price), 0)
+
+  useEffect(() => {
+    function key(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPicker(null)
+    }
+    document.addEventListener('keydown', key)
+    return () => document.removeEventListener('keydown', key)
+  }, [])
 
   function set(k: string, v: string) {
     setForm(f => ({ ...f, [k]: v }))
@@ -179,8 +193,15 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
     setLoading(false)
     if (error) return
     setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
-    setShowForm(false)
+    setShowForm(true)
     router.refresh()
+  }
+
+  function moveOnEnter(e: React.KeyboardEvent<HTMLInputElement>, next?: React.RefObject<HTMLInputElement | null>) {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    if (next?.current) next.current.focus()
+    else void addCurrent()
   }
 
   async function addPriceItem(item: PriceItem) {
@@ -302,11 +323,11 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
             {showForm && (
               <tr className="bg-gray-50/50">
                 <td className="px-6 py-2">
-                  <DescriptionLookup value={form.description} items={priceItems} onText={value => setForm(f => ({ ...f, description: value, price_list_item_id: '' }))} onPick={applyItem} />
+                  <DescriptionLookup value={form.description} items={priceItems} onText={value => setForm(f => ({ ...f, description: value, price_list_item_id: '' }))} onPick={applyItem} onEnter={() => qtyRef.current?.focus()} />
                 </td>
-                <td className="px-3 py-2"><input type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.quantity} onChange={e => set('quantity', e.target.value)} /></td>
-                <td className="px-3 py-2"><input className="h-8 w-full rounded-lg border border-gray-200 px-2 text-sm" value={form.unit} onChange={e => set('unit', e.target.value)} /></td>
-                <td className="px-3 py-2"><input type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.unit_price} onChange={e => set('unit_price', e.target.value)} /></td>
+                <td className="px-3 py-2"><input ref={qtyRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.quantity} onChange={e => set('quantity', e.target.value)} onKeyDown={e => moveOnEnter(e, unitRef)} /></td>
+                <td className="px-3 py-2"><input ref={unitRef} className="h-8 w-full rounded-lg border border-gray-200 px-2 text-sm" value={form.unit} onChange={e => set('unit', e.target.value)} onKeyDown={e => moveOnEnter(e, priceRef)} /></td>
+                <td className="px-3 py-2"><input ref={priceRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.unit_price} onChange={e => set('unit_price', e.target.value)} onKeyDown={moveOnEnter} /></td>
                 <td className="px-6 py-2 text-right font-medium text-gray-800">{formatCurrency((parseFloat(form.quantity) || 0) * (parseFloat(form.unit_price) || 0))}</td>
                 <td className="py-2 pr-2" />
               </tr>
@@ -327,7 +348,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       {showForm && (
         <div className="px-6 py-2 flex gap-2">
           <button onClick={addCurrent} disabled={loading || !form.description.trim()} className="px-3 py-1.5 text-xs font-medium bg-[var(--accent,#f97316)] text-white rounded-lg disabled:opacity-50">{loading ? 'Adding...' : 'Add item'}</button>
-          <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+          <button onClick={() => setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Clear</button>
         </div>
       )}
 
@@ -358,22 +379,14 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
         </div>
       )}
 
-      {!showForm && !picker && (
+      {!picker && (
         <div className="px-6 py-2 flex gap-2 flex-wrap">
-          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
-            <Plus className="h-3.5 w-3.5" /> Add material
-          </button>
           <button onClick={() => { setShowForm(true); setForm({ price_list_item_id: '', description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' }) }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
             <Plus className="h-3.5 w-3.5" /> Add sundry
           </button>
           {priceItems.length > 0 && (
             <button onClick={() => setPicker('items')} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
-              <Package className="h-3.5 w-3.5" /> From price list
-            </button>
-          )}
-          {priceItems.length > 0 && (
-            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
-              <Search className="h-3.5 w-3.5" /> Item lookup
+              <Package className="h-3.5 w-3.5" /> Price List Lookup
             </button>
           )}
           {kits.length > 0 && (

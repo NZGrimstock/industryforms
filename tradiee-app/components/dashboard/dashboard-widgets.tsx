@@ -32,10 +32,20 @@ const CODEX_AUDIT = {
 
 function normaliseConfig(config: DashboardWidgetConfig | null | undefined, available: DashboardWidgetId[]) {
   const availableSet = new Set(available)
+  const savedOrder = config?.order ?? []
   const order = [
-    ...((config?.order ?? []).filter((id): id is DashboardWidgetId => availableSet.has(id as DashboardWidgetId))),
-    ...DEFAULT_ORDER.filter(id => availableSet.has(id) && !(config?.order ?? []).includes(id)),
+    ...(savedOrder.filter((id): id is DashboardWidgetId => availableSet.has(id as DashboardWidgetId))),
+    ...DEFAULT_ORDER.filter(id => availableSet.has(id) && !savedOrder.includes(id)),
   ]
+  // Only place todos at slot #2 when the user has no existing preference for it
+  // (first signup/login, or a legacy config saved before the widget existed).
+  // Once it's present in a saved order, leave it wherever the user put it.
+  if (availableSet.has('todos') && !savedOrder.includes('todos')) {
+    const withoutTodos: DashboardWidgetId[] = order.filter(id => id !== 'todos')
+    const target = withoutTodos[0] === 'stats' ? 1 : Math.min(1, withoutTodos.length)
+    withoutTodos.splice(target, 0, 'todos')
+    order.splice(0, order.length, ...withoutTodos)
+  }
   const hidden = (config?.hidden ?? []).filter((id): id is DashboardWidgetId => availableSet.has(id as DashboardWidgetId))
   return { order, hidden }
 }

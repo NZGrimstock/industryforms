@@ -1,148 +1,119 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency, calcDurationHours } from '@/lib/utils'
-import { hasAddon } from '@/lib/billing'
+import { formatCurrency, calcDurationHours, formatDate } from '@/lib/utils'
+import { PrintReportsButton } from './print-button'
 
-export default async function ReportsPage() {
+const PERIODS = [
+  { value: '1m', label: '1 month', months: 1 },
+  { value: '3m', label: '3 months', months: 3 },
+  { value: '6m', label: '6 months', months: 6 },
+  { value: '1y', label: '1 year', months: 12 },
+  { value: '2y', label: '2 years', months: 24 },
+  { value: '5y', label: '5 years', months: 60 },
+  { value: 'all', label: 'All time', months: null },
+] as const
+
+type PeriodValue = typeof PERIODS[number]['value']
+
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ period?: string; status?: string }> }) {
+  const params = await searchParams
+  const period = (PERIODS.some(p => p.value === params?.period) ? params?.period : '6m') as PeriodValue
+  const selectedPeriod = PERIODS.find(p => p.value === period) ?? PERIODS[2]
+  const statusFilter = params?.status ?? ''
+  const now = new Date()
+  const start = selectedPeriod.months === null ? null : new Date(now.getFullYear(), now.getMonth() - selectedPeriod.months + 1, 1)
+  const previousStart = selectedPeriod.months === null ? null : new Date(start!.getFullYear(), start!.getMonth() - selectedPeriod.months, 1)
+  const previousEnd = start ? new Date(start.getTime() - 1) : null
+  const periodLabel = start ? `${formatDate(start.toISOString())} to ${formatDate(now.toISOString())}` : 'All recorded data'
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, is_super_admin, companies(addons, billing_exempt)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
   const companyId = profile!.company_id
-  const company = profile?.companies as unknown as { addons: Record<string, { active?: boolean }> | null; billing_exempt: boolean | null } | null
-  const bookingsEntitled = hasAddon(!!profile?.is_super_admin, company, 'bookings_website')
 
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
-  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString()
+  let invoicesQuery = supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, created_at, customer_id, customers(name)').eq('company_id', companyId).order('created_at', { ascending: false })
+  let timesheetsQuery = supabase.from('timesheets').select('started_at, ended_at, break_minutes, bill_rate, cost_rate, is_billable').eq('company_id', companyId)
+  let quotesQuery = supabase.from('quotes').select('id, quote_number, status, total, created_at, customers(name)').eq('company_id', companyId).order('created_at', { ascending: false })
+  let jobsQuery = supabase.from('jobs').select('id, job_number, title, status, created_at, customers(name)').eq('company_id', companyId).order('created_at', { ascending: false })
+  if (start) {
+    invoicesQuery = invoicesQuery.gte('created_at', start.toISOString())
+    timesheetsQuery = timesheetsQuery.gte('started_at', start.toISOString())
+    quotesQuery = quotesQuery.gte('created_at', start.toISOString())
+    jobsQuery = jobsQuery.gte('created_at', start.toISOString())
+  }
+  if (statusFilter) jobsQuery = jobsQuery.eq('status', statusFilter)
 
-  const [invoicesRes, timesheetsRes, quotesRes, jobsRes, priceItemsRes] = await Promise.all([
-    supabase.from('invoices').select('status, total, amount_paid, created_at').eq('company_id', companyId),
-    supabase.from('timesheets').select('started_at, ended_at, break_minutes, bill_rate, cost_rate, is_billable').eq('company_id', companyId),
-    supabase.from('quotes').select('status, total, created_at').eq('company_id', companyId),
-    supabase.from('jobs').select('status').eq('company_id', companyId),
+  const [invoicesRes, previousInvoicesRes, timesheetsRes, quotesRes, jobsRes, priceItemsRes] = await Promise.all([
+    invoicesQuery,
+    previousStart && previousEnd
+      ? supabase.from('invoices').select('status, total, amount_paid, created_at').eq('company_id', companyId).gte('created_at', previousStart.toISOString()).lte('created_at', previousEnd.toISOString())
+      : Promise.resolve({ data: [] }),
+    timesheetsQuery,
+    quotesQuery,
+    jobsQuery,
     supabase.from('price_list_items').select('quantity_on_hand, low_stock_threshold, name, unit').eq('company_id', companyId).not('quantity_on_hand', 'is', null),
   ])
 
   const invoices = invoicesRes.data ?? []
+  const previousInvoices = previousInvoicesRes.data ?? []
   const timesheets = timesheetsRes.data ?? []
   const quotes = quotesRes.data ?? []
   const jobs = jobsRes.data ?? []
   const stockItems = priceItemsRes.data ?? []
 
-  // Revenue this month
-  const revenueThisMonth = invoices
-    .filter(i => i.status === 'paid' && i.created_at >= startOfMonth)
-    .reduce((sum, i) => sum + i.total, 0)
-  const revenueLastMonth = invoices
-    .filter(i => i.status === 'paid' && i.created_at >= startOfLastMonth && i.created_at <= endOfLastMonth)
-    .reduce((sum, i) => sum + i.total, 0)
-
-  // Outstanding
-  const outstanding = invoices
-    .filter(i => ['sent', 'partially_paid', 'overdue'].includes(i.status))
-    .reduce((sum, i) => sum + (i.total - i.amount_paid), 0)
-  const overdue = invoices.filter(i => i.status === 'overdue').reduce((sum, i) => sum + (i.total - i.amount_paid), 0)
-
-  // Quote conversion rate
+  const paidInvoices = invoices.filter(i => i.status === 'paid')
+  const revenue = paidInvoices.reduce((sum, i) => sum + Number(i.total), 0)
+  const previousRevenue = previousInvoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0)
+  const outstanding = invoices.filter(i => ['sent', 'partially_paid', 'overdue'].includes(i.status)).reduce((sum, i) => sum + (Number(i.total) - Number(i.amount_paid)), 0)
+  const overdue = invoices.filter(i => i.status === 'overdue').reduce((sum, i) => sum + (Number(i.total) - Number(i.amount_paid)), 0)
   const sentQuotes = quotes.filter(q => q.status !== 'draft').length
   const acceptedQuotes = quotes.filter(q => q.status === 'accepted').length
   const conversionRate = sentQuotes > 0 ? Math.round((acceptedQuotes / sentQuotes) * 100) : 0
-
-  // Labour this month
-  const labourHours = timesheets
-    .filter(t => t.ended_at && t.started_at >= startOfMonth)
-    .reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at, t.break_minutes), 0)
-  const billableHours = timesheets
-    .filter(t => t.ended_at && t.is_billable && t.started_at >= startOfMonth)
-    .reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at, t.break_minutes), 0)
-  const labourRevenue = timesheets
-    .filter(t => t.ended_at && t.is_billable && t.bill_rate && t.started_at >= startOfMonth)
-    .reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at, t.break_minutes) * t.bill_rate!, 0)
-
-  // Low stock
+  const labourHours = timesheets.filter(t => t.ended_at).reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at!, t.break_minutes), 0)
+  const billableHours = timesheets.filter(t => t.ended_at && t.is_billable).reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at!, t.break_minutes), 0)
+  const labourRevenue = timesheets.filter(t => t.ended_at && t.is_billable && t.bill_rate).reduce((sum, t) => sum + calcDurationHours(t.started_at, t.ended_at!, t.break_minutes) * Number(t.bill_rate), 0)
   const lowStock = stockItems.filter(i => i.low_stock_threshold !== null && i.quantity_on_hand! <= i.low_stock_threshold!)
-
-  // Job status breakdown
   const jobStatusCounts = jobs.reduce((acc: Record<string, number>, j) => {
     acc[j.status] = (acc[j.status] ?? 0) + 1
     return acc
   }, {})
-
-  // ── Growth Engine (Sprint E) — bookings, automations, leads ────────────────
-  let leadsBySource: [string, number][] = []
-  let bookingsByPackage: [string, number][] = []
-  let bookingConversionRate = 0
-  let depositRevenue = 0
-  let reviewRequestsSent = 0
-  let repeatCustomerRevenue = 0
-  let automationCounts = { sent: 0, skipped_sms_dark: 0, failed: 0 }
-  let recentFailures: { event_type: string; channel: string; error: string | null; created_at: string }[] = []
-
-  if (bookingsEntitled) {
-    const [enquiriesRes, bookingsRes, reviewSentRes, automationRes, customerInvoicesRes] = await Promise.all([
-      supabase.from('enquiries').select('source').eq('company_id', companyId),
-      supabase.from('bookings').select('status, deposit_paid, bookable_packages(name)').eq('company_id', companyId).neq('status', 'slot_held'),
-      supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('company_id', companyId).not('review_request_sent_at', 'is', null),
-      supabase.from('automation_events').select('event_type, channel, status, error, created_at').eq('company_id', companyId).order('created_at', { ascending: false }).limit(200),
-      supabase.from('invoices').select('customer_id, total, status').eq('company_id', companyId).eq('status', 'paid'),
-    ])
-
-    const enquiries = enquiriesRes.data ?? []
-    const sourceCounts = enquiries.reduce((acc: Record<string, number>, e) => { acc[e.source] = (acc[e.source] ?? 0) + 1; return acc }, {})
-    leadsBySource = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])
-
-    const bookings = bookingsRes.data ?? []
-    const pkgCounts = bookings.reduce((acc: Record<string, number>, b) => {
-      const name = (b.bookable_packages as unknown as { name: string } | null)?.name ?? 'Unknown'
-      acc[name] = (acc[name] ?? 0) + 1
-      return acc
-    }, {})
-    bookingsByPackage = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1])
-    const notCancelled = bookings.filter(b => !['cancelled', 'no_show'].includes(b.status))
-    const convertedBookings = bookings.filter(b => ['confirmed', 'scheduled', 'completed'].includes(b.status))
-    bookingConversionRate = notCancelled.length > 0 ? Math.round((convertedBookings.length / notCancelled.length) * 100) : 0
-    depositRevenue = bookings.reduce((sum, b) => sum + Number(b.deposit_paid), 0)
-
-    reviewRequestsSent = reviewSentRes.count ?? 0
-
-    const events = automationRes.data ?? []
-    automationCounts = {
-      sent: events.filter(e => e.status === 'sent').length,
-      skipped_sms_dark: events.filter(e => e.status === 'skipped_sms_dark').length,
-      failed: events.filter(e => e.status === 'failed').length,
-    }
-    recentFailures = events.filter(e => e.status === 'failed').slice(0, 5)
-
-    const paidInvoices = customerInvoicesRes.data ?? []
-    const byCustomer = paidInvoices.reduce((acc: Record<string, { count: number; total: number }>, i) => {
-      const c = acc[i.customer_id] ?? { count: 0, total: 0 }
-      c.count += 1; c.total += Number(i.total)
-      acc[i.customer_id] = c
-      return acc
-    }, {})
-    repeatCustomerRevenue = Object.values(byCustomer).filter(c => c.count > 1).reduce((sum, c) => sum + c.total, 0)
-  }
+  const maxStatusCount = Math.max(1, ...Object.values(jobStatusCounts))
 
   return (
     <>
       <Header title="Reports" profile={profile} />
-      <div className="p-6 space-y-6">
-        {/* Revenue */}
+      <div className="p-6 space-y-6 report-page">
+        <div className="flex flex-wrap items-start justify-between gap-3 print-hidden">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Business reports</h2>
+            <p className="text-sm text-gray-500">Period: {periodLabel}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <form className="flex items-center gap-2" action="/reports">
+              <select name="period" defaultValue={period} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                {PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+              <button className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">Apply</button>
+            </form>
+            <PrintReportsButton />
+          </div>
+        </div>
+
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Revenue</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Summary ({selectedPeriod.label})</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="This month" value={formatCurrency(revenueThisMonth)} sub={`Last month: ${formatCurrency(revenueLastMonth)}`} />
+            <StatCard label="Revenue" value={formatCurrency(revenue)} sub={selectedPeriod.months ? `Previous period: ${formatCurrency(previousRevenue)}` : undefined} />
             <StatCard label="Outstanding" value={formatCurrency(outstanding)} sub={`Overdue: ${formatCurrency(overdue)}`} alert={overdue > 0} />
             <StatCard label="Quote conversion" value={`${conversionRate}%`} sub={`${acceptedQuotes} / ${sentQuotes} sent`} />
-            <StatCard label="Active jobs" value={String(jobs.filter(j => ['scheduled', 'in_progress'].includes(j.status)).length)} sub={`Total: ${jobs.length}`} />
+            <StatCard label="Jobs created" value={String(jobs.length)} sub={statusFilter ? `Filtered: ${statusFilter.replace(/_/g, ' ')}` : 'All statuses'} />
           </div>
         </section>
 
-        {/* Labour */}
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Labour (this month)</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Labour ({selectedPeriod.label})</h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <StatCard label="Total hours" value={`${labourHours.toFixed(1)}h`} />
             <StatCard label="Billable hours" value={`${billableHours.toFixed(1)}h`} sub={labourHours > 0 ? `${Math.round((billableHours / labourHours) * 100)}% utilisation` : undefined} />
@@ -150,27 +121,25 @@ export default async function ReportsPage() {
           </div>
         </section>
 
-        {/* Jobs breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card>
-            <CardHeader><CardTitle>Jobs by status</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Jobs by status ({selectedPeriod.label})</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {Object.entries(jobStatusCounts).sort((a, b) => b[1] - a[1]).map(([status, count]) => (
-                <div key={status} className="flex items-center gap-3">
+                <Link key={status} href={`/reports?period=${period}&status=${status}`} className="flex items-center gap-3 rounded-lg px-2 py-1 hover:bg-gray-50">
                   <div className="flex-1 flex items-center gap-2">
                     <span className="text-sm text-gray-600 capitalize w-28">{status.replace(/_/g, ' ')}</span>
                     <div className="flex-1 bg-gray-100 rounded-full h-2">
-                      <div className="bg-orange-400 h-2 rounded-full" style={{ width: `${(count / jobs.length) * 100}%` }} />
+                      <div className="bg-orange-400 h-2 rounded-full" style={{ width: `${(count / maxStatusCount) * 100}%` }} />
                     </div>
                   </div>
                   <span className="text-sm font-medium text-gray-700 w-8 text-right">{count}</span>
-                </div>
+                </Link>
               ))}
-              {jobs.length === 0 && <p className="text-sm text-gray-400">No jobs</p>}
+              {jobs.length === 0 && <p className="text-sm text-gray-400">No jobs in this period</p>}
             </CardContent>
           </Card>
 
-          {/* Low stock */}
           <Card>
             <CardHeader><CardTitle>Low stock alerts</CardTitle></CardHeader>
             <CardContent className="p-0">
@@ -190,75 +159,59 @@ export default async function ReportsPage() {
           </Card>
         </div>
 
-        {/* Growth Engine — bookings, automations, leads */}
-        {bookingsEntitled && (
-          <>
-            <section>
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Growth</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="Booking conversion" value={`${bookingConversionRate}%`} sub="confirmed+ / not cancelled" />
-                <StatCard label="Deposit revenue" value={formatCurrency(depositRevenue)} />
-                <StatCard label="Review requests sent" value={String(reviewRequestsSent)} />
-                <StatCard label="Repeat-customer revenue" value={formatCurrency(repeatCustomerRevenue)} sub="from paid invoices" />
-              </div>
-            </section>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader><CardTitle>Leads by source</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {leadsBySource.map(([source, count]) => (
-                    <div key={source} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 capitalize">{source.replace(/_/g, ' ')}</span>
-                      <span className="text-sm font-medium text-gray-700">{count}</span>
-                    </div>
-                  ))}
-                  {leadsBySource.length === 0 && <p className="text-sm text-gray-400">No enquiries yet</p>}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle>Bookings by package</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {bookingsByPackage.map(([name, count]) => (
-                    <div key={name} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{name}</span>
-                      <span className="text-sm font-medium text-gray-700">{count}</span>
-                    </div>
-                  ))}
-                  {bookingsByPackage.length === 0 && <p className="text-sm text-gray-400">No bookings yet</p>}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle>Automation activity</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Sent</span>
-                    <span className="font-medium text-green-600">{automationCounts.sent}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Dark (SMS, awaiting Twilio)</span>
-                    <span className="font-medium text-gray-500">{automationCounts.skipped_sms_dark}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Failed</span>
-                    <span className={`font-medium ${automationCounts.failed > 0 ? 'text-red-600' : 'text-gray-500'}`}>{automationCounts.failed}</span>
-                  </div>
-                  {recentFailures.length > 0 && (
-                    <ul className="pt-2 border-t border-gray-100 space-y-1">
-                      {recentFailures.map((f, i) => (
-                        <li key={i} className="text-xs text-red-500">{f.event_type} ({f.channel}): {f.error}</li>
-                      ))}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DrillTable title={`Revenue drill-down (${paidInvoices.length})`} rows={paidInvoices.slice(0, 12).map(i => ({
+            href: `/invoices/${i.id}`,
+            primary: i.invoice_number,
+            secondary: customerName(i.customers),
+            amount: formatCurrency(Number(i.total)),
+            date: formatDate(i.created_at),
+          }))} empty="No paid invoices in this period" />
+          <DrillTable title={`Job drill-down (${jobs.length})`} rows={jobs.slice(0, 12).map(j => ({
+            href: `/jobs/${j.id}`,
+            primary: `${j.job_number} - ${j.title}`,
+            secondary: `${j.status.replace(/_/g, ' ')} · ${customerName(j.customers)}`,
+            amount: '',
+            date: formatDate(j.created_at),
+          }))} empty="No jobs in this period" />
+        </div>
       </div>
     </>
+  )
+}
+
+function customerName(value: unknown) {
+  const customer = Array.isArray(value) ? value[0] : value
+  return (customer as { name?: string } | null)?.name ?? 'No customer'
+}
+
+function DrillTable({ title, rows, empty }: { title: string; rows: Array<{ href: string; primary: string; secondary: string; amount: string; date: string }>; empty: string }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent className="p-0">
+        {rows.length === 0 ? (
+          <p className="px-6 py-4 text-sm text-gray-400">{empty}</p>
+        ) : (
+          <ul className="divide-y divide-gray-50">
+            {rows.map(row => (
+              <li key={row.href}>
+                <Link href={row.href} className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-gray-50">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-800">{row.primary}</p>
+                    <p className="truncate text-xs text-gray-400">{row.secondary}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {row.amount && <p className="text-sm font-medium text-gray-900">{row.amount}</p>}
+                    <p className="text-xs text-gray-400">{row.date}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

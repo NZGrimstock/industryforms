@@ -60,6 +60,25 @@ credential setup. Run `cd tradiee-mobile && npx eas build --platform ios
   daily to-do cron keeps deterministic DB task selection but lets
   `gpt-5.4-nano` polish the morning list wording. Shared helper:
   `tradiee-app/lib/openai.ts`.
+- UI/product cleanup pass (Codex, 2026-07-08): quote scope rows and job
+  materials now support immediate price-list autocomplete in the Description
+  field, keyboard-first entry (Enter advances through line fields; shared
+  dialogs already close with Escape), and jobs Materials & parts opens ready
+  to type with only `Price List Lookup`, `Add sundry`, and `Add kit` actions
+  across the bottom. Jobs detail order is now Tasks → Materials & parts, with
+  Recurring moved below Photos.
+- Price List kits were clarified as bundle records, not standard price-list
+  items. Kits now have their own list with SKU/code, name, sell price, computed
+  cost from component items, an option to sum component sell prices, and inline
+  creation of missing standard items. Adding tracked items/kits to jobs or
+  invoices warns `no stock of xxx - do you wish to continue?` and consumes
+  tracked inventory via `consume_price_list_stock`.
+- Signup now creates companies with test mode on by default; login/signup
+  forms submit with Enter. Dashboard widget normalisation forces To-Do into
+  visible slot #2 unless hidden. `/reports` was rebuilt around period filters
+  (1/3/6 months, 1/2/5 years, all time), visible period labels, drill-down
+  rows, status drill links, and print/PDF-friendly output via a Print button.
+  Verified with `npx tsc --noEmit` and scoped ESLint on touched web files.
 
 **Sprint E (automations + growth reporting) shipped 2026-07-06.** New
 `automation_events` table (migration `20260704090000_automation_events.sql`)
@@ -660,6 +679,9 @@ local Supabase or cloud: `20260707034000_calendar_sync_log_rls.sql`,
 `20260707112314_stripe_payment_idempotency.sql`. The last migration also adds
 a service-only `portal_login_attempts` table/RPC and Stripe payment settlement
 RPC; run migration list/apply plus data preflights before deploy.
+Also pending verification/deploy: `20260708103000_kits_inventory_bundle_pricing.sql`
+adds kit SKU/sell-price fields and the `consume_price_list_stock` RPC used by
+job/invoice item and kit stock consumption.
 
 ## Key decisions & gotchas
 - **Next 16** uses `proxy.ts` (not `middleware.ts`) + `allowedDevOrigins` in

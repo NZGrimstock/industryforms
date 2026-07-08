@@ -88,7 +88,7 @@ export default function SignupPage() {
           <h1 className="text-lg font-semibold text-gray-900 mb-1">Create your account</h1>
           <p className="text-sm text-gray-500 mb-6">Free 30-day trial, no credit card required.</p>
 
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={e => { e.preventDefault(); void handleSubmit() }}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Your name *</label>
               <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -144,13 +144,13 @@ export default function SignupPage() {
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={loading}
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors"
             >
               {loading ? 'Creating account…' : 'Create account'}
             </button>
-          </div>
+          </form>
         </div>
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{' '}
