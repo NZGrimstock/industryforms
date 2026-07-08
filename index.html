@@ -7,18 +7,35 @@
 <meta name="description" content="Industry Forms helps NZ and AU tradies quote faster, schedule cleaner, work offline, invoice sooner, take Stripe payments, and manage jobs from first enquiry to final payment. Start a free trial.">
 <meta name="keywords" content="job management software for tradies, NZ tradie software, AU tradie software, trade quoting software, field service management, contractor scheduling software, trade invoicing software">
 <link rel="canonical" href="https://industryforms.app/">
+<link rel="icon" href="/Logo/Logo.png" type="image/png">
+<link rel="apple-touch-icon" href="/Logo/Logo.png">
+<meta name="theme-color" content="#E8722A">
 <meta property="og:title" content="Industry Forms — Job Management Software for NZ & AU Tradies">
 <meta property="og:description" content="Paperwork should not be your second trade. Quote faster, schedule cleaner, invoice sooner, and keep every job moving.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://industryforms.app/">
+<meta property="og:image" content="https://industryforms.app/Logo/Logo.png">
+<meta property="og:site_name" content="Industry Forms">
+<meta property="og:locale" content="en_NZ">
 <meta name="twitter:card" content="summary_large_image">
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<meta name="twitter:title" content="Industry Forms — Job Management Software for NZ & AU Tradies">
+<meta name="twitter:description" content="Paperwork should not be your second trade. Quote faster, schedule cleaner, invoice sooner, and keep every job moving.">
+<meta name="twitter:image" content="https://industryforms.app/Logo/Logo.png">
+<link rel="stylesheet" href="styles.css">
+<script src="https://unpkg.com/lucide@0.469.0"></script>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800;900&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
+    {
+      "@type": "Organization",
+      "name": "Industry Forms",
+      "url": "https://industryforms.app/",
+      "logo": "https://industryforms.app/Logo/Logo.png",
+      "email": "support@industryforms.co.nz",
+      "areaServed": ["New Zealand", "Australia"]
+    },
     {
       "@type": "SoftwareApplication",
       "name": "Industry Forms",
@@ -73,38 +90,6 @@
       ]
     }
   ]
-}
-</script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        paper: '#F6F2EC',
-        'paper-dark': '#EDE8E0',
-        brand: '#E8722A',
-        'brand-dark': '#C95D1A',
-        'brand-light': '#F08040',
-        teal: '#0D9488',
-        'teal-light': '#14B8A6',
-        grape: '#7C3AED',
-        'grape-light': '#8B5CF6',
-        ink: '#1C1C2E',
-        'ink-light': '#2D2D44',
-        'ink-faint': '#F0EEF8',
-      },
-      fontFamily: {
-        sans: ['Figtree', 'sans-serif'],
-        display: ['Sora', 'sans-serif'],
-      },
-      boxShadow: {
-        'glass': '0 4px 24px -4px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)',
-        'glass-lg': '0 20px 60px -12px rgba(0,0,0,0.12), 0 4px 16px -4px rgba(0,0,0,0.06)',
-        'brand': '0 8px 32px -6px rgba(232,114,42,0.35)',
-        'ink': '0 8px 32px -6px rgba(28,28,46,0.3)',
-      }
-    }
-  }
 }
 </script>
 <style>
@@ -336,7 +321,7 @@ tailwind.config = {
 <nav class="fixed top-0 left-0 right-0 z-50 nav-blur border-b border-black/[0.05]" role="navigation">
   <div class="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
     <a href="#" class="flex items-center gap-2.5 group" aria-label="Industry Forms home">
-      <img src="Logo/Logo.png" alt="Industry Forms" class="h-[72px] w-auto transition-transform duration-300 group-hover:scale-105">
+      <img src="Logo/Logo.png" alt="Industry Forms" width="2726" height="1177" class="h-[72px] w-auto transition-transform duration-300 group-hover:scale-105">
     </a>
     <div class="hidden md:flex items-center gap-8">
       <a href="#features"    class="text-sm font-medium text-ink/55 hover:text-ink transition-colors duration-150">Features</a>
@@ -348,6 +333,14 @@ tailwind.config = {
       <a href="https://app.industryforms.app/signup" class="btn-brand bg-brand text-white text-sm font-semibold px-5 py-2.5 rounded-full inline-flex items-center gap-1.5">
         Start Free Trial <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
       </a>
+      <div class="flex items-center gap-2 pl-3 ml-1 border-l border-black/[0.08]">
+        <a href="https://app.industryforms.app/signup" title="iOS app coming soon — sign up on the web for now" aria-label="Industry Forms on iOS, coming soon" class="w-9 h-9 rounded-xl bg-ink/[0.06] flex items-center justify-center text-ink/60 hover:text-ink hover:bg-ink/[0.1] transition-colors duration-150">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.884-3.63-.884-1.698 0-2.302.91-3.696.91-1.377 0-2.35-1.25-3.463-2.79C2.94 18.06 2 15.3 2 12.68c0-4.19 2.73-6.41 5.42-6.41 1.34 0 2.46.9 3.3.9.81 0 2.06-.96 3.58-.96.58 0 2.65.05 4.02 2.02-.11.07-2.4 1.4-2.4 4.29 0 3.5 3.06 4.66 3.02 4.7z"/></svg>
+        </a>
+        <a href="https://app.industryforms.app/signup" title="Android app coming soon — sign up on the web for now" aria-label="Industry Forms on Android, coming soon" class="w-9 h-9 rounded-xl bg-ink/[0.06] flex items-center justify-center text-ink/60 hover:text-ink hover:bg-ink/[0.1] transition-colors duration-150">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9994.4482.9994.9993 0 .5511-.4483.9997-.9994.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396"/></svg>
+        </a>
+      </div>
     </div>
     <button id="mobileMenuBtn" class="md:hidden p-2 rounded-xl hover:bg-black/[0.06] transition-colors" aria-label="Menu">
       <i data-lucide="menu" class="w-5 h-5 text-ink"></i>
@@ -362,6 +355,15 @@ tailwind.config = {
       <a href="#faq"          class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">FAQ</a>
       <a href="https://app.industryforms.app" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">Log In</a>
       <a href="https://app.industryforms.app/signup" class="btn-brand bg-brand text-white text-sm font-semibold px-5 py-3 rounded-full text-center mt-3">Start Free Trial</a>
+      <div class="flex items-center gap-3 mt-4 pt-4 border-t border-black/[0.05] px-3">
+        <span class="text-[11px] font-semibold text-ink/40 uppercase tracking-wide">Mobile app</span>
+        <a href="https://app.industryforms.app/signup" title="iOS app coming soon" aria-label="Industry Forms on iOS, coming soon" class="w-8 h-8 rounded-lg bg-ink/[0.06] flex items-center justify-center text-ink/55">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.884-3.63-.884-1.698 0-2.302.91-3.696.91-1.377 0-2.35-1.25-3.463-2.79C2.94 18.06 2 15.3 2 12.68c0-4.19 2.73-6.41 5.42-6.41 1.34 0 2.46.9 3.3.9.81 0 2.06-.96 3.58-.96.58 0 2.65.05 4.02 2.02-.11.07-2.4 1.4-2.4 4.29 0 3.5 3.06 4.66 3.02 4.7z"/></svg>
+        </a>
+        <a href="https://app.industryforms.app/signup" title="Android app coming soon" aria-label="Industry Forms on Android, coming soon" class="w-8 h-8 rounded-lg bg-ink/[0.06] flex items-center justify-center text-ink/55">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9994.4482.9994.9993 0 .5511-.4483.9997-.9994.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3435-4.1021-2.6892-7.5743-6.1185-9.4396"/></svg>
+        </a>
+      </div>
     </div>
   </div>
 </nav>
@@ -1077,7 +1079,7 @@ tailwind.config = {
     <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-16">
       <div class="col-span-2 md:col-span-1">
         <a href="#" class="flex items-center gap-2.5 mb-5">
-          <img src="Logo/Logo.png" alt="Industry Forms" class="h-16 w-auto brightness-0 invert opacity-70">
+          <img src="Logo/Logo.png" alt="Industry Forms" width="2726" height="1177" class="h-16 w-auto brightness-0 invert opacity-70">
         </a>
         <p class="text-xs text-white/30 leading-relaxed">Intelligent job management for tradespeople and SMEs.</p>
       </div>
@@ -1086,8 +1088,6 @@ tailwind.config = {
         <ul class="space-y-3">
           <li><a href="#features" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Features</a></li>
           <li><a href="#pricing" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Pricing</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Integrations</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Changelog</a></li>
         </ul>
       </div>
       <div>
@@ -1106,10 +1106,8 @@ tailwind.config = {
       <div>
         <p class="text-[10px] font-bold tracking-widest uppercase text-white/25 mb-5">Company</p>
         <ul class="space-y-3">
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">About</a></li>
           <li><a href="blog.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Blog</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Careers</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Contact</a></li>
+          <li><a href="mailto:support@industryforms.co.nz" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Contact</a></li>
         </ul>
       </div>
       <div>
@@ -1117,19 +1115,11 @@ tailwind.config = {
         <ul class="space-y-3">
           <li><a href="privacy.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Privacy</a></li>
           <li><a href="terms.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Terms</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Security</a></li>
-          <li><a href="#" class="text-sm text-white/45 hover:text-white transition-colors duration-150">GDPR</a></li>
         </ul>
       </div>
     </div>
     <div class="border-t border-white/[0.05] pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
       <p class="text-xs text-white/20">© 2025 Industry Forms Ltd. All rights reserved.</p>
-      <div class="flex items-center gap-4">
-        <a href="#" class="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.08] transition-all duration-150" aria-label="Twitter"><i data-lucide="twitter" class="w-3.5 h-3.5"></i></a>
-        <a href="#" class="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.08] transition-all duration-150" aria-label="LinkedIn"><i data-lucide="linkedin" class="w-3.5 h-3.5"></i></a>
-        <a href="#" class="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.08] transition-all duration-150" aria-label="Instagram"><i data-lucide="instagram" class="w-3.5 h-3.5"></i></a>
-        <a href="#" class="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center text-white/25 hover:text-white/60 hover:bg-white/[0.08] transition-all duration-150" aria-label="YouTube"><i data-lucide="youtube" class="w-3.5 h-3.5"></i></a>
-      </div>
     </div>
   </div>
 </footer>
@@ -1151,8 +1141,8 @@ tailwind.config = {
           <span class="text-white/25 text-[11px]">of paperwork</span>
         </div>
         <div class="ticker-item">
-          <span class="text-white/25 text-[11px] font-medium tracking-wide uppercase">Reduce missed calls by</span>
-          <span class="font-display font-bold text-base text-grape-light tabular-nums counter" data-target="90" data-suffix="%">0%</span>
+          <span class="text-white/25 text-[11px] font-medium tracking-wide uppercase">Still</span>
+          <span class="font-display font-bold text-base text-grape-light">works with no reception</span>
         </div>
         <div class="ticker-item">
           <span class="text-white/25 text-[11px] font-medium tracking-wide uppercase">Save</span>

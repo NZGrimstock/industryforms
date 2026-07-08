@@ -1,0 +1,23 @@
+# Industry Forms
+
+> Job management software for tradies in New Zealand and Australia. One place for web leads, AI-drafted quotes, bookings, job scheduling, offline mobile field access, compliance forms, invoicing, Stripe payments, reminders, messaging, and gross-profit reporting.
+
+Industry Forms is built specifically for NZ and AU trade businesses (plumbers, electricians, builders, HVAC, painters, roofers, handyman, garden care). Pricing starts at $29/month NZD (Solo tier), with a 28-day free trial and no credit card required.
+
+## Key facts
+
+- Works offline: field crews can log notes, photos, and time without a signal, syncing when a connection returns.
+- Customers can accept quotes and pay deposits or invoices online without creating an account.
+- Accepts Stripe payments and supports progress invoicing on larger projects.
+- Includes AI-drafted quotes from a business's real price list.
+
+## Pages
+
+- [Home](https://industryforms.app/): product overview, pricing, FAQ.
+- [Blog](https://industryforms.app/blog.html): trade-specific guides on quoting, invoicing, scheduling, and compliance.
+- [Privacy](https://industryforms.app/privacy.html)
+- [Terms](https://industryforms.app/terms.html)
+
+## Contact
+
+support@industryforms.co.nz
