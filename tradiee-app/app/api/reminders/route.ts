@@ -46,6 +46,18 @@ async function runReminders() {
   if (smsMeterRetry.retried) sent.push(`SMS meter retries ${smsMeterRetry.retried}`)
   if (smsMeterRetry.failed) errors.push(`SMS meter retries failed ${smsMeterRetry.failed}`)
 
+  const { data: reapedHolds, error: reapHoldsError } = await service
+    .from('bookings')
+    .update({ status: 'cancelled' })
+    .eq('status', 'slot_held')
+    .lt('hold_expires_at', new Date().toISOString())
+    .select('id')
+  if (reapHoldsError) {
+    errors.push(`Expired booking holds cleanup: ${reapHoldsError.message}`)
+  } else if (reapedHolds?.length) {
+    sent.push(`Expired booking holds cleaned ${reapedHolds.length}`)
+  }
+
   // ── Quote follow-ups ─────────────────────────────────────────────────────
   // Sent quotes not viewed/accepted in 3 days, follow_up_at <= now
   const { data: quotesToRemind } = await service

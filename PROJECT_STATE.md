@@ -288,8 +288,8 @@ generates slots from hours + blackouts + `job_visits` + live bookings,
 respecting per-package buffers; resolves against one staff context at a time
 (specific `profileId`, or company-wide when none given) — documented scope
 reduction, not a correctness shortcut. `tryHoldSlot()` reaps an expired hold
-on the exact slot inline on retry; new hourly `/api/bookings/reap-holds` cron
-handles broader cleanup. Admin UI at `/bookings` (packages, weekly hours,
+on the exact slot inline on retry; the daily `/api/reminders` cron also cleans
+up expired abandoned holds for Hobby-plan Vercel compatibility. Admin UI at `/bookings` (packages, weekly hours,
 blackouts), gated on `bookings_website` like the rest of Sprint B.
 
 ### Growth Engine Sprint A + B (2026-07-03/04) — unified inbox + bookings website add-on
