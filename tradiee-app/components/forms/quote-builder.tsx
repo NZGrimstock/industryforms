@@ -227,6 +227,13 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const [addItemOpen, setAddItemOpen] = useState<{ sectionId: string; mode: 'items' | 'kits' } | null>(null)
   const [priceSearch, setPriceSearch] = useState('')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main']))
+  // Tracks the quote row once it exists in the DB — whether it arrived via
+  // editQuote (editing) or was created by the very first autosave (new quote).
+  // Once set, further saves (autosave or explicit) update it instead of
+  // inserting a second row.
+  const [savedId, setSavedId] = useState<string | null>(editQuote?.id ?? null)
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [meta, setMeta] = useState({
     customerId: editQuote?.customer_id ?? defaultCustomerId ?? '',
@@ -426,10 +433,13 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   )
   const { subtotal, discount: docDiscountAmount, gst: gstAmount, total } = totals
 
-  const save = useCallback(async (status: 'draft' | 'sent') => {
-    if (!meta.customerId) { toast('Select a customer first', 'error'); return }
-    if (!meta.title) { toast('Enter a quote title', 'error'); return }
-    setSaving(true)
+  const save = useCallback(async (status: 'draft' | 'sent', opts: { silent?: boolean } = {}) => {
+    const { silent = false } = opts
+    if (!meta.customerId || !meta.title) {
+      if (!silent) toast(!meta.customerId ? 'Select a customer first' : 'Enter a quote title', 'error')
+      return
+    }
+    if (silent) setAutosaveStatus('saving'); else setSaving(true)
 
     const quotePayload = {
       customer_id: meta.customerId, site_id: meta.siteId || null,
@@ -444,22 +454,23 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
 
     let quoteId: string
 
-    if (editQuote) {
-      // Update existing quote
-      const { error: ue } = await supabase.from('quotes').update(quotePayload).eq('id', editQuote.id)
-      if (ue) { toast(ue.message, 'error'); setSaving(false); return }
+    if (savedId) {
+      // Update existing quote (arrived via editQuote, or created by an earlier autosave)
+      const { error: ue } = await supabase.from('quotes').update(quotePayload).eq('id', savedId)
+      if (ue) { if (!silent) toast(ue.message, 'error'); else setAutosaveStatus('idle'); setSaving(false); return }
       // Replace all sections and line items
-      await supabase.from('quote_line_items').delete().eq('quote_id', editQuote.id)
-      await supabase.from('quote_sections').delete().eq('quote_id', editQuote.id)
-      quoteId = editQuote.id
+      await supabase.from('quote_line_items').delete().eq('quote_id', savedId)
+      await supabase.from('quote_sections').delete().eq('quote_id', savedId)
+      quoteId = savedId
     } else {
       // Insert new quote
       const { data: quote, error: qe } = await supabase.from('quotes').insert({
         ...quotePayload,
         company_id: companyId, created_by: profileId, quote_number: quoteNumber,
       }).select().single()
-      if (qe || !quote) { toast(qe?.message ?? 'Failed to save quote', 'error'); setSaving(false); return }
+      if (qe || !quote) { if (!silent) toast(qe?.message ?? 'Failed to save quote', 'error'); else setAutosaveStatus('idle'); setSaving(false); return }
       quoteId = quote.id
+      setSavedId(quoteId)
     }
 
     for (let si = 0; si < sections.length; si++) {
@@ -480,9 +491,21 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
       if (lineInserts.length > 0) await supabase.from('quote_line_items').insert(lineInserts)
     }
 
-    toast(editQuote ? 'Quote updated' : 'Quote saved')
+    if (silent) { setAutosaveStatus('saved'); setSaving(false); return }
+    toast(savedId ? 'Quote updated' : 'Quote saved')
     router.push(`/quotes/${quoteId}`)
-  }, [meta, sections, subtotal, gstAmount, total, docDiscountType, docDiscountValue, docDiscountAmount, companyId, profileId, quoteNumber, supabase, toast, router, editQuote, gstRate])
+  }, [meta, sections, subtotal, gstAmount, total, docDiscountType, docDiscountValue, docDiscountAmount, companyId, profileId, quoteNumber, supabase, toast, router, savedId, gstRate])
+
+  // Autosave as a draft while the user is filling out the quote — needs at
+  // least a customer and a title before there's anything meaningful to save.
+  // Never autosaves over an in-progress "Save & send" (status stays 'draft').
+  useEffect(() => {
+    if (!meta.customerId || !meta.title) return
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => { save('draft', { silent: true }) }, 2000)
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, sections, docDiscountType, docDiscountValue])
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-6 min-h-screen">
@@ -726,6 +749,8 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
             <div className="space-y-2 pt-2">
               <Button className="w-full" loading={saving} onClick={() => save('draft')}>Save draft</Button>
               <Button variant="outline" className="w-full" loading={saving} onClick={() => save('sent')}>Save &amp; send</Button>
+              {autosaveStatus === 'saving' && <p className="text-center text-xs text-gray-400">Saving draft…</p>}
+              {autosaveStatus === 'saved' && <p className="text-center text-xs text-gray-400">Draft auto-saved</p>}
             </div>
           </CardContent>
         </Card>

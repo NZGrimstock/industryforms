@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -52,6 +52,8 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
   const [createdJobId, setCreatedJobId] = useState<string | null>(null)
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [lines, setLines] = useState<QuickLine[]>([emptyLine()])
   const [searchTerms, setSearchTerms] = useState<Record<number, string>>({})
   const [showBulkItems, setShowBulkItems] = useState(false)
@@ -178,10 +180,65 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
     setShowBulkItems(false)
   }
 
+  // Autosaves step 1 as a draft job while the user is still filling it in, so
+  // closing the dialog or navigating away doesn't lose the work. Scoped to the
+  // "existing customer" path only — the "new customer" path creates a customer
+  // record as a side effect, which isn't safe to repeat on every debounce tick.
+  async function autosaveJobDraft() {
+    if (customerMode !== 'existing' || !form.customerId || !form.title.trim()) return
+    setAutosaveStatus('saving')
+    const payload = {
+      customer_id: form.customerId,
+      title: form.title,
+      description: form.description || null,
+      status: form.status,
+      reference: form.reference || null,
+      site_id: form.siteId || null,
+    }
+    if (createdJobId) {
+      const { error } = await supabase.from('jobs').update(payload).eq('id', createdJobId)
+      setAutosaveStatus(error ? 'idle' : 'saved')
+      return
+    }
+    const { data: job, error } = await supabase.from('jobs').insert({
+      ...payload,
+      company_id: companyId,
+      job_number: nextJobNumber,
+    }).select('id').single()
+    if (error || !job) { setAutosaveStatus('idle'); return }
+    setCreatedJobId(job.id)
+    setAutosaveStatus('saved')
+  }
+
+  useEffect(() => {
+    if (!open || step !== 1) return
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(() => { autosaveJobDraft() }, 1500)
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step, form.title, form.description, form.status, form.reference, form.siteId, form.customerId, customerMode])
+
   // Step 1: create job record
   async function handleCreateJob(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+
+    // Autosave already created this draft (existing-customer path) — just push
+    // the latest edits and move on instead of inserting a second job row.
+    if (createdJobId && customerMode === 'existing') {
+      const { error } = await supabase.from('jobs').update({
+        customer_id: form.customerId,
+        title: form.title,
+        description: form.description || null,
+        status: form.status,
+        reference: form.reference || null,
+        site_id: form.siteId || null,
+      }).eq('id', createdJobId)
+      setLoading(false)
+      if (error) { toast(error.message, 'error'); return }
+      setStep(2)
+      return
+    }
 
     // Resolve the customer — either an existing selection or a new one created inline.
     let customerId = form.customerId
@@ -360,11 +417,13 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
                 { value: 'in_progress', label: 'In progress' },
               ]} />
             </div>
-            <div className="flex gap-3 pt-1">
+            <div className="flex items-center gap-3 pt-1">
               <Button type="submit" loading={loading}>
                 Next <ChevronRight className="h-4 w-4" />
               </Button>
               <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+              {autosaveStatus === 'saving' && <span className="text-xs text-gray-400">Saving draft…</span>}
+              {autosaveStatus === 'saved' && <span className="text-xs text-gray-400">Draft auto-saved</span>}
             </div>
           </form>
         )}

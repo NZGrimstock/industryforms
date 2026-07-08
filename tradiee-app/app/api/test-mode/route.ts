@@ -12,24 +12,13 @@ export async function POST(req: Request) {
   const svc = createServiceClient()
 
   if (action === 'disable') {
-    const { data: co } = await svc.from('companies').select('test_data_ids').eq('id', auth.companyId).single()
-    const ids = (co?.test_data_ids ?? {}) as Record<string, string[]>
-
-    // Delete in dependency order (most specific first)
-    const del = async (table: string, idsArr: string[]) => {
-      if (idsArr?.length) await svc.from(table).delete().in('id', idsArr)
-    }
-    await del('travel_logs', ids.travel_logs)
-    await del('bills', ids.bills)
-    await del('purchase_orders', ids.purchase_orders)
-    await del('invoices', ids.invoices)
-    await del('jobs', ids.jobs)
-    await del('enquiries', ids.enquiries)
-    await del('projects', ids.projects)
-    await del('customers', ids.customers)
-    await del('suppliers', ids.suppliers)
-
-    await svc.from('companies').update({ test_mode: false, test_data_ids: {} }).eq('id', auth.companyId)
+    // Single atomic transaction (see migration 20260709105055): deletes every
+    // tracked row — including anything the user created while test mode was
+    // on, not just the original seed — and only clears test_mode if the
+    // whole cleanup succeeds. A partial failure now surfaces as an error
+    // instead of silently leaving orphaned "real-looking" data behind.
+    const { error } = await svc.rpc('disable_test_mode', { p_company_id: auth.companyId })
+    if (error) return NextResponse.json({ error: `Could not fully clear test data: ${error.message}` }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
 
