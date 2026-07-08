@@ -16,7 +16,7 @@ import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { priceForCustomerGroup } from '@/lib/customer-pricing'
 
 type PriceItem = { id: string; code?: string | null; name: string; unit: string; sell_price: number; cost_price: number; type: string; quantity_on_hand?: number | null; customer_group_prices?: { customer_group_id: string; sell_price: number }[] | null }
-type Kit = { id: string; code?: string | null; name: string; sell_price?: number | null; kit_items: { quantity: number; price_list_items: PriceItem | null }[] }
+type Kit = { id: string; code?: string | null; name: string; sell_price?: number | null; use_item_sell_total?: boolean | null; kit_items: { quantity: number; price_list_items: PriceItem | null }[] }
 
 interface Props {
   invoice: {
@@ -143,29 +143,29 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     for (const component of components) {
       if (!confirmStock(component.price_list_items!, Number(component.quantity))) return
     }
-    const rows = kit.kit_items.filter(ki => ki.price_list_items).map((ki, i) => {
-      const item = ki.price_list_items!
-      const price = priceForCustomerGroup(item, invoiceCustomer) || item.cost_price
-      return {
-        invoice_id: invoice.id,
-        price_list_item_id: item.id,
-        type: 'material',
-        description: item.name,
-        quantity: ki.quantity,
-        unit: item.unit,
-        unit_price: price,
-        tax_rate: gstRate,
-        line_total: lineNet(ki.quantity, price, null, 0, gstRate, pricesIncludeTax),
-        sort_order: 99 + i,
-      }
-    })
-    if (rows.length === 0) return
+    if (components.length === 0) return
+    // Add the kit as a single line — kit name + kit price — not its components.
+    // Stock is still consumed per underlying component below.
+    const kitSell = kit.use_item_sell_total
+      ? components.reduce((sum, ki) => sum + (priceForCustomerGroup(ki.price_list_items!, invoiceCustomer) || ki.price_list_items!.cost_price) * Number(ki.quantity), 0)
+      : Number(kit.sell_price ?? 0)
     setLoading(true)
-    const { error } = await supabase.from('invoice_line_items').insert(rows)
+    const { error } = await supabase.from('invoice_line_items').insert({
+      invoice_id: invoice.id,
+      price_list_item_id: null,
+      type: 'material',
+      description: kit.code ? `${kit.name} (${kit.code})` : kit.name,
+      quantity: 1,
+      unit: 'kit',
+      unit_price: Number(kitSell.toFixed(2)),
+      tax_rate: gstRate,
+      line_total: lineNet(1, Number(kitSell.toFixed(2)), null, 0, gstRate, pricesIncludeTax),
+      sort_order: 99,
+    })
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     await consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })))
     await recompute(invoice.discount_type, invoice.discount_value)
-    toast(`Added ${rows.length} line${rows.length === 1 ? '' : 's'} from ${kit.name}`)
+    toast(`Added ${kit.name}`)
     setActiveDialog(null)
     router.refresh()
     setLoading(false)
