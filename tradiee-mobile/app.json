@@ -28,7 +28,7 @@
       "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#f97316"
+        "backgroundColor": "#ffffff"
       },
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",

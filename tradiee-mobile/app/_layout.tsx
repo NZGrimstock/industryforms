@@ -142,6 +142,9 @@ export default function RootLayout() {
             <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
             <Stack.Screen name="pay-now" options={{ headerShown: true, title: 'Pay Now', headerTintColor: '#f97316' }} />
             <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profile', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="jobs/new" options={{ headerShown: true, title: 'New Job', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="quotes/new" options={{ headerShown: true, title: 'New Quote', headerTintColor: '#f97316' }} />
           </Stack>
         </PowerSyncContext.Provider>
       </StripeTerminalProvider>

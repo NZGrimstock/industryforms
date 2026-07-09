@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Modal, TextInput, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
@@ -65,6 +65,9 @@ function formatDate(iso: string | null) {
 export default function InvoiceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [recording, setRecording] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editForm, setEditForm] = useState({ due_date: '', notes: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const { data: invoices, isLoading } = useQuery<Invoice>(
     `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.gst_amount, i.total,
@@ -97,6 +100,23 @@ export default function InvoiceDetailScreen() {
     if (error) Alert.alert('Error', error.message)
   }
 
+  function openEdit() {
+    if (!invoice) return
+    setEditForm({ due_date: invoice.due_date?.slice(0, 10) ?? '', notes: invoice.notes ?? '' })
+    setShowEdit(true)
+  }
+
+  async function saveEdit() {
+    setSavingEdit(true)
+    const { error } = await supabase.from('invoices').update({
+      due_date: editForm.due_date.trim() || null,
+      notes: editForm.notes.trim() || null,
+    }).eq('id', id)
+    setSavingEdit(false)
+    if (error) { Alert.alert('Error', error.message); return }
+    setShowEdit(false)
+  }
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -118,7 +138,14 @@ export default function InvoiceDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      <Stack.Screen options={{ title: invoice.invoice_number, headerTintColor: '#f97316' }} />
+      <Stack.Screen options={{
+        title: invoice.invoice_number, headerTintColor: '#f97316',
+        headerRight: () => (
+          <TouchableOpacity onPress={openEdit} hitSlop={10}>
+            <Feather name="edit-2" size={20} color="#f97316" />
+          </TouchableOpacity>
+        ),
+      }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
 
         {/* Info card */}
@@ -225,11 +252,47 @@ export default function InvoiceDetailScreen() {
           </View>
         )}
       </SafeAreaView>
+
+      <Modal visible={showEdit} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowEdit(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Invoice</Text>
+            <TouchableOpacity onPress={() => setShowEdit(false)}>
+              <Text style={styles.modalClose}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <Text style={styles.metaLabel}>Due date (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} value={editForm.due_date} onChangeText={v => setEditForm(f => ({ ...f, due_date: v }))} placeholder="2026-08-01" placeholderTextColor="#9ca3af" />
+            <Text style={styles.metaLabel}>Notes</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
+              value={editForm.notes}
+              onChangeText={v => setEditForm(f => ({ ...f, notes: v }))}
+              placeholder="Notes shown on the invoice…"
+              placeholderTextColor="#9ca3af"
+              multiline
+            />
+            <Text style={{ fontSize: 12, color: '#9ca3af' }}>Line items aren&apos;t editable from mobile yet — use the web app for that.</Text>
+            <TouchableOpacity style={[styles.saveBtn, savingEdit && { opacity: 0.5 }]} onPress={saveEdit} disabled={savingEdit} activeOpacity={0.85}>
+              {savingEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  modalClose: { fontSize: 15, color: '#f97316', fontWeight: '600' },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
+  saveBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  saveBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   docNumber: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },

@@ -7,6 +7,7 @@ import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null }
 type LineItem = { id: string; description: string; quantity: string; unit_price: string }
@@ -359,7 +360,7 @@ export default function NewQuoteScreen() {
               <Text style={s.label}>Phone *</Text>
               <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.phone} onChangeText={v => setNewCust(p => ({ ...p, phone: v }))} placeholder="+64 21 000 0000" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
               <Text style={s.label}>Billing address *</Text>
-              <TextInput style={[s.input, { marginBottom: 24 }]} value={newCust.billing_address} onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))} placeholder="Start typing an address…" placeholderTextColor="#9ca3af" />
+              <AddressAutocomplete style={[s.input, { marginBottom: 24 }]} value={newCust.billing_address} onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))} placeholder="Start typing an address…" />
               <TouchableOpacity
                 style={[s.btn, (!newCustValid || creatingCust) && { opacity: 0.5 }]}
                 onPress={createCustomer}

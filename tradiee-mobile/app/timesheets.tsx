@@ -321,6 +321,23 @@ export default function TimesheetsScreen() {
     fetchAll()
   }
 
+  // Permanently removes a trip that isn't a real trip at all (GPS glitch,
+  // duplicate) — distinct from "Ignore", which keeps the row but excludes it
+  // from the logbook.
+  function confirmDeleteTrip(log: TravelLog) {
+    Alert.alert('Delete this trip?', 'This removes it permanently — not just from the logbook. Use "Ignore" instead if it\'s a real trip you just don\'t want counted.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          const { error } = await supabase.from('travel_logs').delete().eq('id', log.id)
+          if (error) { Alert.alert('Error', error.message); return }
+          setShowAllocModal(false); setAllocLog(null); setAllocJob(null); setAllocJobSearch('')
+          fetchAll()
+        },
+      },
+    ])
+  }
+
   const filteredJobs = activeJobs.filter(j =>
     j.title.toLowerCase().includes(jobSearch.toLowerCase()) ||
     j.job_number.toLowerCase().includes(jobSearch.toLowerCase())
@@ -712,6 +729,13 @@ export default function TimesheetsScreen() {
                 </TouchableOpacity>
               )}
             </View>
+            <TouchableOpacity style={styles.allocRow} onPress={() => allocLog && confirmDeleteTrip(allocLog)}>
+              <Text style={styles.allocIcon}>❌</Text>
+              <View>
+                <Text style={[styles.allocLabel, { color: '#dc2626' }]}>Delete permanently</Text>
+                <Text style={styles.allocDesc}>Not allocatable — remove entirely (GPS glitch, duplicate)</Text>
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.allocCancel} onPress={() => { setShowAllocModal(false); setAllocLog(null) }}>
               <Text style={{ color: '#6b7280', fontSize: 16 }}>Cancel</Text>
             </TouchableOpacity>

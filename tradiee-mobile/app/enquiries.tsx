@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput,
   ActivityIndicator, Alert, Modal, RefreshControl, Linking,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -175,21 +176,23 @@ export default function EnquiriesScreen() {
               <Text style={s.modalClose}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ padding: 16, gap: 10 }}>
-            <TextInput style={s.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="Customer name *" placeholderTextColor="#9ca3af" autoFocus />
-            <TextInput style={s.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
-            <TextInput style={s.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="Email" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
-            <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm(p => ({ ...p, notes: v }))} placeholder="What are they looking for?" placeholderTextColor="#9ca3af" multiline />
-            <TextInput style={s.input} value={form.source} onChangeText={v => setForm(p => ({ ...p, source: v }))} placeholder="Source (phone call, website, referral…)" placeholderTextColor="#9ca3af" />
-            <TouchableOpacity
-              style={[s.addBtn, (!form.name.trim() || adding) && { opacity: 0.5 }]}
-              onPress={addEnquiry}
-              disabled={!form.name.trim() || adding}
-              activeOpacity={0.85}
-            >
-              {adding ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Add Enquiry</Text>}
-            </TouchableOpacity>
-          </View>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
+              <TextInput style={s.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="Customer name *" placeholderTextColor="#9ca3af" autoFocus />
+              <TextInput style={s.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+              <TextInput style={s.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="Email" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
+              <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm(p => ({ ...p, notes: v }))} placeholder="What are they looking for?" placeholderTextColor="#9ca3af" multiline />
+              <TextInput style={s.input} value={form.source} onChangeText={v => setForm(p => ({ ...p, source: v }))} placeholder="Source (phone call, website, referral…)" placeholderTextColor="#9ca3af" />
+              <TouchableOpacity
+                style={[s.addBtn, (!form.name.trim() || adding) && { opacity: 0.5 }]}
+                onPress={addEnquiry}
+                disabled={!form.name.trim() || adding}
+                activeOpacity={0.85}
+              >
+                {adding ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Add Enquiry</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

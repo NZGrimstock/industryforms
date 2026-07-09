@@ -1,9 +1,14 @@
+import { useState } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Linking, Platform,
+  ActivityIndicator, Linking, Platform, Modal, TextInput, Alert, KeyboardAvoidingView,
 } from 'react-native'
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Feather } from '@expo/vector-icons'
+import { supabase } from '@/lib/supabase'
+import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 function openPhone(phone: string) {
   Linking.openURL(`tel:${phone.replace(/\s/g, '')}`)
@@ -61,6 +66,9 @@ type Job = {
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
+  const [showEdit, setShowEdit] = useState(false)
+  const [form, setForm] = useState({ name: '', type: '', email: '', phone: '', billing_address: '', contact_person: '' })
+  const [saving, setSaving] = useState(false)
 
   const { data: customers, isLoading } = useQuery<Customer>(
     `SELECT id, name, type, email, phone, billing_address, contact_person
@@ -68,6 +76,35 @@ export default function CustomerDetailScreen() {
     [id]
   )
   const customer = customers?.[0]
+
+  function openEdit() {
+    if (!customer) return
+    setForm({
+      name: customer.name ?? '',
+      type: customer.type ?? 'residential',
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
+      billing_address: customer.billing_address ?? '',
+      contact_person: customer.contact_person ?? '',
+    })
+    setShowEdit(true)
+  }
+
+  async function saveEdit() {
+    if (!form.name.trim()) { Alert.alert('Name required', 'Please enter a customer name.'); return }
+    setSaving(true)
+    const { error } = await supabase.from('customers').update({
+      name: form.name.trim(),
+      type: form.type,
+      email: form.email.trim() || null,
+      phone: form.phone.trim() || null,
+      billing_address: form.billing_address.trim() || null,
+      contact_person: form.contact_person.trim() || null,
+    }).eq('id', id)
+    setSaving(false)
+    if (error) { Alert.alert('Error', error.message); return }
+    setShowEdit(false)
+  }
 
   const { data: sites } = useQuery<Site>(
     `SELECT id, label, address, access_notes
@@ -102,7 +139,14 @@ export default function CustomerDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      <Stack.Screen options={{ title: customer.name, headerTintColor: '#f97316' }} />
+      <Stack.Screen options={{
+        title: customer.name, headerTintColor: '#f97316',
+        headerRight: () => (
+          <TouchableOpacity onPress={openEdit} hitSlop={10}>
+            <Feather name="edit-2" size={20} color="#f97316" />
+          </TouchableOpacity>
+        ),
+      }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
 
         {/* Info card */}
@@ -195,11 +239,57 @@ export default function CustomerDetailScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={showEdit} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowEdit(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Customer</Text>
+            <TouchableOpacity onPress={() => setShowEdit(false)}>
+              <Text style={styles.modalClose}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Name *" placeholderTextColor="#9ca3af" />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {(['residential', 'commercial'] as const).map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.typeToggle, form.type === t && styles.typeToggleActive]}
+                  onPress={() => setForm(f => ({ ...f, type: t }))}
+                >
+                  <Text style={[styles.typeToggleText, form.type === t && styles.typeToggleTextActive]}>
+                    {t === 'residential' ? 'Residential' : 'Commercial'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput style={styles.input} value={form.contact_person} onChangeText={v => setForm(f => ({ ...f, contact_person: v }))} placeholder="Contact person" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="Email" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} placeholder="Phone" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+            <AddressAutocomplete style={styles.input} value={form.billing_address} onChangeText={v => setForm(f => ({ ...f, billing_address: v }))} placeholder="Billing address" />
+            <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={saveEdit} disabled={saving} activeOpacity={0.85}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  modalClose: { fontSize: 15, color: '#f97316', fontWeight: '600' },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
+  typeToggle: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' },
+  typeToggleActive: { backgroundColor: '#fff7ed', borderColor: '#f97316' },
+  typeToggleText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
+  typeToggleTextActive: { color: '#f97316' },
+  saveBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  saveBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
   avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

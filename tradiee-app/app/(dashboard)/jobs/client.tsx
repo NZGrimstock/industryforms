@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { useToast } from '@/components/ui/toast'
 import { VoiceInput } from '@/components/ui/voice-input'
 import { SmartWriteButton } from '@/components/ui/smart-write'
@@ -359,7 +360,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
                     <span className="text-sm text-gray-600">Add as job site</span>
                   </label>
                   {newCust.addAsSite && (
-                    <Input value={newCust.siteAddress} onChange={e => setNewCust(c => ({ ...c, siteAddress: e.target.value }))} placeholder="Site address *" />
+                    <AddressAutocomplete value={newCust.siteAddress} onChange={v => setNewCust(c => ({ ...c, siteAddress: v }))} placeholder="Site address *" />
                   )}
                 </div>
               )}
@@ -371,7 +372,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
                 {showAddSite ? (
                   <div className="space-y-2 border border-orange-200 rounded-xl p-3 bg-orange-50/40">
                     <Input value={newSite.label} onChange={e => setNewSite(s => ({ ...s, label: e.target.value }))} placeholder="Label (e.g. Main house)" />
-                    <Input value={newSite.address} onChange={e => setNewSite(s => ({ ...s, address: e.target.value }))} placeholder="Full address *" autoFocus />
+                    <AddressAutocomplete value={newSite.address} onChange={v => setNewSite(s => ({ ...s, address: v }))} placeholder="Full address *" />
                     <div className="flex gap-2">
                       <Button type="button" size="sm" loading={addingSite} onClick={addSiteInline} disabled={!newSite.address.trim()}>Add site</Button>
                       <Button type="button" size="sm" variant="outline" onClick={() => { setShowAddSite(false); setNewSite({ label: '', address: '' }) }}>Cancel</Button>

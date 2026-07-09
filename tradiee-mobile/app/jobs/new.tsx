@@ -7,11 +7,11 @@ import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
-import Constants from 'expo-constants'
+import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 type Customer = { id: string; name: string; phone: string | null }
 
-const API_BASE = Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000'
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
 export default function NewJobScreen() {
   const [title, setTitle] = useState('')
@@ -83,6 +83,7 @@ export default function NewJobScreen() {
   async function save() {
     if (!title.trim()) { Alert.alert('Title required', 'Please enter a job title.'); return }
     if (!companyId || !userId) return
+    if (!API_BASE) { Alert.alert('Error', 'Missing EXPO_PUBLIC_API_URL.'); return }
     setSaving(true)
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
@@ -207,12 +208,11 @@ export default function NewJobScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
-              <TextInput
+              <AddressAutocomplete
                 style={s.input}
                 value={newCust.billing_address}
                 onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))}
                 placeholder="Billing address *"
-                placeholderTextColor="#9ca3af"
               />
               <TouchableOpacity
                 style={[s.btn, (!newCustValid || creatingCust) && { opacity: 0.5 }]}
