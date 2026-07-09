@@ -53,12 +53,12 @@ export default function MoreScreen() {
   const workItems: MenuItem[] = [
     { icon: 'users',       label: 'Customers',   route: '/customers' },
     ...(projectsEnabled ? [{ icon: 'folder' as FeatherName, label: 'Projects', route: '/projects' }] : []),
+    ...(profile?.role !== 'staff' ? [{ icon: 'file-text' as FeatherName, label: 'Quotes', route: '/quotes' }] : []),
     { icon: 'credit-card', label: 'Invoices',     route: '/invoices' },
     { icon: 'zap',         label: 'Tap to Pay',   route: '/pay-now' },
     { icon: 'clock',       label: 'Time Logs',    route: '/timesheets' },
     { icon: 'map',         label: 'Job Map',      route: '/job-map' },
     { icon: 'check-square',label: 'To-do List',   route: '/todos' },
-    { icon: 'inbox',       label: 'Enquiries',    route: '/enquiries' },
     { icon: 'mail',        label: 'Invitations',  route: '/invitations', badge: pendingCount > 0 ? pendingCount : undefined },
   ]
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
+import { notifyCompanyInbox } from '@/lib/push'
 
 const bodySchema = z.object({
   slug: z.string().trim().min(1).max(200),
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const isBooking = kind === 'booking'
-  const { error } = await service.from('enquiries').insert({
+  const { data: enquiry, error } = await service.from('enquiries').insert({
     company_id: site.company_id,
     customer_name: String(name).slice(0, 200),
     customer_email: email ? String(email).slice(0, 200) : null,
@@ -40,8 +41,18 @@ export async function POST(req: NextRequest) {
     description: message ? String(message).slice(0, 4000) : null,
     source: isBooking ? 'booking' : 'website',
     status: 'new',
-  })
+  }).select('id').single()
 
   if (error) return NextResponse.json({ error: 'Could not submit enquiry' }, { status: 500 })
+
+  if (enquiry) {
+    await notifyCompanyInbox(service, site.company_id, {
+      title: isBooking ? `Booking request — ${name}` : `New website lead — ${name}`,
+      body: message ? String(message).slice(0, 180) : (email || phone || ''),
+      key: `enquiry:${enquiry.id}`,
+      phone: phone || null,
+    })
+  }
+
   return NextResponse.json({ ok: true })
 }

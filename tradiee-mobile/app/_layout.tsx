@@ -14,6 +14,7 @@ import { SupabaseConnector } from '@/lib/powersync/connector'
 import { supabase } from '@/lib/supabase'
 import { ProfileProvider } from '@/lib/profile-context'
 import { fetchConnectionToken } from '@/lib/tap-to-pay'
+import { sendSms } from '@/lib/notify'
 import type { Session } from '@supabase/supabase-js'
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
@@ -28,6 +29,22 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 })
+
+// Lock-screen actions on an inbox push (Mobile Overhaul brief §7). "Reply"
+// sends without opening the app; "Call"/"Quote" bring the app forward to the
+// right screen — see the response listener below for handling.
+async function registerNotificationCategories() {
+  await Notifications.setNotificationCategoryAsync('inbox_message', [
+    {
+      identifier: 'reply',
+      buttonTitle: 'Reply',
+      textInput: { submitButtonTitle: 'Send', placeholder: 'Type a reply…' },
+      options: { opensAppToForeground: false },
+    },
+    { identifier: 'quote', buttonTitle: 'Quote', options: { opensAppToForeground: true } },
+    { identifier: 'call', buttonTitle: 'Call', options: { opensAppToForeground: true } },
+  ])
+}
 
 async function registerPushToken(userId: string) {
   try {
@@ -95,13 +112,32 @@ export default function RootLayout() {
     // Register push token
     if (Platform.OS !== 'web') {
       registerPushToken(session.user.id)
+      registerNotificationCategories()
     }
 
-    // Handle notification taps — navigate to the relevant screen
+    // Handle notification taps and category actions — navigate to the
+    // relevant screen, or (Reply) send without opening the app.
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as any
+      const actionId = response.actionIdentifier
+
       if (data?.screen === 'job' && data?.jobId) router.push(`/jobs/${data.jobId}`)
       if (data?.screen === 'invite' && data?.token) router.push(`/invite/${data.token}`)
+
+      if (data?.screen === 'thread' && data?.key) {
+        const userText = (response as any).userText as string | undefined
+        if (actionId === 'reply' && userText?.trim() && String(data.key).startsWith('sms:')) {
+          const customerId = String(data.key).slice('sms:'.length)
+          sendSms(customerId, userText.trim()).catch(e => console.warn('[push:reply]', e))
+          return
+        }
+        if (actionId === 'call' && data.phone) {
+          Linking.openURL(`tel:${String(data.phone).replace(/[^+\d]/g, '')}`)
+          return
+        }
+        // Default tap, and 'quote' action — open the thread itself.
+        router.push(`/messages/${encodeURIComponent(String(data.key))}`)
+      }
     })
 
     // Handle deep links (industryforms://invite/[token])
@@ -144,6 +180,8 @@ export default function RootLayout() {
             <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
             <Stack.Screen name="pay-now" options={{ headerShown: true, title: 'Pay Now', headerTintColor: '#f97316' }} />
             <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="messages/[key]" options={{ headerShown: true, title: 'Thread', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="on-my-way" options={{ headerShown: true, title: 'On my way', headerTintColor: '#f97316' }} />
             <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profile', headerTintColor: '#f97316' }} />
             <Stack.Screen name="jobs/new" options={{ headerShown: true, title: 'New Job', headerTintColor: '#f97316' }} />
             <Stack.Screen name="quotes/new" options={{ headerShown: true, title: 'New Quote', headerTintColor: '#f97316' }} />

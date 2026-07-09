@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getConversations } from '@/lib/messages'
+import { smsConfigured } from '@/lib/sms'
 
 export async function GET() {
   const supabase = await createClient()
@@ -20,5 +21,5 @@ export async function GET() {
   }
 
   const conversations = await getConversations(supabase)
-  return NextResponse.json({ conversations })
+  return NextResponse.json({ conversations, smsEnabled: smsConfigured() })
 }

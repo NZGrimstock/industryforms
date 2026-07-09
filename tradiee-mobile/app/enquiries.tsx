@@ -89,7 +89,10 @@ export default function EnquiriesScreen() {
   }
 
   async function convertToQuote(e: Enquiry) {
-    router.push(`/quotes/new`)
+    router.push({
+      pathname: '/quotes/new',
+      params: { name: e.customer_name, email: e.email ?? '', phone: e.phone ?? '', notes: e.notes ?? '' },
+    })
   }
 
   return (

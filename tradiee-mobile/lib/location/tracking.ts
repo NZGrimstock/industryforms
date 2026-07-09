@@ -15,6 +15,11 @@ const STORAGE_KEY     = 'TRADIEE_ACTIVE_TRIP'
 const SESSION_KEY     = 'TRADIEE_SESSION'          // mirrored by supabase.ts for BG task access
 const ACTIVE_JOB_KEY  = 'TRADIEE_ACTIVE_JOB'
 const GEOFENCE_COOLDOWN_KEY = 'TRADIEE_GEOFENCE_LAST_CHECKIN'
+// Set by app/on-my-way.tsx after sending "On my way"; cleared here once the
+// geofence confirms arrival (Mobile Overhaul brief §8 step 5 — piggybacks the
+// existing tracking task instead of a second location subscription).
+export const ACTIVE_ETA_KEY = 'TRADIEE_ACTIVE_ETA'
+type ActiveEta = { jobId: string; customerId: string; sentAt: string }
 export const TRIP_FOLLOWUP_KEY = 'TRADIEE_TRIP_FOLLOWUP'  // consumed by timesheets tab
 export const AUTO_CHECKIN_NOTICE_KEY = 'TRADIEE_AUTO_CHECKIN_NOTICE'
 
@@ -328,6 +333,38 @@ async function maybeAutoCheckIn(lat: number, lng: number, nowIso: string) {
   }
 }
 
+// If the tech sent "On my way" for a job, auto-flip to "Arrived" (and tell
+// the customer) once GPS puts them within the existing geofence radius —
+// no separate tracking loop, just piggybacking this task's location stream.
+async function maybeAutoArrive(lat: number, lng: number) {
+  const raw = await AsyncStorage.getItem(ACTIVE_ETA_KEY)
+  if (!raw) return
+  const eta = JSON.parse(raw) as ActiveEta
+
+  const supabase = await getSupabase()
+  const { data: job } = await supabase
+    .from('jobs')
+    .select('site_id, customer_sites(lat, lng)')
+    .eq('id', eta.jobId)
+    .single()
+  const site = job ? (Array.isArray(job.customer_sites) ? job.customer_sites[0] : job.customer_sites) : null
+  const siteLat = Number((site as { lat?: unknown } | null)?.lat)
+  const siteLng = Number((site as { lng?: unknown } | null)?.lng)
+  if (!Number.isFinite(siteLat) || !Number.isFinite(siteLng)) return
+  if (haversineKm(lat, lng, siteLat, siteLng) > GEOFENCE_RADIUS_KM) return
+
+  const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!apiBase || !session?.access_token) return
+
+  await fetch(`${apiBase}/api/sms/eta`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ jobId: eta.jobId, status: 'arrived' }),
+  }).catch(() => {})
+  await AsyncStorage.removeItem(ACTIVE_ETA_KEY)
+}
+
 // Must be defined at module scope — called before any component mounts
 TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   if (error) { console.error('[tracking]', error); return }
@@ -339,6 +376,8 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   const { latitude: lat, longitude: lng, speed } = loc.coords
   const speedMs = speed ?? 0
   const now = new Date().toISOString()
+
+  await maybeAutoArrive(lat, lng)
 
   const state = await getState()
 

@@ -17,7 +17,7 @@ export type ConversationSummary = {
 }
 
 export async function getConversations(supabase: SupabaseClient): Promise<ConversationSummary[]> {
-  const [messagesRes, enquiriesRes] = await Promise.all([
+  const [messagesRes, enquiriesRes, bookingsRes] = await Promise.all([
     supabase
       .from('customer_messages')
       .select('id, customer_id, direction, body, created_at, read_at, status, from_number, customers(name)')
@@ -26,6 +26,13 @@ export async function getConversations(supabase: SupabaseClient): Promise<Conver
     supabase
       .from('enquiries')
       .select('id, customer_name, customer_email, customer_phone, description, source, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    // Bookable-packages bookings (Sprint C/D) — distinct from the legacy
+    // enquiries(source='booking') rows created by the simple booking form.
+    supabase
+      .from('bookings')
+      .select('id, customer_name, customer_email, customer_phone, notes, status, starts_at, created_at, bookable_packages(name)')
       .order('created_at', { ascending: false })
       .limit(200),
   ])
@@ -79,6 +86,22 @@ export async function getConversations(supabase: SupabaseClient): Promise<Conver
       lastActivity: e.created_at,
       unread: e.status === 'new',
       status: e.status === 'won' || e.status === 'lost' ? 'closed' : 'open',
+    })
+  }
+
+  const BOOKING_CLOSED = new Set(['cancelled', 'no_show', 'completed'])
+  for (const b of bookingsRes.data ?? []) {
+    const pkg = Array.isArray(b.bookable_packages) ? b.bookable_packages[0] : b.bookable_packages
+    const pkgName = (pkg as { name: string } | null)?.name
+    conversations.push({
+      key: `booking:${b.id}`,
+      source: 'booking',
+      customerId: null,
+      displayName: b.customer_name,
+      preview: pkgName ? `${pkgName} — ${new Date(b.starts_at).toLocaleDateString('en-NZ')}` : (b.notes ?? ''),
+      lastActivity: b.created_at,
+      unread: b.status === 'requested',
+      status: BOOKING_CLOSED.has(b.status) ? 'closed' : 'open',
     })
   }
 

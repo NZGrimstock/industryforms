@@ -13,12 +13,12 @@ type ActiveJob = { jobId: string; timesheetId: string; startedAt: string }
 const BOTTOM_TABS: { name: string; label: string; icon: FeatherName }[] = [
   { name: 'home',     label: 'Home',     icon: 'home' },
   { name: 'jobs',     label: 'Jobs',     icon: 'briefcase' },
+  { name: 'inbox',    label: 'Inbox',    icon: 'mail' },
   { name: 'schedule', label: 'Schedule', icon: 'calendar' },
-  { name: 'quotes',   label: 'Quotes',   icon: 'file-text' },
   { name: 'more',     label: 'More',     icon: 'more-horizontal' },
 ]
 
-const ADMIN_ONLY = new Set(['quotes'])
+const ADMIN_ONLY = new Set(['inbox'])
 
 // Sticky timer badge — shown in every tab header when a job timer is running.
 // Polls AsyncStorage every 8 s; tapping navigates back to the active job.
@@ -78,26 +78,44 @@ const timerStyles = StyleSheet.create({
 
 export default function TabLayout() {
   const [pendingCount, setPendingCount] = useState(0)
+  const [unreadInbox, setUnreadInbox] = useState(0)
   const [isStaff, setIsStaff] = useState(false)
 
   useEffect(() => {
+    let inboxPoll: ReturnType<typeof setInterval> | null = null
+
     async function loadProfile() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
       const { data: profile } = await supabase
         .from('profiles').select('company_id, role').eq('id', session.user.id).single()
       if (!profile?.company_id) return
-      setIsStaff(profile.role === 'staff')
+      const staff = profile.role === 'staff'
+      setIsStaff(staff)
       const { count } = await supabase
         .from('job_invitations')
         .select('id', { count: 'exact', head: true })
         .eq('subcontractor_company_id', profile.company_id)
         .eq('status', 'pending')
       setPendingCount(count ?? 0)
+
+      if (!staff) {
+        const loadUnread = async () => {
+          const [msgs, enq] = await Promise.all([
+            supabase.from('customer_messages').select('id', { count: 'exact', head: true })
+              .eq('company_id', profile.company_id).eq('direction', 'inbound').is('read_at', null),
+            supabase.from('enquiries').select('id', { count: 'exact', head: true })
+              .eq('company_id', profile.company_id).eq('status', 'new'),
+          ])
+          setUnreadInbox((msgs.count ?? 0) + (enq.count ?? 0))
+        }
+        loadUnread()
+        inboxPoll = setInterval(loadUnread, 15000)
+      }
     }
     loadProfile()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => loadProfile())
-    return () => subscription.unsubscribe()
+    return () => { subscription.unsubscribe(); if (inboxPoll) clearInterval(inboxPoll) }
   }, [])
 
   const HeaderRight = useCallback(() => <ActiveTimerBadge />, [])
@@ -129,12 +147,17 @@ export default function TabLayout() {
                 {tab.name === 'more' && pendingCount > 0 && (
                   <View style={styles.navBadge} />
                 )}
+                {tab.name === 'inbox' && unreadInbox > 0 && (
+                  <View style={styles.navBadge} />
+                )}
               </View>
             ),
             href: isStaff && ADMIN_ONLY.has(tab.name) ? null : undefined,
           }}
         />
       ))}
+      {/* Routable (from More → Quotes) but not a bottom-tab button — see nav change in overhaul brief §6. */}
+      <Tabs.Screen name="quotes" options={{ href: null }} />
     </Tabs>
   )
 }

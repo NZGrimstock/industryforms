@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { toE164, validateTwilioSignature } from '@/lib/sms'
+import { notifyCompanyInbox } from '@/lib/push'
 
 export async function POST(req: Request) {
   // Twilio is intentionally dark until TWILIO_AUTH_TOKEN is set — refuse to
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     .maybeSingle()
 
   if (customer) {
-    await service.from('customer_messages').insert({
+    const { data: inserted } = await service.from('customer_messages').insert({
       company_id: customer.company_id,
       customer_id: customer.id,
       direction: 'inbound',
@@ -70,13 +71,23 @@ export async function POST(req: Request) {
       to_number: to,
       source: 'sms',
       status: 'open',
-    })
+    }).select('id').single()
+
+    if (inserted) {
+      const { data: custRow } = await service.from('customers').select('name').eq('id', customer.id).single()
+      await notifyCompanyInbox(service, customer.company_id, {
+        title: custRow?.name ?? 'New message',
+        body,
+        key: `sms:${customer.id}`,
+        phone: from,
+      })
+    }
   } else {
     // Unmatched sender — still land the row (customer_id null) so it shows
     // up in the Unmatched tab and can be converted to a customer.
     const ownerCompanyId = process.env.TWILIO_OWNER_COMPANY_ID
     if (ownerCompanyId) {
-      await service.from('customer_messages').insert({
+      const { data: inserted } = await service.from('customer_messages').insert({
         company_id: ownerCompanyId,
         customer_id: null,
         direction: 'inbound',
@@ -86,7 +97,16 @@ export async function POST(req: Request) {
         to_number: to,
         source: 'sms',
         status: 'open',
-      })
+      }).select('id').single()
+
+      if (inserted) {
+        await notifyCompanyInbox(service, ownerCompanyId, {
+          title: from,
+          body,
+          key: `sms-unmatched:${inserted.id}`,
+          phone: from,
+        })
+      }
     }
   }
 

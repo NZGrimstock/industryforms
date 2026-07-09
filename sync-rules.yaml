@@ -38,6 +38,8 @@ streams:
       - SELECT invoices.*           FROM invoices           INNER JOIN profiles ON profiles.company_id = invoices.company_id           WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
       - SELECT invoice_line_items.* FROM invoice_line_items INNER JOIN profiles ON profiles.company_id = invoice_line_items.company_id WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
       - SELECT job_photos.*         FROM job_photos         INNER JOIN profiles ON profiles.company_id = job_photos.company_id         WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT enquiries.*          FROM enquiries          INNER JOIN profiles ON profiles.company_id = enquiries.company_id          WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
+      - SELECT customer_messages.*  FROM customer_messages  INNER JOIN profiles ON profiles.company_id = customer_messages.company_id  WHERE profiles.id = auth.user_id() AND (profiles.role = 'owner' OR profiles.role = 'admin')
 
   # ── Staff: company-wide reference data needed on every job ──────────────
   staff_reference:

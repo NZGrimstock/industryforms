@@ -87,6 +87,13 @@
           "photosPermission": "IndustryForms needs access to your photos to attach images to jobs.",
           "cameraPermission": "IndustryForms needs your camera to take job photos."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#f97316"
+        }
       ]
     ],
     "experiments": {

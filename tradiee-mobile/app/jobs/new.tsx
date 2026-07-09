@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
 } from 'react-native'
-import { router, Stack } from 'expo-router'
+import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
@@ -14,8 +14,11 @@ type Customer = { id: string; name: string; phone: string | null }
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
 export default function NewJobScreen() {
+  // Carried over when arriving from Inbox → enquiry → "Convert to job"
+  // (Mobile Overhaul brief finding #4 — convert used to drop the enquiry data).
+  const params = useLocalSearchParams<{ name?: string; email?: string; phone?: string; address?: string; notes?: string }>()
   const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(params.notes ?? '')
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [customerName, setCustomerName] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
@@ -47,6 +50,19 @@ export default function NewJobScreen() {
         })
     })
   }, [])
+
+  useEffect(() => {
+    if (!params.name) return
+    setTitle(prev => prev || `Job for ${params.name}`)
+    setNewCust({
+      name: params.name ?? '',
+      phone: params.phone ?? '',
+      email: params.email ?? '',
+      billing_address: params.address ?? '',
+    })
+    setShowNewCustomer(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.name])
 
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(customerSearch.toLowerCase())

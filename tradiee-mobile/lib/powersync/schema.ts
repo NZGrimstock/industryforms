@@ -243,6 +243,38 @@ const job_photos = new Table({
   taken_at:     column.text,
 })
 
+// Unified inbox (Mobile Overhaul brief §11) — reads offline via PowerSync;
+// writes (reply, triage) go through the web APIs and reconcile on next sync.
+const enquiries = new Table({
+  company_id:     column.text,
+  customer_name:  column.text,
+  customer_email: column.text,
+  customer_phone: column.text,
+  address:        column.text,
+  description:    column.text,
+  source:         column.text,
+  status:         column.text,
+  assigned_to:    column.text,
+  notes:          column.text,
+  follow_up_at:   column.text,
+  created_at:     column.text,
+  updated_at:     column.text,
+})
+
+const customer_messages = new Table({
+  company_id:  column.text,
+  customer_id: column.text,
+  direction:   column.text,
+  body:        column.text,
+  from_number: column.text,
+  to_number:   column.text,
+  read_at:     column.text,
+  assigned_to: column.text,
+  status:      column.text,
+  source:      column.text,
+  created_at:  column.text,
+})
+
 export const AppSchema = new Schema({
   jobs,
   customers,
@@ -264,6 +296,8 @@ export const AppSchema = new Schema({
   invoices,
   invoice_line_items,
   job_photos,
+  enquiries,
+  customer_messages,
 })
 
 export type Database = (typeof AppSchema)['types']

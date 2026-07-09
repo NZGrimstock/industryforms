@@ -54,6 +54,7 @@ type Todo = {
 }
 
 type Stats = { openJobs: number; draftQuotes: number; pendingTodos: number }
+type MoneySnapshot = { collectedThisWeek: number; outstanding: number }
 
 export default function HomeScreen() {
   const timezone = useTimezone()
@@ -61,6 +62,7 @@ export default function HomeScreen() {
   const [visits, setVisits] = useState<Visit[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
   const [stats, setStats] = useState<Stats>({ openJobs: 0, draftQuotes: 0, pendingTodos: 0 })
+  const [money, setMoney] = useState<MoneySnapshot | null>(null)
   const [activeJob, setActiveJob] = useState<(ActiveJob & { elapsed: string }) | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -77,7 +79,7 @@ export default function HomeScreen() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data: prof } = await supabase
-      .from('profiles').select('full_name, company_id').eq('id', user.id).single()
+      .from('profiles').select('full_name, company_id, role').eq('id', user.id).single()
     if (!prof) return
     setFirstName(prof.full_name?.split(' ')[0] ?? '')
 
@@ -143,6 +145,30 @@ export default function HomeScreen() {
       draftQuotes: draftQuotesRes.count ?? 0, // now "accepted quotes"
       pendingTodos: pendingTodosRes.count ?? 0,
     })
+
+    // Money snapshot — owner/admin only (matches Quotes-tab gating; staff
+    // never see financials on mobile).
+    if (prof.role === 'owner' || prof.role === 'admin') {
+      const weekStart = new Date()
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+      weekStart.setHours(0, 0, 0, 0)
+
+      const [paymentsRes, invoicesRes] = await Promise.all([
+        supabase.from('payments')
+          .select('amount, invoices!inner(company_id)')
+          .eq('invoices.company_id', prof.company_id)
+          .gte('paid_at', weekStart.toISOString()),
+        supabase.from('invoices')
+          .select('total, amount_paid')
+          .eq('company_id', prof.company_id)
+          .in('status', ['sent', 'partially_paid', 'overdue']),
+      ])
+      const collectedThisWeek = (paymentsRes.data ?? []).reduce((sum, p) => sum + Number(p.amount), 0)
+      const outstanding = (invoicesRes.data ?? []).reduce((sum, inv) => sum + (Number(inv.total) - Number(inv.amount_paid)), 0)
+      setMoney({ collectedThisWeek, outstanding })
+    } else {
+      setMoney(null)
+    }
   }, [])
 
   useFocusEffect(useCallback(() => { checkTimer() }, [checkTimer]))
@@ -213,6 +239,20 @@ export default function HomeScreen() {
             <Text style={s.statLbl}>To-dos</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Money snapshot */}
+        {money && (
+          <View style={s.moneyRow}>
+            <TouchableOpacity style={s.moneyCard} onPress={() => router.push('/invoices')} activeOpacity={0.7}>
+              <Text style={s.moneyLbl}>Collected this week</Text>
+              <Text style={[s.moneyNum, { color: '#15803d' }]}>${money.collectedThisWeek.toLocaleString('en-NZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.moneyCard} onPress={() => router.push('/invoices')} activeOpacity={0.7}>
+              <Text style={s.moneyLbl}>Outstanding</Text>
+              <Text style={[s.moneyNum, money.outstanding > 0 && { color: '#f97316' }]}>${money.outstanding.toLocaleString('en-NZ', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Quick actions */}
         <View style={s.quickRow}>
@@ -292,6 +332,10 @@ const s = StyleSheet.create({
   statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   statNum: { fontSize: 26, fontWeight: '800', color: '#111827' },
   statLbl: { fontSize: 11, color: '#9ca3af', fontWeight: '500', marginTop: 2, textAlign: 'center' },
+  moneyRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  moneyCard: { flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+  moneyLbl: { fontSize: 11, color: '#9ca3af', fontWeight: '600' },
+  moneyNum: { fontSize: 20, fontWeight: '800', color: '#111827', marginTop: 3 },
   quickRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   quickBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 13 },
   quickBtnGhost: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' },

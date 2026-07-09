@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Alert, ActivityIndicator, Modal, Image, Linking, Platform,
@@ -13,6 +13,8 @@ import { supabase } from '@/lib/supabase'
 import { getJobStatuses, resolveStatus, statusHex, DEFAULT_JOB_STATUSES, type JobStatus } from '@/lib/job-statuses'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz, formatDateTime as formatDateTimeTz } from '@/lib/datetime'
+import { colors, radius, shadow } from '@/lib/theme'
+import { tap as hapticTap, success as hapticSuccess } from '@/lib/haptics'
 
 // Self-contained HTML signature pad — draws to a canvas and posts a PNG data URL
 // (or 'EMPTY' if untouched) back to React Native.
@@ -65,6 +67,7 @@ type Job = {
   title: string
   description: string | null
   status: string
+  customer_id: string | null
   customer_name: string | null
   customer_phone: string | null
   customer_billing_address: string | null
@@ -79,6 +82,9 @@ type Note = { id: string; body: string; author_id: string | null; created_at: st
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number }
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
 type Photo = { id: string; storage_path: string; caption: string | null; taken_at: string }
+type FormField = { id: string; type: string; label: string; required: boolean; options?: string[] }
+type FormTemplate = { id: string; name: string; fields: string; is_active: number }
+type FormSubmission = { id: string; template_id: string | null; template_name: string; answers: string; submitted_at: string | null }
 
 export default function JobDetailScreen() {
   const timezone = useTimezone()
@@ -98,13 +104,22 @@ export default function JobDetailScreen() {
   const [statuses, setStatuses] = useState<JobStatus[]>(DEFAULT_JOB_STATUSES)
   const [showComplete, setShowComplete] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [fillTemplate, setFillTemplate] = useState<FormTemplate | null>(null)
+  const [fillAnswers, setFillAnswers] = useState<Record<string, string>>({})
+  const [savingForm, setSavingForm] = useState(false)
+  const [formsY, setFormsY] = useState(0)
+  const scrollRef = useRef<ScrollView>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       supabase.from('profiles').select('company_id').eq('id', user.id).single()
         .then(({ data: profile }) => {
-          if (profile?.company_id) getJobStatuses(profile.company_id).then(setStatuses)
+          if (profile?.company_id) {
+            setCompanyId(profile.company_id)
+            getJobStatuses(profile.company_id).then(setStatuses)
+          }
         })
     })
   }, [])
@@ -184,6 +199,7 @@ export default function JobDetailScreen() {
     await AsyncStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify(aj))
     setActiveJob(aj)
     setTogglingTimer(false)
+    hapticTap()
   }
 
   async function stopJob() {
@@ -196,10 +212,11 @@ export default function JobDetailScreen() {
     await AsyncStorage.removeItem(ACTIVE_JOB_KEY)
     setActiveJob(null)
     setTogglingTimer(false)
+    hapticTap()
   }
 
   const { data: jobs, isLoading } = useQuery<Job>(
-    `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at,
+    `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at, j.customer_id,
             c.name AS customer_name, c.phone AS customer_phone,
             c.billing_address AS customer_billing_address,
             s.address AS site_address, s.lat AS site_lat, s.lng AS site_lng
@@ -261,6 +278,55 @@ export default function JobDetailScreen() {
      WHERE job_id = ? ORDER BY taken_at ASC`,
     [id]
   )
+
+  const { data: formTemplates } = useQuery<FormTemplate>(
+    `SELECT id, name, fields, is_active FROM form_templates
+     WHERE company_id = ? AND is_active = 1 ORDER BY name ASC`,
+    [companyId ?? '']
+  )
+
+  const { data: formSubmissions } = useQuery<FormSubmission>(
+    `SELECT id, template_id, template_name, answers, submitted_at FROM form_submissions
+     WHERE job_id = ?`,
+    [id]
+  )
+
+  function submissionFor(templateId: string) {
+    return (formSubmissions ?? []).find(s => s.template_id === templateId)
+  }
+
+  function openForm(template: FormTemplate) {
+    const existing = submissionFor(template.id)
+    setFillAnswers(existing ? JSON.parse(existing.answers || '{}') : {})
+    setFillTemplate(template)
+  }
+
+  async function saveForm() {
+    if (!fillTemplate || !companyId) return
+    setSavingForm(true)
+    try {
+      const existing = submissionFor(fillTemplate.id)
+      const payload = {
+        job_id: id,
+        company_id: companyId,
+        template_id: fillTemplate.id,
+        template_name: fillTemplate.name,
+        answers: fillAnswers,
+        submitted_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+        submitted_at: new Date().toISOString(),
+      }
+      const { error } = existing
+        ? await supabase.from('form_submissions').update(payload).eq('id', existing.id)
+        : await supabase.from('form_submissions').insert(payload)
+      if (error) throw new Error(error.message)
+      hapticSuccess()
+      setFillTemplate(null)
+    } catch (e: any) {
+      Alert.alert('Could not save form', e.message ?? 'Unknown error')
+    } finally {
+      setSavingForm(false)
+    }
+  }
 
   useEffect(() => {
     if (!photos?.length) return
@@ -375,6 +441,7 @@ export default function JobDetailScreen() {
       }
       if (activeJob) await stopJob()
       setShowComplete(false)
+      hapticSuccess()
       Alert.alert('Job completed', signature && signature !== 'EMPTY' ? 'Customer sign-off saved.' : 'Status set to complete.')
     } catch (e: any) {
       Alert.alert('Could not complete', e.message ?? 'Unknown error')
@@ -436,6 +503,7 @@ export default function JobDetailScreen() {
       const inv = await res.json()
       if (!res.ok) throw new Error(inv.error ?? 'Could not create invoice')
 
+      hapticSuccess()
       Alert.alert('Invoice created', `Draft invoice ${inv.invoice_number} created.`, [
         { text: 'View invoice', onPress: () => router.push(`/invoices/${inv.id}`) },
         { text: 'OK' },
@@ -472,7 +540,7 @@ export default function JobDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen options={{ title: job.job_number, headerTintColor: '#f97316' }} />
-      <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
 
         {/* Header card */}
         <View style={styles.headerCard}>
@@ -532,6 +600,108 @@ export default function JobDetailScreen() {
               </TouchableOpacity>
             </View>
           )}
+        </View>
+
+        {/* Status stepper — visualises the lifecycle at a glance (finding #9) */}
+        {statuses.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stepperWrap} contentContainerStyle={{ paddingHorizontal: 4 }}>
+            {statuses.map((st, i) => {
+              const curIdx = statuses.findIndex(s => s.key === job.status)
+              const state = i < curIdx ? 'done' : i === curIdx ? 'cur' : 'future'
+              return (
+                <View key={st.key} style={styles.step}>
+                  {i > 0 && <View style={[styles.stepBar, state !== 'future' && { backgroundColor: colors.success }]} />}
+                  <View style={[
+                    styles.stepDot,
+                    state === 'done' && { backgroundColor: colors.success },
+                    state === 'cur' && { backgroundColor: statusHex(st.color) },
+                  ]}>
+                    <Text style={styles.stepDotText}>{state === 'done' ? '✓' : i + 1}</Text>
+                  </View>
+                  <Text style={[styles.stepLabel, state === 'cur' && { color: statusHex(st.color), fontWeight: '800' }]} numberOfLines={1}>{st.label}</Text>
+                </View>
+              )
+            })}
+          </ScrollView>
+        )}
+
+        {/* Quick actions — one-handed, on-site (brief §9) */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickWrap} contentContainerStyle={{ paddingHorizontal: 4, gap: 9 }}>
+          <TouchableOpacity
+            style={[styles.qbtn, styles.qbtnHot]}
+            onPress={() => { hapticTap(); router.push(`/on-my-way?jobId=${id}`) }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="On my way — send ETA to customer"
+          >
+            <Text style={styles.qbtnIcon}>🚗</Text><Text style={[styles.qbtnLabel, { color: colors.brandDark }]}>On my way</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); openInMaps() }}
+            disabled={!jobAddress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Navigate to job site"
+          >
+            <Text style={styles.qbtnIcon}>🧭</Text><Text style={styles.qbtnLabel}>Navigate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); job.customer_phone && callPhone(job.customer_phone) }}
+            disabled={!job.customer_phone}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Call customer"
+          >
+            <Text style={styles.qbtnIcon}>📞</Text><Text style={styles.qbtnLabel}>Call</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            disabled={!job.customer_id}
+            onPress={() => { hapticTap(); job.customer_id && router.push(`/messages/${encodeURIComponent(`sms:${job.customer_id}`)}`) }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Message customer"
+          >
+            <Text style={styles.qbtnIcon}>💬</Text><Text style={styles.qbtnLabel}>Message</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); promptPhotoSource() }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Add photo"
+          >
+            <Text style={styles.qbtnIcon}>📷</Text><Text style={styles.qbtnLabel}>Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); scrollRef.current?.scrollTo({ y: formsY, animated: true }) }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Jump to forms"
+          >
+            <Text style={styles.qbtnIcon}>📋</Text><Text style={styles.qbtnLabel}>Forms</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Forms — the app's namesake, finally on the job screen */}
+        <View style={styles.section} onLayout={e => setFormsY(e.nativeEvent.layout.y)}>
+          <Text style={styles.sectionTitle}>Forms</Text>
+          {(formTemplates ?? []).length === 0 && <Text style={styles.emptyText}>No form templates yet</Text>}
+          {(formTemplates ?? []).map(t => {
+            const sub = submissionFor(t.id)
+            return (
+              <TouchableOpacity key={t.id} style={styles.formRow} onPress={() => openForm(t)} activeOpacity={0.6}>
+                <Text style={styles.formRowIcon}>📋</Text>
+                <Text style={styles.formRowLabel} numberOfLines={1}>{t.name}</Text>
+                <View style={[styles.formStatus, sub ? styles.formStatusDone : styles.formStatusTodo]}>
+                  <Text style={[styles.formStatusText, { color: sub ? '#15803d' : colors.brandDark }]}>{sub ? 'Submitted' : 'To do'}</Text>
+                </View>
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         {/* Visits */}
@@ -717,11 +887,99 @@ export default function JobDetailScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Fill form modal */}
+      <Modal visible={!!fillTemplate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => !savingForm && setFillTemplate(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
+          <View style={styles.formModalHeader}>
+            <Text style={styles.completeTitle} numberOfLines={1}>{fillTemplate?.name}</Text>
+            <TouchableOpacity onPress={() => setFillTemplate(null)} disabled={savingForm}>
+              <Text style={styles.completeClose}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
+            {(() => {
+              let fields: FormField[] = []
+              try { fields = fillTemplate ? JSON.parse(fillTemplate.fields || '[]') : [] } catch { fields = [] }
+              return fields.map(f => (
+                <View key={f.id}>
+                  <Text style={styles.fieldLabel}>{f.label}{f.required ? ' *' : ''}</Text>
+                  {f.type === 'checkbox' ? (
+                    <TouchableOpacity
+                      style={[styles.checkboxRow, fillAnswers[f.id] === 'yes' && styles.checkboxRowOn]}
+                      onPress={() => setFillAnswers(a => ({ ...a, [f.id]: a[f.id] === 'yes' ? 'no' : 'yes' }))}
+                    >
+                      <Text style={styles.checkboxText}>{fillAnswers[f.id] === 'yes' ? '☑ Yes' : '☐ No'}</Text>
+                    </TouchableOpacity>
+                  ) : f.type === 'select' ? (
+                    <View style={styles.chips}>
+                      {(f.options ?? []).map(opt => (
+                        <TouchableOpacity
+                          key={opt}
+                          style={[styles.selectChip, fillAnswers[f.id] === opt && styles.selectChipOn]}
+                          onPress={() => setFillAnswers(a => ({ ...a, [f.id]: opt }))}
+                        >
+                          <Text style={[styles.selectChipText, fillAnswers[f.id] === opt && { color: '#fff' }]}>{opt}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : f.type === 'signature' || f.type === 'photo' ? (
+                    <Text style={styles.unsupportedField}>Not supported on mobile yet — fill this one from the web app.</Text>
+                  ) : (
+                    <TextInput
+                      style={[styles.input, f.type === 'textarea' && { minHeight: 80, textAlignVertical: 'top' }]}
+                      value={fillAnswers[f.id] ?? ''}
+                      onChangeText={v => setFillAnswers(a => ({ ...a, [f.id]: v }))}
+                      placeholder={f.type === 'date' ? 'YYYY-MM-DD' : ''}
+                      keyboardType={f.type === 'number' ? 'numeric' : 'default'}
+                      multiline={f.type === 'textarea'}
+                    />
+                  )}
+                </View>
+              ))
+            })()}
+          </ScrollView>
+          <View style={{ padding: 16 }}>
+            <TouchableOpacity style={[styles.completeBtn, savingForm && { opacity: 0.6 }]} onPress={saveForm} disabled={savingForm} activeOpacity={0.85}>
+              {savingForm ? <ActivityIndicator color="#fff" /> : <Text style={styles.completeBtnText}>Save &amp; submit</Text>}
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  stepperWrap: { marginBottom: 14 },
+  step: { alignItems: 'center', width: 62, position: 'relative' },
+  stepBar: { position: 'absolute', top: 12, left: -31, width: 62, height: 3, backgroundColor: colors.line, zIndex: 1 },
+  stepDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.line, alignItems: 'center', justifyContent: 'center', marginBottom: 4, zIndex: 2 },
+  stepDotText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  stepLabel: { fontSize: 9, color: colors.mut, textAlign: 'center' },
+  quickWrap: { marginBottom: 14 },
+  qbtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 12, alignItems: 'center', gap: 5, minWidth: 70 },
+  qbtnHot: { backgroundColor: colors.brandBg, borderColor: colors.brandBorder },
+  qbtnIcon: { fontSize: 19 },
+  qbtnLabel: { fontSize: 11.5, fontWeight: '700', color: colors.ink },
+  formRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderTopWidth: 1, borderTopColor: '#f9fafb' },
+  formRowIcon: { fontSize: 16 },
+  formRowLabel: { flex: 1, fontSize: 13.5, color: colors.ink },
+  formStatus: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  formStatusTodo: { backgroundColor: colors.brandBg },
+  formStatusDone: { backgroundColor: colors.successBg },
+  formStatusText: { fontSize: 11, fontWeight: '700' },
+  formModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 12 },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: colors.sub, marginBottom: 6 },
+  checkboxRow: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 13 },
+  checkboxRowOn: { backgroundColor: colors.successBg, borderColor: colors.success },
+  checkboxText: { fontSize: 15, color: colors.ink, fontWeight: '600' },
+  chips: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  selectChip: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: 20, paddingHorizontal: 13, paddingVertical: 9 },
+  selectChipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  selectChipText: { fontSize: 13, fontWeight: '600', color: colors.ink },
+  unsupportedField: { fontSize: 12, color: colors.mut, fontStyle: 'italic' },
+  input: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.ink },
   container: { flex: 1, backgroundColor: '#f9fafb' },
   headerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },

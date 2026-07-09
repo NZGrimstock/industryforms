@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
 } from 'react-native'
-import { router, Stack } from 'expo-router'
+import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
@@ -19,6 +19,9 @@ let _id = 0
 function uid() { return String(++_id) }
 
 export default function NewQuoteScreen() {
+  // Carried over when arriving from Inbox → enquiry → "Convert to quote"
+  // (Mobile Overhaul brief finding #4 — convert used to drop the enquiry data).
+  const params = useLocalSearchParams<{ name?: string; email?: string; phone?: string; address?: string; notes?: string }>()
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -65,6 +68,20 @@ export default function NewQuoteScreen() {
         })
     })
   }, [])
+
+  useEffect(() => {
+    if (!params.name) return
+    setTitle(prev => prev || (params.notes ? params.notes.slice(0, 80) : `Quote for ${params.name}`))
+    setNewCust({
+      name: params.name ?? '',
+      email: params.email ?? '',
+      phone: params.phone ?? '',
+      billing_address: params.address ?? '',
+    })
+    setShowPicker(true)
+    setShowNewCustomer(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.name])
 
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())

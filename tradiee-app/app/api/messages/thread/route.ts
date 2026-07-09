@@ -45,5 +45,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ type: 'enquiry', enquiry })
   }
 
+  if (type === 'booking') {
+    const { data: booking } = await supabase.from('bookings')
+      .select(`id, customer_name, customer_email, customer_phone, site_address, notes, status, starts_at, ends_at,
+                deposit_required, deposit_paid, deposit_refunded, job_id, bookable_packages(name)`)
+      .eq('id', id).single()
+    if (!booking) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ type: 'booking', booking })
+  }
+
   return NextResponse.json({ error: 'Unknown conversation type' }, { status: 400 })
 }

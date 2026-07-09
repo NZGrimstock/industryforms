@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_TIMEZONE, formatTime } from '@/lib/datetime'
+import { sendExpoPush, type PushMessage } from '@/lib/push'
 
 const bodySchema = z.union([
   z.object({
@@ -24,22 +25,6 @@ const bodySchema = z.union([
   }),
   z.object({ type: z.literal('visit_reminder_batch'), payload: z.unknown().optional() }),
 ])
-
-type PushMessage = {
-  to: string
-  title: string
-  body: string
-  data?: Record<string, string>
-}
-
-async function sendExpoPush(messages: PushMessage[]) {
-  if (!messages.length) return
-  await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(messages),
-  })
-}
 
 // POST /api/notify
 // Body: { type: 'job_assigned' | 'visit_reminder', payload: { ... } }
