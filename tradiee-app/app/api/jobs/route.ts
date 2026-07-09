@@ -3,7 +3,8 @@
 // Used by the mobile app because nextDocNumber() is server-only.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 import { nextDocNumber } from '@/lib/numbering'
 
 const bodySchema = z.object({
@@ -15,34 +16,24 @@ const bodySchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  let { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    const bearer = req.headers.get('authorization')
-    if (bearer?.startsWith('Bearer ')) {
-      const { data } = await createServiceClient().auth.getUser(bearer.slice(7))
-      user = data.user
-    }
-  }
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
-  if (!profile?.company_id) return NextResponse.json({ error: 'No company' }, { status: 403 })
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { userId, companyId } = auth
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
   const { title, description, customer_id, quote_id, status } = parsed.data
 
   const service = createServiceClient()
-  const job_number = await nextDocNumber(service, profile.company_id, 'job')
+  const job_number = await nextDocNumber(service, companyId, 'job')
 
   const { data: job, error } = await service.from('jobs').insert({
     job_number,
     title,
     description: description ?? null,
     customer_id: customer_id ?? null,
-    company_id: profile.company_id,
-    assigned_to: user.id,
+    company_id: companyId,
+    assigned_to: userId,
     status,
     ...(quote_id ? { quote_id } : {}),
   }).select('id, job_number').single()

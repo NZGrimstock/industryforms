@@ -3,25 +3,16 @@
 // If the job has no materials, creates an empty draft invoice.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 import { nextDocNumber } from '@/lib/numbering'
 
 const bodySchema = z.object({ job_id: z.string().uuid() })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  let { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    const bearer = req.headers.get('authorization')
-    if (bearer?.startsWith('Bearer ')) {
-      const { data } = await createServiceClient().auth.getUser(bearer.slice(7))
-      user = data.user
-    }
-  }
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
-  if (!profile?.company_id) return NextResponse.json({ error: 'No company' }, { status: 403 })
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { companyId } = auth
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'job_id required' }, { status: 400 })
@@ -35,7 +26,7 @@ export async function POST(req: NextRequest) {
     .select('id, customer_id, company_id, title')
     .eq('id', job_id)
     .single()
-  if (!job || job.company_id !== profile.company_id) {
+  if (!job || job.company_id !== companyId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -49,7 +40,7 @@ export async function POST(req: NextRequest) {
   const { data: co } = await service
     .from('companies')
     .select('default_gst_rate')
-    .eq('id', profile.company_id)
+    .eq('id', companyId)
     .single()
   const gstRate = Number(co?.default_gst_rate ?? 0.15)
 
@@ -58,10 +49,10 @@ export async function POST(req: NextRequest) {
   const gst = subtotal * gstRate
   const total = subtotal + gst
 
-  const invoice_number = await nextDocNumber(service, profile.company_id, 'invoice')
+  const invoice_number = await nextDocNumber(service, companyId, 'invoice')
 
   const { data: inv, error } = await service.from('invoices').insert({
-    company_id: profile.company_id,
+    company_id: companyId,
     customer_id: job.customer_id,
     job_id,
     invoice_number,
