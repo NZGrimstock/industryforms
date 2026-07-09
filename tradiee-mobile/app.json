@@ -31,7 +31,6 @@
     },
     "android": {
       "package": "com.industryforms.app",
-      "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -90,6 +89,14 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#f97316"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],
