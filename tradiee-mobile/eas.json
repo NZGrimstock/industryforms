@@ -10,8 +10,12 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://cfltbpwrojtlpkjvresd.supabase.co",
@@ -19,11 +23,13 @@
         "EXPO_PUBLIC_POWERSYNC_URL": "https://6a33b406deeddd0df605d498.powersync.journeyapps.com",
         "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app",
-        "EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID": "tml_Gjk2AE1e6OUFu2"
+        "EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID": "tml_Gjk2AE1e6OUFu2",
+        "EXPO_PUBLIC_LOCATIONIQ_KEY": "pk.b84459de3d7b8ac1a254105f56c0658d"
       }
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -33,7 +39,8 @@
         "EXPO_PUBLIC_POWERSYNC_URL": "https://6a33b406deeddd0df605d498.powersync.journeyapps.com",
         "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app",
-        "EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID": "tml_Gjk2AE1e6OUFu2"
+        "EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID": "tml_Gjk2AE1e6OUFu2",
+        "EXPO_PUBLIC_LOCATIONIQ_KEY": "pk.b84459de3d7b8ac1a254105f56c0658d"
       }
     }
   },
