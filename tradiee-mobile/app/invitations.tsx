@@ -11,6 +11,8 @@ import {
 import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate } from '@/lib/datetime'
 
 type InvitationItem = {
   id: string
@@ -39,6 +41,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function InvitationsTab() {
+  const timezone = useTimezone()
   const [invitations, setInvitations] = useState<InvitationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -104,7 +107,7 @@ export default function InvitationsTab() {
           {item.job_title}
         </Text>
         <Text style={styles.date}>
-          {new Date(item.created_at).toLocaleDateString('en-NZ', {
+          {formatDate(item.created_at, timezone, {
             day: 'numeric',
             month: 'short',
             year: 'numeric',

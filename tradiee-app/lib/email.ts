@@ -1,3 +1,5 @@
+import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.EMAIL_FROM ?? 'noreply@tradehub.app'
 
@@ -36,6 +38,7 @@ export function quoteEmailHtml({
   companyPhone,
   companyEmail,
   logoUrl,
+  timezone = DEFAULT_TIMEZONE,
 }: {
   companyName: string
   customerName: string
@@ -47,6 +50,7 @@ export function quoteEmailHtml({
   companyPhone?: string | null
   companyEmail?: string | null
   logoUrl?: string | null
+  timezone?: string
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -64,7 +68,7 @@ export function quoteEmailHtml({
         <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:#111827">${quoteNumber}</p>
         <p style="margin:0 0 12px;color:#4b5563">${quoteTitle}</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#f97316">${total}</p>
-        ${expiresAt ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Expires ${new Date(expiresAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+        ${expiresAt ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Expires ${formatDate(expiresAt, timezone, { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
       </div>
       <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">View &amp; Accept Quote →</a>
       <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">
@@ -91,6 +95,7 @@ export function invoiceEmailHtml({
   companyPhone,
   companyEmail,
   logoUrl,
+  timezone = DEFAULT_TIMEZONE,
 }: {
   companyName: string
   customerName: string
@@ -103,6 +108,7 @@ export function invoiceEmailHtml({
   companyPhone?: string | null
   companyEmail?: string | null
   logoUrl?: string | null
+  timezone?: string
 }) {
   return `<!DOCTYPE html>
 <html>
@@ -121,7 +127,7 @@ export function invoiceEmailHtml({
         ${jobTitle ? `<p style="margin:0 0 12px;color:#4b5563">${jobTitle}</p>` : '<p style="margin:0 0 12px"></p>'}
         <p style="margin:0;font-size:22px;font-weight:700;color:#111827">Total: ${total}</p>
         <p style="margin:4px 0 0;font-size:18px;font-weight:600;color:#f97316">Due: ${amountDue}</p>
-        ${dueDate ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Due date: ${new Date(dueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
+        ${dueDate ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Due date: ${formatDate(dueDate, timezone, { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
       </div>
       <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">View &amp; Pay Invoice →</a>
       <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { StyleSheet, Font } from '@react-pdf/renderer';
+import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime';
 
 // ── FONT REGISTRATION ─────────────────────────────────────────────────────────
 Font.register({
@@ -38,6 +39,12 @@ export function setRenderCouncil(council: string) { _renderCouncil = council; }
 export function getCouncilDisplay(council?: string): string {
   return (COUNCIL_CONFIG[council || _renderCouncil] ?? COUNCIL_CONFIG['auckland']).display;
 }
+
+// Module-level timezone set before each PDF render — mirrors setRenderCouncil.
+// Used only as a fallback "today" when a template isn't given an explicit date.
+let _renderTimezone = DEFAULT_TIMEZONE;
+export function setRenderTimezone(timezone: string) { _renderTimezone = timezone; }
+export function todayFormatted(): string { return formatDate(new Date(), _renderTimezone); }
 
 // ── BRAND COLOURS ─────────────────────────────────────────────────────────────
 export const COLORS = {
@@ -364,7 +371,7 @@ export const SignatureRow = ({
   signatureLabel?: string;
   dateLabel?: string;
 }) => {
-  const today = new Date().toLocaleDateString('en-NZ');
+  const today = date || todayFormatted();
   const sigSrc = signatureBase64
     ? signatureBase64.startsWith('data:')
       ? signatureBase64
@@ -449,7 +456,7 @@ export const CouncilUseOnly = ({
   );
 
 export const FooterBar = ({ generated, council }: { generated?: string; council?: string }) => {
-  const today = generated || new Date().toLocaleDateString('en-NZ');
+  const today = generated || todayFormatted();
   const cfg = COUNCIL_CONFIG[council || _renderCouncil] ?? COUNCIL_CONFIG['auckland'];
   return React.createElement(
     View,

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Circle, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate } from '@/lib/datetime'
 
 type Todo = {
   id: string
@@ -39,6 +41,7 @@ export function TodoWidget({
 }) {
   const supabase = createClient()
   const router = useRouter()
+  const timezone = useTimezone()
   const [todos, setTodos] = useState(initial)
   const [newTitle, setNewTitle] = useState('')
   const [adding, setAdding] = useState(false)
@@ -134,7 +137,7 @@ export function TodoWidget({
                     )}
                     {t.due_date && (
                       <span className={`ml-2 text-xs ${overdue ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                        {overdue ? 'Overdue · ' : ''}{new Date(t.due_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        {overdue ? 'Overdue · ' : ''}{formatDate(t.due_date, timezone, { month: 'short', day: 'numeric' })}
                       </span>
                     )}
                   </div>

@@ -1,8 +1,9 @@
 'use client'
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { formatDateTime } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/badge'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate, formatTime, formatDateTime } from '@/lib/datetime'
 import { ChevronLeft, ChevronRight, Calendar, Edit2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { TimePicker } from '@/components/ui/time-picker'
@@ -68,7 +69,7 @@ function profileName(profile: { full_name: string } | { full_name: string }[] | 
   return Array.isArray(profile) ? profile[0]?.full_name : profile?.full_name
 }
 
-function VisitCard({ visit, colorIdx = 5, isDragging = false }: { visit: Visit; colorIdx?: number; isDragging?: boolean }) {
+function VisitCard({ visit, colorIdx = 5, isDragging = false, timezone }: { visit: Visit; colorIdx?: number; isDragging?: boolean; timezone: string }) {
   const c = STAFF_COLORS[colorIdx % STAFF_COLORS.length]
   const extraNames = visit.jobs?.job_assignees
     ?.map(a => profileName(a.profiles))
@@ -78,7 +79,7 @@ function VisitCard({ visit, colorIdx = 5, isDragging = false }: { visit: Visit; 
     <div className={`${c.bg} border ${c.border} rounded-lg p-2 ${isDragging ? 'opacity-50' : ''} transition-colors cursor-grab active:cursor-grabbing`}>
       <p className={`text-xs font-medium ${c.text} truncate`}>{visit.jobs?.title ?? '—'}</p>
       <p className={`text-xs ${c.sub}`}>
-        {new Date(visit.scheduled_start).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+        {formatTime(visit.scheduled_start, timezone, { hour12: true })}
       </p>
       {(visit.profiles || extraNames) && (
         <p className={`text-xs ${c.sub} truncate opacity-70`}>
@@ -89,14 +90,14 @@ function VisitCard({ visit, colorIdx = 5, isDragging = false }: { visit: Visit; 
   )
 }
 
-function DraggableVisit({ visit, colorIdx, onEdit }: { visit: Visit; colorIdx?: number; onEdit: (v: Visit) => void }) {
+function DraggableVisit({ visit, colorIdx, onEdit, timezone }: { visit: Visit; colorIdx?: number; onEdit: (v: Visit) => void; timezone: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: visit.id, data: { visit } })
   const c = STAFF_COLORS[(colorIdx ?? 5) % STAFF_COLORS.length]
   return (
     <div ref={setNodeRef} className="relative group">
       <div {...listeners} {...attributes}>
         <Link href={`/jobs/${visit.jobs?.id}`} onClick={e => { if (isDragging) e.preventDefault() }}>
-          <VisitCard visit={visit} colorIdx={colorIdx} isDragging={isDragging} />
+          <VisitCard visit={visit} colorIdx={colorIdx} isDragging={isDragging} timezone={timezone} />
         </Link>
       </div>
       <button
@@ -122,6 +123,7 @@ function DroppableDay({ day, children }: { day: Date; children: React.ReactNode 
 }
 
 export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: Visit[]; team?: TeamMember[] }) {
+  const timezone = useTimezone()
   const [view, setView] = useState<'week' | 'list'>('week')
   const [visits, setVisits] = useState<Visit[]>(initialVisits)
   const [activeVisit, setActiveVisit] = useState<Visit | null>(null)
@@ -283,7 +285,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
         <div className="flex items-center gap-2">
           <button onClick={prevWeek} className="p-2 rounded-lg hover:bg-gray-100"><ChevronLeft className="h-4 w-4" /></button>
           <span className="text-sm font-medium text-gray-700">
-            {days[0].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {days[6].toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+            {formatDate(days[0], timezone, { day: 'numeric', month: 'short' })} – {formatDate(days[6], timezone, { day: 'numeric', month: 'short', year: 'numeric' })}
           </span>
           <button onClick={nextWeek} className="p-2 rounded-lg hover:bg-gray-100"><ChevronRight className="h-4 w-4" /></button>
           <button onClick={goToday} className="ml-2 text-xs text-orange-500 hover:text-[var(--accent,#f97316)] font-medium">Today</button>
@@ -306,13 +308,13 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
               return (
                 <div key={day.toISOString()}>
                   <div className={`text-center mb-2 py-1 rounded-lg text-xs font-medium ${isToday ? 'bg-[var(--accent,#f97316)] text-white' : 'text-gray-500'}`}>
-                    <p>{day.toLocaleDateString('en-NZ', { weekday: 'short' })}</p>
+                    <p>{formatDate(day, timezone, { weekday: 'short' })}</p>
                     <p className="text-lg font-bold">{day.getDate()}</p>
                   </div>
                   <DroppableDay day={day}>
                     <div className="space-y-1.5">
                       {dayVisits.map(v => (
-                        <DraggableVisit key={v.id} visit={v} colorIdx={v.assigned_to ? (staffColorMap[v.assigned_to] ?? 5) : 5} onEdit={openEdit} />
+                        <DraggableVisit key={v.id} visit={v} colorIdx={v.assigned_to ? (staffColorMap[v.assigned_to] ?? 5) : 5} onEdit={openEdit} timezone={timezone} />
                       ))}
                     </div>
                   </DroppableDay>
@@ -324,7 +326,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
           <DragOverlay>
             {activeVisit && (
               <div className="w-32 rotate-2 shadow-lg">
-                <VisitCard visit={activeVisit} colorIdx={activeVisit.assigned_to ? (staffColorMap[activeVisit.assigned_to] ?? 5) : 5} />
+                <VisitCard visit={activeVisit} colorIdx={activeVisit.assigned_to ? (staffColorMap[activeVisit.assigned_to] ?? 5) : 5} timezone={timezone} />
               </div>
             )}
           </DragOverlay>
@@ -348,7 +350,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
                     <div>
                       <p className="text-sm font-medium text-gray-900">{v.jobs?.title ?? '—'}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {formatDateTime(v.scheduled_start)} · {v.jobs?.customers?.name} · {workerNames(v)}
+                        {formatDateTime(v.scheduled_start, timezone)} · {v.jobs?.customers?.name} · {workerNames(v)}
                       </p>
                     </div>
                     <StatusBadge status={v.status} />

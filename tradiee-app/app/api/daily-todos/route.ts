@@ -24,6 +24,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { createOpenAIText, openAiConfigured, OPENAI_MODEL_NANO, parseJsonObject } from '@/lib/openai'
 import { createServiceClient } from '@/lib/supabase/server'
+import { DEFAULT_TIMEZONE, formatTime } from '@/lib/datetime'
 
 type SourceType = 'visit_today' | 'quote_followup' | 'invoice_overdue' | 'enquiry_followup' | 'job_stalled'
 
@@ -90,10 +91,16 @@ async function run() {
     .lte('scheduled_start', todayEnd)
     .eq('status', 'scheduled')
     .not('assigned_to', 'is', null)
+  const visitAssigneeIds = [...new Set((visits ?? []).map(v => v.assigned_to as string))]
+  const timezoneByProfile: Record<string, string> = {}
+  if (visitAssigneeIds.length) {
+    const { data: assigneeProfiles } = await svc.from('profiles').select('id, timezone').in('id', visitAssigneeIds)
+    for (const p of assigneeProfiles ?? []) timezoneByProfile[p.id as string] = (p.timezone as string | null) ?? DEFAULT_TIMEZONE
+  }
   for (const v of visits ?? []) {
     const job = v.jobs as unknown as { id: string; company_id: string; job_number: string; title: string; customers: { name: string } | null } | null
     if (!job) continue
-    const when = new Date(v.scheduled_start as string).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })
+    const when = formatTime(v.scheduled_start as string, timezoneByProfile[v.assigned_to as string] ?? DEFAULT_TIMEZONE, { hour12: true })
     candidates.push({
       companyId: job.company_id, assignedTo: v.assigned_to as string,
       title: `Visit ${when}: ${job.customers?.name ?? job.title}`,

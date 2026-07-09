@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
+import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
 
 const bodySchema = z.object({
   jobId: z.string().uuid(),
@@ -55,12 +56,13 @@ export async function POST(request: Request) {
   // 2. Check if subcontractorEmail matches an active platform user
   const { data: subProfile } = await supabase
     .from('profiles')
-    .select('company_id')
+    .select('company_id, timezone')
     .eq('email', subcontractorEmail)
     .eq('is_active', true)
     .maybeSingle()
 
   const subcontractorCompanyId = subProfile?.company_id ?? null
+  const subcontractorTimezone = subProfile?.timezone ?? DEFAULT_TIMEZONE
   const onPlatform = subcontractorCompanyId !== null
 
   // 3. Insert invitation
@@ -131,6 +133,7 @@ export async function POST(request: Request) {
       deepLink,
       webUrl,
       onPlatform: true,
+      timezone: subcontractorTimezone,
     })
   } else {
     emailHtml = invitationEmailHtml({
@@ -143,6 +146,7 @@ export async function POST(request: Request) {
       deepLink: null,
       webUrl,
       onPlatform: false,
+      timezone: DEFAULT_TIMEZONE,
     })
   }
 
@@ -165,6 +169,7 @@ function invitationEmailHtml({
   deepLink,
   webUrl,
   onPlatform,
+  timezone,
 }: {
   contractorCompanyName: string
   jobTitle: string
@@ -175,9 +180,10 @@ function invitationEmailHtml({
   deepLink: string | null
   webUrl: string
   onPlatform: boolean
+  timezone: string
 }) {
   const dueDateStr = dueDate
-    ? new Date(dueDate).toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? formatDate(dueDate, timezone, { day: 'numeric', month: 'long', year: 'numeric' })
     : null
   const priceStr = agreedPrice != null
     ? new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(agreedPrice)

@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail, quoteEmailHtml } from '@/lib/email'
 import { logCommunication } from '@/lib/comms'
 import { formatCurrency } from '@/lib/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 
 const bodySchema = z.object({ quoteId: z.string().uuid() })
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'quoteId required' }, { status: 400 })
   const { quoteId } = parsed.data
   const service = createServiceClient()
-  const { data: callerProfile } = await service.from('profiles').select('company_id').eq('id', user.id).single()
+  const { data: callerProfile } = await service.from('profiles').select('company_id, timezone').eq('id', user.id).single()
 
   const { data: quote } = await service
     .from('quotes')
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
     companyPhone: company.phone,
     companyEmail: company.email,
     logoUrl: company.logo_url,
+    timezone: callerProfile?.timezone ?? DEFAULT_TIMEZONE,
   })
 
   const result = await sendEmail({

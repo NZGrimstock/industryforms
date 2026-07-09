@@ -4,6 +4,8 @@ import { Stack } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate as formatDateTz } from '@/lib/datetime'
 
 type ProjectRow = {
   id: string
@@ -24,12 +26,9 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: 'Cancelled',
 }
 
-function formatDate(date: string | null) {
-  if (!date) return null
-  return new Date(date).toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
 export default function ProjectsScreen() {
+  const timezone = useTimezone()
+  const formatDate = (date: string | null) => date ? formatDateTz(date, timezone, { month: 'short', day: 'numeric' }) : null
   const [refreshing, setRefreshing] = useState(false)
   // Codex build audit marker (2026-07-08): PowerSync-backed mobile Projects view for field crews.
   const { data: projects = [], isLoading } = useQuery<ProjectRow>(`

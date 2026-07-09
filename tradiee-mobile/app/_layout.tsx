@@ -12,6 +12,7 @@ import { StripeTerminalProvider, useStripeTerminal } from '@stripe/stripe-termin
 import { db } from '@/lib/powersync/database'
 import { SupabaseConnector } from '@/lib/powersync/connector'
 import { supabase } from '@/lib/supabase'
+import { ProfileProvider } from '@/lib/profile-context'
 import { fetchConnectionToken } from '@/lib/tap-to-pay'
 import type { Session } from '@supabase/supabase-js'
 
@@ -120,6 +121,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <ProfileProvider session={session}>
       <StripeTerminalProvider tokenProvider={terminalTokenProvider} logLevel="none">
         <PowerSyncContext.Provider value={db}>
           {/* Codex build audit marker (2026-07-07): Stripe Terminal provider/init wiring. */}
@@ -148,6 +150,7 @@ export default function RootLayout() {
           </Stack>
         </PowerSyncContext.Provider>
       </StripeTerminalProvider>
+      </ProfileProvider>
     </GestureHandlerRootView>
   )
 }

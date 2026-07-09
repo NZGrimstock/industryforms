@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2, FileText, CheckCircle, Clock, DollarSign } from 'lucide-react'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate } from '@/lib/datetime'
 
 interface Claim {
   id: string
@@ -44,6 +46,7 @@ export function ProgressClaims({
   jobId, companyId, profileId, jobTitle, customerId, gstRate,
   nextInvoiceNumber, initialClaims, totalQuoted,
 }: Props) {
+  const timezone = useTimezone()
   const [claims, setClaims] = useState<Claim[]>(initialClaims.sort((a, b) => a.stage_number - b.stage_number))
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -177,7 +180,7 @@ export function ProgressClaims({
                 <div className="flex items-center gap-3 mt-0.5">
                   <p className="text-sm font-semibold text-gray-800">{formatCurrency(claim.amount)}</p>
                   {claim.percentage && <span className="text-xs text-gray-400">{claim.percentage.toFixed(0)}% of job</span>}
-                  {claim.due_date && <span className="text-xs text-gray-400">Due {new Date(claim.due_date).toLocaleDateString('en-NZ')}</span>}
+                  {claim.due_date && <span className="text-xs text-gray-400">Due {formatDate(claim.due_date, timezone)}</span>}
                 </div>
               </div>
 

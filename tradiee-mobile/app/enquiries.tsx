@@ -8,6 +8,8 @@ import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate } from '@/lib/datetime'
 
 type Enquiry = {
   id: string
@@ -29,6 +31,7 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 export default function EnquiriesScreen() {
+  const timezone = useTimezone()
   const [enquiries, setEnquiries] = useState<Enquiry[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -138,7 +141,7 @@ export default function EnquiriesScreen() {
                     </TouchableOpacity>
                   )}
                   {item.notes && <Text style={s.notes} numberOfLines={2}>{item.notes}</Text>}
-                  <Text style={s.source}>{item.source ?? 'Direct'} · {new Date(item.created_at).toLocaleDateString()}</Text>
+                  <Text style={s.source}>{item.source ?? 'Direct'} · {formatDate(item.created_at, timezone)}</Text>
                 </View>
                 <View style={[s.badge, { backgroundColor: (STATUS_COLOR[item.status] ?? '#9ca3af') + '20' }]}>
                   <Text style={[s.badgeText, { color: STATUS_COLOR[item.status] ?? '#9ca3af' }]}>{item.status}</Text>

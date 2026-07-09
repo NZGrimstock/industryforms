@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { useTimezone } from '@/lib/profile-context'
+import { formatTime, formatDate } from '@/lib/datetime'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 type ActiveJob = { jobId: string; timesheetId: string; startedAt: string }
@@ -17,10 +19,6 @@ function getGreeting() {
   if (h < 12) return 'Good morning'
   if (h < 17) return 'Good afternoon'
   return 'Good evening'
-}
-
-function fmt(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 const VISIT_COLOR: Record<string, string> = {
@@ -58,6 +56,7 @@ type Todo = {
 type Stats = { openJobs: number; draftQuotes: number; pendingTodos: number }
 
 export default function HomeScreen() {
+  const timezone = useTimezone()
   const [firstName, setFirstName] = useState('')
   const [visits, setVisits] = useState<Visit[]>([])
   const [todos, setTodos] = useState<Todo[]>([])
@@ -180,7 +179,7 @@ export default function HomeScreen() {
         {/* Greeting */}
         <Text style={s.greeting}>{getGreeting()}{firstName ? `, ${firstName}` : ''}!</Text>
         <Text style={s.date}>
-          {new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+          {formatDate(new Date(), timezone, { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
 
         {/* Active job banner */}
@@ -243,7 +242,7 @@ export default function HomeScreen() {
                 <View style={[s.visitStripe, { backgroundColor: VISIT_COLOR[v.status] ?? '#9ca3af' }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.visitTime}>
-                    {fmt(v.scheduled_start)}{v.scheduled_end ? ` – ${fmt(v.scheduled_end)}` : ''}
+                    {formatTime(v.scheduled_start, timezone)}{v.scheduled_end ? ` – ${formatTime(v.scheduled_end, timezone)}` : ''}
                   </Text>
                   <Text style={s.visitTitle} numberOfLines={1}>{v.job_title}</Text>
                   {v.customer_name && <Text style={s.visitCustomer}>{v.customer_name}</Text>}

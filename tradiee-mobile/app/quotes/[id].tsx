@@ -8,6 +8,8 @@ import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate as formatDateTz } from '@/lib/datetime'
 
 const STATUS_COLOR: Record<string, string> = {
   draft:    '#6b7280',
@@ -58,14 +60,11 @@ function fmt(amount: number) {
   return '$' + (amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function fmtDate(iso: string | null) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 let _uid = 0
 
 export default function QuoteDetailScreen() {
+  const timezone = useTimezone()
+  const fmtDate = (iso: string | null) => iso ? formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
   const { id } = useLocalSearchParams<{ id: string }>()
   const [sending, setSending] = useState(false)
   const [accepting, setAccepting] = useState(false)

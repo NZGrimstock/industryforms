@@ -8,6 +8,8 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { FileText, CheckCircle, Download } from 'lucide-react'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate } from '@/lib/datetime'
 
 type DocType = 'PS1' | 'PS2' | 'PS3_GENERAL' | 'PS3_DRAINAGE' | 'PS3_PLUMBING' | 'PS4' | 'RBW_2A' | 'RBW_6A'
 
@@ -43,6 +45,7 @@ export function ComplianceDocModal({
   onSuccess,
 }: ComplianceDocModalProps) {
   const { toast } = useToast()
+  const timezone = useTimezone()
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ docNumber: string; pdfUrl: string | null } | null>(null)
@@ -97,7 +100,7 @@ export function ComplianceDocModal({
       clientName: form.clientName,
       clientEmail: form.clientEmail,
       nzbcClauses: form.nzbcClauses,
-      date: new Date().toLocaleDateString('en-NZ'),
+      date: formatDate(new Date(), timezone),
     }
 
     if (docType === 'PS1' || docType === 'PS2') {

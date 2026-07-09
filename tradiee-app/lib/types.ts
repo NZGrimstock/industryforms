@@ -56,6 +56,7 @@ export interface Profile {
   google_token_expiry: string | null
   google_calendar_id: string | null
   welcome_tutorial_seen_at?: string | null
+  timezone?: string | null
   created_at: string
   updated_at: string
 }

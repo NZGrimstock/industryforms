@@ -5,7 +5,8 @@
  */
 import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
-import { setRenderCouncil } from './templates/BaseTemplate'
+import { setRenderCouncil, setRenderTimezone } from './templates/BaseTemplate'
+import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PS1DesignTemplate } from './templates/PS1DesignTemplate'
 import { PS2DesignReviewTemplate } from './templates/PS2DesignReviewTemplate'
 import { PS3GeneralConstructionTemplate } from './templates/PS3GeneralConstructionTemplate'
@@ -39,14 +40,16 @@ export interface GenerateDocInput {
     council?: string | null
     company_name?: string | null
     logo_url?: string | null
+    timezone?: string | null
   }
 }
 
 export async function generateComplianceDoc(input: GenerateDocInput): Promise<Buffer> {
   const { docType, docNumber, statementData, profile } = input
 
-  // Set council for footer rendering
+  // Set council + timezone for footer/date fallback rendering
   setRenderCouncil(profile.council || 'auckland')
+  setRenderTimezone(profile.timezone || DEFAULT_TIMEZONE)
 
   const statement = {
     doc_number: docNumber,

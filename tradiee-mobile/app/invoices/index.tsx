@@ -6,6 +6,8 @@ import {
 import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate as formatDateTz } from '@/lib/datetime'
 
 const STATUS_COLOR: Record<string, string> = {
   draft:          '#6b7280',
@@ -38,12 +40,9 @@ function formatAmount(amount: number) {
   return '$' + (amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 export default function InvoicesScreen() {
+  const timezone = useTimezone()
+  const formatDate = (iso: string | null) => iso ? formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' }) : null
   const [search, setSearch] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [isLoading, setIsLoading] = useState(true)

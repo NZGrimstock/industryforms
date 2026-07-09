@@ -1,5 +1,6 @@
 'use client'
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
+import { DEFAULT_TIMEZONE, formatDate, formatDateTime } from '@/lib/datetime'
 
 const ORANGE = '#f97316'
 const GREY   = '#6b7280'
@@ -59,14 +60,14 @@ function fmt(n: number | null | undefined) {
   return n.toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function fmtDate(iso: string | null | undefined) {
+function fmtDate(iso: string | null | undefined, timezone: string) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
+  return formatDate(iso, timezone, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function fmtDateTime(iso: string | null | undefined) {
+function fmtDateTime(iso: string | null | undefined, timezone: string) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return formatDateTime(iso, timezone, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export interface JobSheetData {
@@ -117,10 +118,12 @@ export interface JobSheetData {
     gst_number: string | null
     default_gst_rate: number
   }
+  timezone?: string
 }
 
 export function JobSheetPdf({ data }: { data: JobSheetData }) {
   const { job, visits, lineItems, timesheets, notes, company } = data
+  const timezone = data.timezone ?? DEFAULT_TIMEZONE
   const gstRate = company.default_gst_rate ?? 0.15
 
   const lineSubtotal = lineItems.reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0)
@@ -150,7 +153,7 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
           <View style={s.headerRight}>
             <Text style={s.docLabel}>Job Sheet</Text>
             <Text style={s.jobNum}>{job.job_number}</Text>
-            <Text style={s.jobDate}>Date: {fmtDate(job.created_at)}</Text>
+            <Text style={s.jobDate}>Date: {fmtDate(job.created_at, timezone)}</Text>
             <View style={s.statusBadge}>
               <Text style={s.statusText}>{job.status.replace(/_/g, ' ')}</Text>
             </View>
@@ -209,8 +212,8 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
             </View>
             {visits.map((v, i) => (
               <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
-                <Text style={[s.td, { width: 110 }]}>{fmtDateTime(v.scheduled_start)}</Text>
-                <Text style={[s.td, { width: 110 }]}>{fmtDateTime(v.scheduled_end)}</Text>
+                <Text style={[s.td, { width: 110 }]}>{fmtDateTime(v.scheduled_start, timezone)}</Text>
+                <Text style={[s.td, { width: 110 }]}>{fmtDateTime(v.scheduled_end, timezone)}</Text>
                 <Text style={[s.td, { flex: 1 }]}>{v.profiles?.full_name ?? 'Unassigned'}</Text>
                 <Text style={[s.td, { width: 60, color: GREY }]}>{v.status}</Text>
               </View>
@@ -260,7 +263,7 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
               return (
                 <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
                   <Text style={[s.td, { flex: 1 }]}>{t.profiles?.full_name ?? '—'}</Text>
-                  <Text style={[s.td, { width: 105 }]}>{fmtDateTime(t.started_at)}</Text>
+                  <Text style={[s.td, { width: 105 }]}>{fmtDateTime(t.started_at, timezone)}</Text>
                   <Text style={[s.td, { width: 45 }]}>{hrs != null ? `${hrs.toFixed(2)}h` : 'Running'}</Text>
                   <Text style={[s.td, { width: 45, textAlign: 'right', color: GREY }]}>{t.bill_rate ? `$${fmt(t.bill_rate)}/hr` : '—'}</Text>
                   <Text style={[s.td, { width: 60, textAlign: 'right' }]}>{lineTotal != null ? `$${fmt(lineTotal)}` : '—'}</Text>
@@ -276,7 +279,7 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
             <Text style={s.sectionTitle}>Notes</Text>
             {notes.map((n, i) => (
               <View key={i} style={{ marginBottom: 5 }}>
-                <Text style={{ fontSize: 7, color: GREY, marginBottom: 1 }}>{n.profiles?.full_name ?? '—'} · {fmtDateTime(n.created_at)}</Text>
+                <Text style={{ fontSize: 7, color: GREY, marginBottom: 1 }}>{n.profiles?.full_name ?? '—'} · {fmtDateTime(n.created_at, timezone)}</Text>
                 <Text style={{ fontSize: 9, color: '#374151', lineHeight: 1.4 }}>{n.body}</Text>
               </View>
             ))}
@@ -335,7 +338,7 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
         {/* ── Footer ── */}
         <View style={s.footer}>
           <Text style={s.footerText}>{job.job_number} · {job.customers?.name ?? ''}</Text>
-          <Text style={s.footerText}>Generated {new Date().toLocaleDateString('en-NZ')}</Text>
+          <Text style={s.footerText}>Generated {fmtDate(new Date().toISOString(), timezone)}</Text>
         </View>
       </Page>
     </Document>

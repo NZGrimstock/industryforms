@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { Wrench, ArrowLeft } from 'lucide-react'
+import { DEFAULT_TIMEZONE, formatDate as formatDateTz, formatTime } from '@/lib/datetime'
 
 export default async function PortalJobDetailPage({
   params,
@@ -37,12 +38,19 @@ export default async function PortalJobDetailPage({
   // Fetch job — must belong to the portal's customer
   const { data: job } = await supabase
     .from('jobs')
-    .select('id, job_number, title, description, status, customer_id, created_at')
+    .select('id, job_number, title, description, status, customer_id, created_at, assigned_to')
     .eq('id', jobId)
     .eq('company_id', company_id)
     .single()
 
   if (!job || job.customer_id !== customer_id) notFound()
+
+  // Timezone for displaying visit times: the assigned staff member's, falling
+  // back to any company admin's, falling back to the app default.
+  const tzProfile = job.assigned_to
+    ? (await supabase.from('profiles').select('timezone').eq('id', job.assigned_to).maybeSingle()).data
+    : (await supabase.from('profiles').select('timezone').eq('company_id', company_id).in('role', ['owner', 'admin']).limit(1).maybeSingle()).data
+  const timezone = tzProfile?.timezone ?? DEFAULT_TIMEZONE
 
   // Codex build audit marker (2026-07-07): customer portal deliberately omits
   // internal visit/job notes because the schema has no public/private marker.
@@ -139,15 +147,13 @@ export default async function PortalJobDetailPage({
                   label: visit.status,
                   className: 'bg-gray-100 text-gray-600',
                 }
-                const start = new Date(visit.scheduled_start)
-                const end = new Date(visit.scheduled_end)
-                const dateStr = start.toLocaleDateString('en-NZ', {
+                const dateStr = formatDateTz(visit.scheduled_start, timezone, {
                   weekday: 'short',
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
                 })
-                const timeStr = `${start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })} – ${end.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}`
+                const timeStr = `${formatTime(visit.scheduled_start, timezone)} – ${formatTime(visit.scheduled_end, timezone)}`
                 return (
                   <li key={visit.id} className="px-6 py-3 flex items-start justify-between gap-4">
                     <div>

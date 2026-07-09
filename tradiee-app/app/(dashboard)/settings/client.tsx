@@ -18,6 +18,7 @@ import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } fr
 import { getPlan, planForSeats } from '@/lib/plans'
 import { extractAccent } from '@/lib/extract-color'
 import { MfaSection } from '@/components/settings/mfa-section'
+import { TIMEZONES } from '@/lib/datetime'
 
 interface Props {
   profile: Profile & { companies: Company }
@@ -90,6 +91,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     lbp_number: (profile as unknown as Record<string, unknown>).lbp_number as string ?? '',
     cpeng_number: (profile as unknown as Record<string, unknown>).cpeng_number as string ?? '',
     council: ((profile as unknown as Record<string, unknown>).council as string) ?? 'auckland',
+    timezone: ((profile as unknown as Record<string, unknown>).timezone as string) ?? 'Pacific/Auckland',
   })
   const [signatureB64, setSignatureB64] = useState<string | null>(
     ((profile as unknown as Record<string, unknown>).signature_base64 as string | null) ?? null
@@ -220,6 +222,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       lbp_number: profileForm.lbp_number || null,
       cpeng_number: profileForm.cpeng_number || null,
       council: profileForm.council || 'auckland',
+      timezone: profileForm.timezone || 'Pacific/Auckland',
       signature_base64: signatureB64 || null,
     } as Record<string, unknown>).eq('id', profile.id)
     if (error) toast(error.message, 'error')
@@ -623,6 +626,15 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             <form onSubmit={saveProfile} className="space-y-4">
               <div><Label>Full name <span className="text-red-400">*</span></Label><Input value={profileForm.full_name} onChange={e => setP('full_name', e.target.value)} required /></div>
               <div><Label>Phone</Label><Input value={profileForm.phone} onChange={e => setP('phone', e.target.value)} /></div>
+              <div>
+                <Label>Timezone</Label>
+                <Select
+                  value={profileForm.timezone}
+                  onChange={e => setP('timezone', e.target.value)}
+                  options={TIMEZONES.map(tz => ({ value: tz.value, label: tz.label }))}
+                />
+                <p className="text-xs text-gray-400 mt-1">Used for dates &amp; times across web and mobile, on this account</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Bill rate ($/hr)</Label>

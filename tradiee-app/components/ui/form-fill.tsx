@@ -3,6 +3,8 @@ import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { FileText, ChevronDown, X, CheckCircle, Printer } from 'lucide-react'
 import type { FormField } from '@/app/(dashboard)/forms/[id]/builder'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate, formatDateTime } from '@/lib/datetime'
 
 interface Template { id: string; name: string; fields: FormField[] }
 interface Submission { id: string; template_name: string; submitted_at: string | null; answers: Record<string, unknown> }
@@ -16,6 +18,7 @@ interface Props {
 }
 
 export function FormFill({ jobId, companyId, profileId, templates, existingSubmissions }: Props) {
+  const timezone = useTimezone()
   const [view, setView] = useState<'list' | 'pick' | 'fill'>('list')
   const [selected, setSelected] = useState<Template | null>(null)
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
@@ -140,10 +143,10 @@ export function FormFill({ jobId, companyId, profileId, templates, existingSubmi
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
                 <span className="text-gray-700">{s.template_name}</span>
-                {s.submitted_at && <span className="text-xs text-gray-400">{new Date(s.submitted_at).toLocaleDateString('en-NZ')}</span>}
+                {s.submitted_at && <span className="text-xs text-gray-400">{formatDate(s.submitted_at, timezone)}</span>}
               </div>
               <button
-                onClick={() => printSubmission(s)}
+                onClick={() => printSubmission(s, timezone)}
                 className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
               >
                 <Printer className="h-3 w-3" /> Print
@@ -292,7 +295,7 @@ function SignaturePad({ fieldId, canvasRef }: { fieldId: string; canvasRef: (el:
   )
 }
 
-function printSubmission(submission: Submission) {
+function printSubmission(submission: Submission, timezone: string) {
   const answers = submission.answers as Record<string, unknown>
   const rows = Object.entries(answers).map(([k, v]) => {
     if (typeof v === 'string' && v.startsWith('data:image')) {
@@ -305,7 +308,7 @@ function printSubmission(submission: Submission) {
     <html><head><style>body{font-family:sans-serif;padding:24px}h1{font-size:18px;margin-bottom:4px}p{color:#666;font-size:13px;margin:0}table{width:100%;border-collapse:collapse;margin-top:16px}td{border-bottom:1px solid #eee;vertical-align:top}@media print{button{display:none}}</style></head>
     <body>
       <h1>${submission.template_name}</h1>
-      <p>Submitted ${submission.submitted_at ? new Date(submission.submitted_at).toLocaleString('en-NZ') : ''}</p>
+      <p>Submitted ${submission.submitted_at ? formatDateTime(submission.submitted_at, timezone) : ''}</p>
       <table>${rows}</table>
       <script>window.onload=()=>window.print()</script>
     </body></html>

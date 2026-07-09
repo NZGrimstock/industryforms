@@ -18,6 +18,8 @@ import {
   type AutoCheckinNotice,
   type TripFollowup,
 } from '@/lib/location/tracking'
+import { useTimezone } from '@/lib/profile-context'
+import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 const TRADING_HOURS_KEY = 'TRADIEE_TRADING_HOURS'
@@ -48,22 +50,23 @@ function formatDuration(start: string, end: string | null, breakMin = 0) {
   const mins = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000) - breakMin)
   return `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  const today = new Date()
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
 const TAB_TIME = 'time'
 const TAB_TRAVEL = 'travel'
 
 export default function TimesheetsScreen() {
+  const timezone = useTimezone()
+  const formatTime = (iso: string) => formatTimeTz(iso, timezone)
+  // Compare the calendar day in the user's own timezone, not the device's, so
+  // "Today"/"Yesterday" match what they'd expect from their account setting.
+  const formatDate = (iso: string) => {
+    const dayKey = (d: Date) => formatDateTz(d, timezone, { year: 'numeric', month: 'numeric', day: 'numeric' })
+    const today = new Date()
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+    const key = dayKey(new Date(iso))
+    if (key === dayKey(today)) return 'Today'
+    if (key === dayKey(yesterday)) return 'Yesterday'
+    return formatDateTz(iso, timezone, { month: 'short', day: 'numeric' })
+  }
   const [tab, setTab] = useState<'time' | 'travel'>(TAB_TIME)
   const [tracking, setTracking] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)

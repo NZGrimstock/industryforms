@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendEmail, invoiceEmailHtml } from '@/lib/email'
 import { logCommunication } from '@/lib/comms'
 import { formatCurrency } from '@/lib/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 
 const bodySchema = z.object({ invoiceId: z.string().uuid() })
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   const { invoiceId } = parsed.data
   const service = createServiceClient()
 
-  const { data: callerProfile } = await service.from('profiles').select('company_id').eq('id', user.id).single()
+  const { data: callerProfile } = await service.from('profiles').select('company_id, timezone').eq('id', user.id).single()
 
   const { data: invoice } = await service
     .from('invoices')
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
     companyPhone: company.phone,
     companyEmail: company.email,
     logoUrl: company.logo_url,
+    timezone: callerProfile?.timezone ?? DEFAULT_TIMEZONE,
   })
 
   const result = await sendEmail({

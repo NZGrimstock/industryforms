@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { DEFAULT_TIMEZONE, formatTime } from '@/lib/datetime'
 
 const bodySchema = z.union([
   z.object({
@@ -73,14 +74,12 @@ export async function POST(request: Request) {
     const { visitId, assignedToId, jobTitle, scheduledStart } = payload
     const { data: profile } = await supabase
       .from('profiles')
-      .select('expo_push_token')
+      .select('expo_push_token, timezone')
       .eq('id', assignedToId)
       .single()
 
     if (profile?.expo_push_token) {
-      const time = new Date(scheduledStart).toLocaleTimeString('en-NZ', {
-        hour: 'numeric', minute: '2-digit', hour12: true,
-      })
+      const time = formatTime(scheduledStart, profile.timezone ?? DEFAULT_TIMEZONE, { hour12: true })
       await sendExpoPush([{
         to: profile.expo_push_token,
         title: 'Visit reminder',
@@ -98,7 +97,7 @@ export async function POST(request: Request) {
 
     const { data: visits } = await supabase
       .from('job_visits')
-      .select('id, scheduled_start, assigned_to, jobs(title, job_number), profiles!assigned_to(expo_push_token)')
+      .select('id, scheduled_start, assigned_to, jobs(title, job_number), profiles!assigned_to(expo_push_token, timezone)')
       .gte('scheduled_start', windowStart)
       .lte('scheduled_start', windowEnd)
       .not('assigned_to', 'is', null)
@@ -107,14 +106,12 @@ export async function POST(request: Request) {
       id: string
       scheduled_start: string
       jobs: { title: string | null } | null
-      profiles: { expo_push_token: string | null } | null
+      profiles: { expo_push_token: string | null; timezone: string | null } | null
     }
     const messages: PushMessage[] = ((visits ?? []) as unknown as VisitRow[])
       .filter(v => v.profiles?.expo_push_token)
       .map(v => {
-        const time = new Date(v.scheduled_start).toLocaleTimeString('en-NZ', {
-          hour: 'numeric', minute: '2-digit', hour12: true,
-        })
+        const time = formatTime(v.scheduled_start, v.profiles?.timezone ?? DEFAULT_TIMEZONE, { hour12: true })
         return {
           to: v.profiles!.expo_push_token!,
           title: 'Upcoming visit',

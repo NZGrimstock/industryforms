@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Download, MapPin, Clock, Route, Car, CheckCircle2, Circle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate as formatDateTz, formatTime as formatTimeTz } from '@/lib/datetime'
 
 type Log = {
   id: string
@@ -39,11 +41,11 @@ function formatDuration(start: string, end: string | null) {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+function formatDate(iso: string, timezone: string) {
+  return formatDateTz(iso, timezone, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })
+function formatTime(iso: string, timezone: string) {
+  return formatTimeTz(iso, timezone, { hour12: true })
 }
 
 function mapsLink(lat: number | null, lng: number | null) {
@@ -57,18 +59,18 @@ const PURPOSE_LABELS: Record<string, string> = {
   ignore: 'Ignored',
 }
 
-function downloadCSV(logs: Log[], team: TeamMember[]) {
+function downloadCSV(logs: Log[], team: TeamMember[], timezone: string) {
   const teamById = Object.fromEntries(team.map(t => [t.id, t]))
   const rows = [
     ['Date', 'Team member', 'Vehicle', 'Start time', 'End time', 'Duration', 'Distance (km)', 'Purpose', 'Job', 'Notes', 'Start GPS', 'End GPS'],
     ...logs.map(l => {
       const member = l.profile_id ? teamById[l.profile_id] : null
       return [
-        l.started_at ? formatDate(l.started_at) : '',
+        l.started_at ? formatDate(l.started_at, timezone) : '',
         member?.full_name ?? '',
         member?.vehicle_registration ?? '',
-        l.started_at ? formatTime(l.started_at) : '',
-        l.ended_at ? formatTime(l.ended_at) : '',
+        l.started_at ? formatTime(l.started_at, timezone) : '',
+        l.ended_at ? formatTime(l.ended_at, timezone) : '',
         formatDuration(l.started_at, l.ended_at),
         l.distance_km?.toFixed(2) ?? '',
         l.purpose ? (PURPOSE_LABELS[l.purpose] ?? l.purpose) : 'Unallocated',
@@ -99,6 +101,7 @@ interface Props {
 export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId, companyId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const timezone = useTimezone()
   const [localFrom, setLocalFrom] = useState(fromDate)
   const [localTo, setLocalTo] = useState(toDate)
   const [localProfile, setLocalProfile] = useState(selectedProfileId)
@@ -173,7 +176,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
               </select>
             </div>
             <Button onClick={applyFilters}>Apply</Button>
-            <Button variant="outline" onClick={() => downloadCSV(logs, team)}>
+            <Button variant="outline" onClick={() => downloadCSV(logs, team, timezone)}>
               <Download className="h-4 w-4" /> Export CSV
             </Button>
           </div>
@@ -224,7 +227,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
           {byDay.map(({ date, logs: dayLogs }) => (
             <div key={date}>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                {formatDate(date + 'T00:00:00')} · {dayLogs.length} trip{dayLogs.length !== 1 ? 's' : ''} · {dayLogs.reduce((s, l) => s + (l.distance_km ?? 0), 0).toFixed(1)} km
+                {formatDate(date + 'T00:00:00', timezone)} · {dayLogs.length} trip{dayLogs.length !== 1 ? 's' : ''} · {dayLogs.reduce((s, l) => s + (l.distance_km ?? 0), 0).toFixed(1)} km
               </p>
               <Card>
                 <div className="divide-y divide-gray-50">
@@ -264,8 +267,8 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
                             )}
                           </div>
                           <p className="text-sm text-gray-700">
-                            {formatTime(l.started_at)}
-                            {l.ended_at && ` — ${formatTime(l.ended_at)}`}
+                            {formatTime(l.started_at, timezone)}
+                            {l.ended_at && ` — ${formatTime(l.ended_at, timezone)}`}
                             {movingMins !== null && ` · ${Math.floor(movingMins / 60)}h ${movingMins % 60}m`}
                           </p>
                           {l.notes && <p className="text-xs text-gray-400 mt-0.5">{l.notes}</p>}
@@ -327,11 +330,11 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
                     const member = l.profile_id ? teamById[l.profile_id] : null
                     return (
                       <tr key={l.id} className={i > 0 ? 'border-t border-gray-50' : ''}>
-                        <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{formatDate(l.started_at)}</td>
+                        <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{formatDate(l.started_at, timezone)}</td>
                         <td className="px-4 py-2 text-gray-700">{member?.full_name ?? '—'}</td>
                         <td className="px-4 py-2 font-mono text-gray-500 text-xs">{member?.vehicle_registration ?? '—'}</td>
-                        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatTime(l.started_at)}</td>
-                        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{l.ended_at ? formatTime(l.ended_at) : '—'}</td>
+                        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{formatTime(l.started_at, timezone)}</td>
+                        <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{l.ended_at ? formatTime(l.ended_at, timezone) : '—'}</td>
                         <td className="px-4 py-2 text-right font-semibold text-gray-900">{(l.distance_km ?? 0).toFixed(2)} km</td>
                         <td className="px-4 py-2">
                           <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${purposeColor[l.purpose ?? ''] ?? 'bg-orange-50 text-orange-600'}`}>
@@ -362,7 +365,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
             </div>
           </Card>
           <div className="mt-3 flex justify-end">
-            <Button variant="outline" onClick={() => downloadCSV(logs.filter(l => l.purpose === 'work' || !l.purpose), team)}>
+            <Button variant="outline" onClick={() => downloadCSV(logs.filter(l => l.purpose === 'work' || !l.purpose), team, timezone)}>
               <Download className="h-4 w-4" /> Export logbook CSV
             </Button>
           </div>

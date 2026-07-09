@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/header'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatDate, formatDuration, formatCurrency } from '@/lib/utils'
+import { DEFAULT_TIMEZONE, formatTime } from '@/lib/datetime'
 import { Clock } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { TimesheetActions } from '../timesheets/client'
@@ -11,8 +12,9 @@ export default async function TimeLogsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, hourly_bill_rate').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, hourly_bill_rate, timezone').eq('id', user.id).single()
   if (!profile) redirect('/login')
+  const timezone = profile.timezone ?? DEFAULT_TIMEZONE
 
   const [timesheetsRes, jobsRes] = await Promise.all([
     supabase.from('timesheets').select('*, profiles(full_name), jobs(job_number, title)').eq('company_id', profile.company_id).order('started_at', { ascending: false }).limit(100),
@@ -60,7 +62,7 @@ export default async function TimeLogsPage() {
                       {t.jobs ? <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">{(t.jobs as {job_number: string}).job_number}</span> : '—'}
                     </td>
                     <td className="px-6 py-3 text-gray-500">{formatDate(t.started_at)}</td>
-                    <td className="px-6 py-3 text-gray-500">{new Date(t.started_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}</td>
+                    <td className="px-6 py-3 text-gray-500">{formatTime(t.started_at, timezone, { hour12: true })}</td>
                     <td className="px-6 py-3 font-medium text-gray-800">{formatDuration(t.started_at, t.ended_at, t.break_minutes)}</td>
                     <td className="px-6 py-3 text-right text-gray-500">{t.bill_rate ? formatCurrency(t.bill_rate) + '/hr' : '—'}</td>
                     <td className="px-6 py-3">{t.is_billable ? <span className="text-green-600 text-xs font-medium">Yes</span> : <span className="text-gray-400 text-xs">No</span>}</td>

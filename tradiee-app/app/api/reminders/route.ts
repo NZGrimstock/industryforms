@@ -6,6 +6,7 @@ import { nextDocNumber } from '@/lib/numbering'
 import { notify } from '@/lib/notify'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
 import { logCommunication } from '@/lib/comms'
+import { DEFAULT_TIMEZONE, formatDateTime } from '@/lib/datetime'
 
 function addInterval(dateStr: string, interval: string | null): string {
   const d = new Date(dateStr)
@@ -245,7 +246,8 @@ async function runReminders() {
       errors.push(`Visit ${visit.id} reminder skipped: missing customer phone or company`)
       continue
     }
-    const when = new Date(visit.scheduled_start).toLocaleString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
+    // ponytail: no logged-in profile in scope here (customer-facing SMS) — DEFAULT_TIMEZONE fallback
+    const when = formatDateTime(visit.scheduled_start, DEFAULT_TIMEZONE, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
     const body = `Hi ${customer.name.split(' ')[0]}, reminder: ${company.name} has an appointment with you ${when} (${job!.title}).`
     // Codex build audit marker (2026-07-07): plain visit reminders now leave automation + comms history.
     const notifyResults = await notify({

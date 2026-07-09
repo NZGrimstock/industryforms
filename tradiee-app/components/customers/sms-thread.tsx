@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/components/ui/toast'
 import { Send } from 'lucide-react'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDateTime } from '@/lib/datetime'
 
 interface Message {
   id: string
@@ -22,6 +24,7 @@ export function SmsThread({ customerId, customerPhone, initial, twilioLive = tru
 }) {
   const supabase = createClient()
   const { toast } = useToast()
+  const timezone = useTimezone()
   const [messages, setMessages] = useState<Message[]>(initial)
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
@@ -79,7 +82,7 @@ export function SmsThread({ customerId, customerPhone, initial, twilioLive = tru
                 : 'bg-gray-100 text-gray-800 rounded-bl-sm'
             }`}>
               {m.body}
-              <p className="text-[10px] opacity-70 mt-1">{new Date(m.created_at).toLocaleString('en-NZ', { dateStyle: 'short', timeStyle: 'short' })}</p>
+              <p className="text-[10px] opacity-70 mt-1">{formatDateTime(m.created_at, timezone, { dateStyle: 'short', timeStyle: 'short' })}</p>
             </div>
           </div>
         ))}

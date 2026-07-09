@@ -9,6 +9,7 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatDateTime, formatCurrency } from '@/lib/utils'
+import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { JobDetailClient } from './client'
 import { JobMaterials } from './materials'
 import { PrintJobSheet } from '@/components/pdf/print-job-sheet'
@@ -217,6 +218,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       gst_number: co?.gst_number ?? null,
       default_gst_rate: co?.default_gst_rate ?? 0.15,
     },
+    timezone: (profile as { timezone?: string | null } | null)?.timezone ?? DEFAULT_TIMEZONE,
   }
 
   return (

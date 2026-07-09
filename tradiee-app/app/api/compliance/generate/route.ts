@@ -95,6 +95,7 @@ export async function POST(req: Request) {
         council: ((profile as Record<string, unknown>).council as string | null) || 'auckland',
         company_name: co?.name || null,
         logo_url: co?.logo_url || null,
+        timezone: (profile as Record<string, unknown>).timezone as string | null,
       },
     })
 

@@ -5,6 +5,8 @@ import { SmsThread } from '@/components/customers/sms-thread'
 import { useToast } from '@/components/ui/toast'
 import { Search, UserPlus, Link2, CheckCircle2, ShieldOff } from 'lucide-react'
 import type { ConversationSummary } from '@/lib/messages'
+import { useTimezone } from '@/components/providers/timezone-provider'
+import { formatDate, formatDateTime } from '@/lib/datetime'
 
 type Tab = 'open' | 'unread' | 'bookings' | 'enquiries' | 'unmatched' | 'closed'
 
@@ -28,6 +30,7 @@ type ThreadData = SmsThreadData | UnmatchedThreadData | EnquiryThreadData
 
 export function MessagesClient({ initial, twilioLive }: { initial: ConversationSummary[]; twilioLive: boolean }) {
   const { toast } = useToast()
+  const timezone = useTimezone()
   const [conversations, setConversations] = useState(initial)
   const [tab, setTab] = useState<Tab>('open')
   const [search, setSearch] = useState('')
@@ -156,7 +159,7 @@ export function MessagesClient({ initial, twilioLive }: { initial: ConversationS
               <p className="text-xs text-gray-400 truncate mt-0.5">{c.preview}</p>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-[10px] font-semibold uppercase text-gray-400">{SOURCE_LABEL[c.source]}</span>
-                <span className="text-[10px] text-gray-300">{new Date(c.lastActivity).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}</span>
+                <span className="text-[10px] text-gray-300">{formatDate(c.lastActivity, timezone, { day: 'numeric', month: 'short' })}</span>
               </div>
             </button>
           ))}
@@ -194,7 +197,7 @@ export function MessagesClient({ initial, twilioLive }: { initial: ConversationS
               <p className="text-sm text-gray-500">{thread.message.from_number}</p>
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap">{thread.message.body}</div>
-            <p className="text-xs text-gray-400">{new Date(thread.message.created_at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+            <p className="text-xs text-gray-400">{formatDateTime(thread.message.created_at, timezone, { dateStyle: 'medium', timeStyle: 'short' })}</p>
 
             <div className="border-t border-gray-100 pt-4 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Create customer from this message</p>
@@ -235,7 +238,7 @@ export function MessagesClient({ initial, twilioLive }: { initial: ConversationS
             {thread.enquiry.description && (
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-wrap">{thread.enquiry.description}</div>
             )}
-            <p className="text-xs text-gray-400">Received {new Date(thread.enquiry.created_at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+            <p className="text-xs text-gray-400">Received {formatDateTime(thread.enquiry.created_at, timezone, { dateStyle: 'medium', timeStyle: 'short' })}</p>
           </div>
         )}
       </div>

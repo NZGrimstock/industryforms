@@ -3,6 +3,8 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator }
 import { router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTimezone } from '@/lib/profile-context'
+import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
 
 const VISIT_STATUS_COLOR: Record<string, string> = {
   scheduled:   '#3b82f6',
@@ -22,22 +24,14 @@ type Visit = {
   notes: string | null
 }
 
-function formatTime(iso: string | null) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
 export default function ScheduleScreen() {
+  const timezone = useTimezone()
+  const formatTime = (iso: string | null) => iso ? formatTimeTz(iso, timezone) : '—'
+  const formatDate = (iso: string) => formatDateTz(iso, timezone, { weekday: 'short', month: 'short', day: 'numeric' })
   const today = todayIso()
 
   const { data: visits, isLoading } = useQuery<Visit>(

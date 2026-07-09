@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import { todayFormatted } from './BaseTemplate';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const r = StyleSheet.create({
@@ -229,7 +230,7 @@ export const Form2ATemplate = ({
         React.createElement(View, { style: { width: 160 } },
           React.createElement(Text, { style: { fontSize: 9, marginBottom: 4 } }, 'Date:'),
           React.createElement(View, { style: [r.sigBox, { height: 20 }] },
-            React.createElement(Text, { style: { fontSize: 9, padding: 3 } }, (d.date || new Date().toLocaleDateString('en-NZ')) as string),
+            React.createElement(Text, { style: { fontSize: 9, padding: 3 } }, (d.date || todayFormatted()) as string),
           ),
         ),
       ),
@@ -334,7 +335,7 @@ export const Form6ATemplate = ({
         React.createElement(View, { style: { width: 160 } },
           React.createElement(Text, { style: { fontSize: 9, marginBottom: 4 } }, 'Date:'),
           React.createElement(View, { style: [r.sigBox, { height: 20 }] },
-            React.createElement(Text, { style: { fontSize: 9, padding: 3 } }, (d.date || new Date().toLocaleDateString('en-NZ')) as string),
+            React.createElement(Text, { style: { fontSize: 9, padding: 3 } }, (d.date || todayFormatted()) as string),
           ),
         ),
         React.createElement(View, { style: { flex: 1 } },

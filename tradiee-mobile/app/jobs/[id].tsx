@@ -11,6 +11,8 @@ import * as ImagePicker from 'expo-image-picker'
 import { WebView } from 'react-native-webview'
 import { supabase } from '@/lib/supabase'
 import { getJobStatuses, resolveStatus, statusHex, DEFAULT_JOB_STATUSES, type JobStatus } from '@/lib/job-statuses'
+import { useTimezone } from '@/lib/profile-context'
+import { formatDate as formatDateTz, formatDateTime as formatDateTimeTz } from '@/lib/datetime'
 
 // Self-contained HTML signature pad — draws to a canvas and posts a PNG data URL
 // (or 'EMPTY' if untouched) back to React Native.
@@ -78,15 +80,10 @@ type Material = { id: string; description: string; quantity: number; unit: strin
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
 type Photo = { id: string; storage_path: string; caption: string | null; taken_at: string }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
 export default function JobDetailScreen() {
+  const timezone = useTimezone()
+  const formatDate = (iso: string) => formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' })
+  const formatDateTime = (iso: string) => formatDateTimeTz(iso, timezone, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   const { id } = useLocalSearchParams<{ id: string }>()
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteText, setNoteText] = useState('')

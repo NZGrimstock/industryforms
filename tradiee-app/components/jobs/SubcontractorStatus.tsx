@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
 
 interface Props {
   contractorJobId: string
@@ -46,6 +47,11 @@ function InvitationBadge({ status }: { status: string }) {
 
 export async function SubcontractorStatus({ contractorJobId, companyId }: Props) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: viewerProfile } = user
+    ? await supabase.from('profiles').select('timezone').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const timezone = viewerProfile?.timezone ?? DEFAULT_TIMEZONE
 
   const [invitationsRes, jobLinksRes] = await Promise.all([
     supabase
@@ -103,17 +109,17 @@ export async function SubcontractorStatus({ contractorJobId, companyId }: Props)
                 <p className="text-sm text-gray-700">{inv.subcontractor_email}</p>
                 {inv.accepted_at && (
                   <p className="text-xs text-gray-400">
-                    Accepted {new Date(inv.accepted_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    Accepted {formatDate(inv.accepted_at, timezone, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 )}
                 {inv.declined_at && (
                   <p className="text-xs text-gray-400">
-                    Declined {new Date(inv.declined_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    Declined {formatDate(inv.declined_at, timezone, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 )}
                 {inv.status === 'pending' && (
                   <p className="text-xs text-gray-400">
-                    Sent {new Date(inv.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    Sent {formatDate(inv.created_at, timezone, { day: 'numeric', month: 'short', year: 'numeric' })}
                   </p>
                 )}
               </div>
