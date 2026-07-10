@@ -15,12 +15,15 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(name, default_gst_rate)').eq('id', user!.id).single()
 
-  const { data: quote } = await supabase
-    .from('quotes')
-    .select('*, customers(*, customer_sites(*)), quote_sections(*, quote_line_items(*))')
-    .eq('id', id)
-    .eq('company_id', profile!.company_id)
-    .single()
+  const [{ data: quote }, nextJobNumber] = await Promise.all([
+    supabase
+      .from('quotes')
+      .select('*, customers(*, customer_sites(*)), quote_sections(*, quote_line_items(*))')
+      .eq('id', id)
+      .eq('company_id', profile!.company_id)
+      .single(),
+    nextDocNumber(supabase, profile!.company_id, 'job'),
+  ])
 
   if (!quote) notFound()
 
@@ -31,8 +34,6 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const totalCost = allLines.reduce((sum: number, l: { quantity: number; unit_cost: number | null }) => sum + Number(l.quantity) * Number(l.unit_cost ?? 0), 0)
   const grossProfit = Number(quote.subtotal) - totalCost
   const margin = Number(quote.subtotal) > 0 ? (grossProfit / Number(quote.subtotal)) * 100 : 0
-
-  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
 
   return (
     <>

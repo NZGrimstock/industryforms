@@ -42,13 +42,15 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   if (!job) notFound()
 
-  const { data: customerSites } = await supabase
-    .from('customer_sites')
-    .select('id, address, label')
-    .eq('customer_id', job.customer_id)
-    .order('created_at')
-
-  const [visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes] = await Promise.all([
+  // Everything below only depends on `job` (customer_id/quote_id) or
+  // `profile.company_id`/`id` — none of it depends on any other query's
+  // result, so it all runs as one parallel wave instead of the previous
+  // ~8 sequential round trips (each one paying full Supabase latency).
+  const [
+    customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes,
+  ] = await Promise.all([
+    supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
     supabase.from('job_notes').select('*, profiles(full_name)').eq('job_id', id).order('created_at', { ascending: false }),
     supabase.from('timesheets').select('*, profiles(full_name)').eq('job_id', id).order('started_at', { ascending: false }),
@@ -62,7 +64,15 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('form_submissions').select('id, template_name, submitted_at, answers').eq('job_id', id).order('created_at'),
     supabase.from('progress_claims').select('*').eq('job_id', id).order('stage_number'),
     supabase.from('compliance_documents').select('id, doc_number, doc_type, ac_form_code, project_address, status, created_at, pdf_path').eq('job_id', id).order('created_at', { ascending: false }),
+    supabase.from('job_assignees').select('id, profile_id, profiles(full_name, job_title)').eq('job_id', id),
+    getJobStatuses(supabase, profile!.company_id),
+    nextDocNumber(supabase, profile!.company_id, 'invoice'),
+    job.quote_id
+      ? supabase.from('quote_line_items').select('quantity, unit_price, unit_cost, description, unit, type, price_list_item_id, sort_order').eq('quote_id', job.quote_id).order('sort_order')
+      : Promise.resolve({ data: null }),
   ])
+
+  const customerSites = customerSitesRes.data
 
   // Build signed URLs for compliance doc PDFs (private R2 bucket)
   const complianceDocs = complianceDocsRes.data ?? []
@@ -77,12 +87,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     )
   }
 
-  const { data: jobAssignees } = await supabase
-    .from('job_assignees')
-    .select('id, profile_id, profiles(full_name, job_title)')
-    .eq('job_id', id)
   const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
-  const normalizedJobAssignees = (jobAssignees ?? []).map(a => {
+  const normalizedJobAssignees = (jobAssigneesRes.data ?? []).map(a => {
     const assigneeProfile = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles
     return {
       id: a.id,
@@ -97,18 +103,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const profileHasSignature = !!((profile as Record<string, unknown>).signature_base64)
 
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
-  const nextInvoiceNumber = await nextDocNumber(supabase, profile!.company_id, 'invoice')
 
   // Job costing: estimated from quote, actual from timesheets + invoices
   let estimatedSubtotal = 0
   let quoteLineItems: Array<{ description: string; quantity: number; unit: string; unit_price: number }> = []
   let quoteFillLines: Array<{ description: string; quantity: number; unit: string; unit_cost: number; unit_price: number; type: string; price_list_item_id: string | null }> = []
   if (job.quote_id) {
-    const { data: qLines } = await supabase
-      .from('quote_line_items')
-      .select('quantity, unit_price, unit_cost, description, unit, type, price_list_item_id, sort_order')
-      .eq('quote_id', job.quote_id)
-      .order('sort_order')
+    const qLines = (qLinesRes as { data: Array<{ quantity: number; unit_price: number; unit_cost: number | null; description: string | null; unit: string | null; type: string | null; price_list_item_id: string | null }> | null }).data
     quoteLineItems = (qLines ?? []).map(l => ({
       description: l.description ?? '',
       quantity: Number(l.quantity),
@@ -270,7 +271,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               alreadyInvoiced={alreadyInvoiced}
               actualLines={actualLines}
               actualTotal={actualTotal}
-              jobStatuses={await getJobStatuses(supabase, profile!.company_id)}
+              jobStatuses={jobStatuses}
             />
           </div>
         </div>

@@ -24,11 +24,12 @@ export default async function EnquiryDetailPage({ params }: { params: Promise<{ 
 
   if (!enquiry) notFound()
 
-  const { data: team } = await supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true)
-  const { data: customers } = await supabase.from('customers').select('id, name').eq('company_id', profile!.company_id).order('name')
-
-  const nextQuoteNumber = await nextDocNumber(supabase, profile!.company_id, 'quote')
-  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
+  const [{ data: team }, { data: customers }, nextQuoteNumber, nextJobNumber] = await Promise.all([
+    supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
+    supabase.from('customers').select('id, name').eq('company_id', profile!.company_id).order('name'),
+    nextDocNumber(supabase, profile!.company_id, 'quote'),
+    nextDocNumber(supabase, profile!.company_id, 'job'),
+  ])
 
   return (
     <>

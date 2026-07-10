@@ -13,20 +13,21 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
 
-  const { data: supplier } = await supabase
-    .from('suppliers')
-    .select('*')
-    .eq('id', id)
-    .eq('company_id', profile!.company_id)
-    .single()
+  const [{ data: supplier }, { data: pos }] = await Promise.all([
+    supabase
+      .from('suppliers')
+      .select('*')
+      .eq('id', id)
+      .eq('company_id', profile!.company_id)
+      .single(),
+    supabase
+      .from('purchase_orders')
+      .select('id, po_number, status, total, order_date')
+      .eq('supplier_id', id)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
   if (!supplier) notFound()
-
-  const { data: pos } = await supabase
-    .from('purchase_orders')
-    .select('id, po_number, status, total, order_date')
-    .eq('supplier_id', id)
-    .order('created_at', { ascending: false })
-    .limit(20)
 
   return (
     <>

@@ -54,6 +54,12 @@ interface Props {
   standardMarkupPct?: number
 }
 
+// The dollar figures elsewhere on the job page (job costing, profitability,
+// invoice-from-actuals) are computed server-side from these same rows, so a
+// background router.refresh() still runs after every mutation to keep those
+// in sync — it just no longer blocks the add/remove button, since the row
+// itself is applied to local state immediately.
+
 function sellPrice(item: PriceItem, standardMarkupEnabled: boolean, standardMarkupPct: number) {
   return Number(item.sell_price) || (standardMarkupEnabled ? Number((Number(item.cost_price) * (1 + standardMarkupPct / 100)).toFixed(2)) : Number(item.cost_price))
 }
@@ -121,9 +127,10 @@ function DescriptionLookup({
   )
 }
 
-export function JobMaterials({ jobId, companyId, profileId, materials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
+export function JobMaterials({ jobId, companyId, profileId, materials: initialMaterials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const [materials, setMaterials] = useState(initialMaterials)
   const [showForm, setShowForm] = useState(true)
   const [picker, setPicker] = useState<'items' | 'kits' | null>(null)
   const [search, setSearch] = useState('')
@@ -132,6 +139,11 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
   const qtyRef = useRef<HTMLInputElement>(null)
   const unitRef = useRef<HTMLInputElement>(null)
   const priceRef = useRef<HTMLInputElement>(null)
+
+  // The background router.refresh() re-renders this component with a fresh
+  // `materials` prop straight from the DB — accept it as the source of truth
+  // once it lands, replacing our optimistic guess.
+  useEffect(() => { setMaterials(initialMaterials) }, [initialMaterials])
 
   const filteredItems = priceItems.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.code ?? '').toLowerCase().includes(search.toLowerCase()))
   const filteredKits = kits.filter(k => !search || k.name.toLowerCase().includes(search.toLowerCase()) || (k.code ?? '').toLowerCase().includes(search.toLowerCase()))
@@ -179,7 +191,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
     const item = priceItems.find(p => p.id === form.price_list_item_id)
     if (item && !confirmStock(item, qty)) return
     setLoading(true)
-    const { error } = await supabase.from('job_materials').insert({
+    const { data, error } = await supabase.from('job_materials').insert({
       job_id: jobId,
       company_id: companyId,
       added_by: profileId,
@@ -189,12 +201,13 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       unit: form.unit,
       unit_cost: parseFloat(form.unit_cost) || 0,
       unit_price: parseFloat(form.unit_price) || 0,
-    })
-    if (!error && item) await consumeStock([{ item_id: item.id, quantity: qty }])
+    }).select('id, description, quantity, unit, unit_price, price_list_item_id').single()
     setLoading(false)
     if (error) return
+    setMaterials(prev => [...prev, data])
     setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
     setShowForm(true)
+    if (item) void consumeStock([{ item_id: item.id, quantity: qty }])
     router.refresh()
   }
 
@@ -208,7 +221,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
   async function addPriceItem(item: PriceItem) {
     if (!confirmStock(item, 1)) return
     setLoading(true)
-    const { error } = await supabase.from('job_materials').insert({
+    const { data, error } = await supabase.from('job_materials').insert({
       job_id: jobId,
       company_id: companyId,
       added_by: profileId,
@@ -218,12 +231,13 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       unit: item.unit,
       unit_cost: item.cost_price,
       unit_price: sellPrice(item, standardMarkupEnabled, standardMarkupPct),
-    })
-    if (!error) await consumeStock([{ item_id: item.id, quantity: 1 }])
+    }).select('id, description, quantity, unit, unit_price, price_list_item_id').single()
     setLoading(false)
     if (error) return
+    setMaterials(prev => [...prev, data])
     setPicker(null)
     setSearch('')
+    void consumeStock([{ item_id: item.id, quantity: 1 }])
     router.refresh()
   }
 
@@ -240,7 +254,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       ? components.reduce((sum, ki) => sum + sellPrice(ki.price_list_items!, standardMarkupEnabled, standardMarkupPct) * Number(ki.quantity), 0)
       : Number(kit.sell_price ?? 0)
     setLoading(true)
-    const { error } = await supabase.from('job_materials').insert({
+    const { data, error } = await supabase.from('job_materials').insert({
       job_id: jobId,
       company_id: companyId,
       added_by: profileId,
@@ -250,12 +264,13 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
       unit: 'kit',
       unit_cost: Number(kitCost.toFixed(2)),
       unit_price: Number(kitSell.toFixed(2)),
-    })
-    if (!error) await consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })))
+    }).select('id, description, quantity, unit, unit_price, price_list_item_id').single()
     setLoading(false)
     if (error) return
+    setMaterials(prev => [...prev, data])
     setPicker(null)
     setSearch('')
+    void consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })))
     router.refresh()
   }
 
@@ -263,7 +278,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
     if (quoteLines.length === 0) return
     if (materials.length > 0 && !confirm('Add all line items from the quote to this job? Existing materials will be kept.')) return
     setLoading(true)
-    await supabase.from('job_materials').insert(
+    const { data, error } = await supabase.from('job_materials').insert(
       quoteLines
         .filter(l => l.description.trim())
         .map(l => ({
@@ -277,12 +292,15 @@ export function JobMaterials({ jobId, companyId, profileId, materials, priceItem
           unit_cost: l.unit_cost,
           unit_price: l.unit_price,
         }))
-    )
+    ).select('id, description, quantity, unit, unit_price, price_list_item_id')
     setLoading(false)
+    if (error) return
+    setMaterials(prev => [...prev, ...(data ?? [])])
     router.refresh()
   }
 
   async function remove(id: string) {
+    setMaterials(prev => prev.filter(m => m.id !== id))
     await supabase.from('job_materials').delete().eq('id', id)
     router.refresh()
   }

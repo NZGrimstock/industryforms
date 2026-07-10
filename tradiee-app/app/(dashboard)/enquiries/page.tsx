@@ -14,22 +14,24 @@ export default async function EnquiriesPage({ searchParams }: { searchParams: Pr
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
-  const { data: team } = await supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true)
 
   let query = supabase.from('enquiries')
     .select('*, profiles(full_name)')
     .eq('company_id', profile!.company_id)
   if (sp.status) query = query.eq('status', sp.status)
-  const { data: enquiries } = await query.order('created_at', { ascending: false })
 
   const statuses = ['new', 'contacted', 'quoted', 'won', 'lost']
 
-  const statusCounts = await Promise.all(
-    statuses.map(s =>
+  // team, the enquiries list, and the 5 per-status counts are all independent
+  // — one parallel wave instead of team → enquiries → 5 sequential counts.
+  const [{ data: team }, { data: enquiries }, ...statusCounts] = await Promise.all([
+    supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
+    query.order('created_at', { ascending: false }),
+    ...statuses.map(s =>
       supabase.from('enquiries').select('id', { count: 'exact', head: true })
         .eq('company_id', profile!.company_id).eq('status', s)
-    )
-  )
+    ),
+  ])
 
   return (
     <>

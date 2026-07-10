@@ -40,15 +40,15 @@ export default async function ProjectsPage() {
     )
   }
 
-  // Per-project rollup: count jobs (proxy for size), tally completed stages for the % bar.
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('id, name, description, status, target_end_date, total_budget, project_manager_id, customers(name), profiles!project_manager_id(full_name), project_stages(id, status), jobs(id)')
-    .eq('company_id', profile!.company_id)
-    .order('created_at', { ascending: false })
-
-  // Customers (for the New Project dropdown) + team (for PM selector)
-  const [{ data: customers }, { data: team }] = await Promise.all([
+  // Per-project rollup (count jobs, tally completed stages for the % bar),
+  // customers (for the New Project dropdown), and team (for PM selector) —
+  // all independent, fetched in parallel.
+  const [{ data: projects }, { data: customers }, { data: team }] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('id, name, description, status, target_end_date, total_budget, project_manager_id, customers(name), profiles!project_manager_id(full_name), project_stages(id, status), jobs(id)')
+      .eq('company_id', profile!.company_id)
+      .order('created_at', { ascending: false }),
     supabase.from('customers').select('id, name').eq('company_id', profile!.company_id).order('name'),
     supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
   ])

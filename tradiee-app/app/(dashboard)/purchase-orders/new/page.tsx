@@ -10,13 +10,12 @@ export default async function NewPurchaseOrderPage({ searchParams }: { searchPar
   const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate)').eq('id', user!.id).single()
   const companyId = profile!.company_id
 
-  const [suppliersRes, jobsRes, priceRes] = await Promise.all([
+  const [suppliersRes, jobsRes, priceRes, nextNumber] = await Promise.all([
     supabase.from('suppliers').select('id, name').eq('company_id', companyId).order('name'),
     supabase.from('jobs').select('id, job_number, title').eq('company_id', companyId).not('status', 'in', '(completed,cancelled)').order('created_at', { ascending: false }).limit(100),
     supabase.from('price_list_items').select('id, name, unit, cost_price').eq('company_id', companyId).eq('is_active', true).order('name'),
+    nextDocNumber(supabase, companyId, 'po'),
   ])
-
-  const nextNumber = await nextDocNumber(supabase, companyId, 'po')
   const gstRate = (profile?.companies as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15
 
   return (

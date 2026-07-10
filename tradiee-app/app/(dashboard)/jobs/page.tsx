@@ -25,15 +25,14 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
-  const [customersRes, priceItemsRes] = await Promise.all([
+  const [customersRes, priceItemsRes, jobStatuses] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
+    getJobStatuses(supabase, profile!.company_id),
   ])
   const customers = customersRes.data
   const priceItems = priceItemsRes.data ?? []
   const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
-
-  const jobStatuses = await getJobStatuses(supabase, profile!.company_id)
   const terminalKeys = jobStatuses.filter(s => s.is_terminal).map(s => s.key)
 
   // Board needs all active statuses; list can be filtered.
@@ -49,9 +48,10 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
   const asc = sp.sort ? sp.dir === 'asc' : false
   const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
-  const { data: jobs } = await query.order(sortCol, { ascending: asc })
-
-  const nextJobNumber = await nextDocNumber(supabase, profile!.company_id, 'job')
+  const [{ data: jobs }, nextJobNumber] = await Promise.all([
+    query.order(sortCol, { ascending: asc }),
+    nextDocNumber(supabase, profile!.company_id, 'job'),
+  ])
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
     { key: 'list', icon: List, label: 'List' },
