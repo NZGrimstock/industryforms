@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Linking, Platform,
+  View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Linking, Platform, Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { router, useFocusEffect, Stack } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 import { getJobStatuses } from '@/lib/job-statuses'
+import { geocodeAddress } from '@/lib/geocode'
 
 type MapJob = {
   id: string
@@ -16,6 +17,7 @@ type MapJob = {
   lat: number
   lng: number
   address: string | null
+  site_id: string | null
   customer: string | null
   phone: string | null
 }
@@ -50,6 +52,7 @@ export default function MapScreen() {
   const [jobs, setJobs] = useState<MapJob[]>([])
   const [loading, setLoading] = useState(true)
   const [mine, setMine] = useState(true)
+  const [locatingId, setLocatingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,7 +67,7 @@ export default function MapScreen() {
 
     let q = supabase
       .from('jobs')
-      .select('id, job_number, title, status, assigned_to, customer_sites!site_id(lat, lng, address), customers(name, phone)')
+      .select('id, job_number, title, status, assigned_to, customer_sites!site_id(id, lat, lng, address), customers(name, phone)')
       .eq('company_id', profile.company_id)
       .in('status', activeKeys)
     if (mine) {
@@ -80,11 +83,12 @@ export default function MapScreen() {
     const { data } = await q.limit(200)
 
     const all: MapJob[] = (data ?? []).map(j => {
-      const site = (Array.isArray(j.customer_sites) ? j.customer_sites[0] : j.customer_sites) as { lat: number | null; lng: number | null; address: string | null } | null
+      const site = (Array.isArray(j.customer_sites) ? j.customer_sites[0] : j.customer_sites) as { id: string; lat: number | null; lng: number | null; address: string | null } | null
       const cust = (Array.isArray(j.customers) ? j.customers[0] : j.customers) as { name: string | null; phone: string | null } | null
       return {
         id: j.id, job_number: j.job_number, title: j.title, status: j.status,
         lat: site?.lat ?? NaN, lng: site?.lng ?? NaN, address: site?.address ?? null,
+        site_id: site?.id ?? null,
         customer: cust?.name ?? null, phone: cust?.phone ?? null,
       }
     })
@@ -96,6 +100,23 @@ export default function MapScreen() {
 
   useFocusEffect(useCallback(() => { load() }, [load]))
   useEffect(() => { load() }, [load])
+
+  // The address was geocoded once at save time (customers/new, customers/[id],
+  // jobs/new) and failed or was never attempted — retry it from here rather
+  // than making the user re-edit the site to trigger another geocode.
+  async function retryLocate(j: MapJob) {
+    if (!j.address || !j.site_id) return
+    setLocatingId(j.id)
+    const coords = await geocodeAddress(j.address)
+    if (!coords) {
+      setLocatingId(null)
+      Alert.alert('Could not locate', 'That address could not be matched to a location. Try editing the site address to be more specific.')
+      return
+    }
+    await supabase.from('customer_sites').update({ lat: coords.lat, lng: coords.lng }).eq('id', j.site_id)
+    setLocatingId(null)
+    load()
+  }
 
   function call(phone: string) {
     Linking.openURL(`tel:${phone.replace(/[^+\d]/g, '')}`).catch(() => {})
@@ -163,6 +184,17 @@ export default function MapScreen() {
                 {item.phone ? (
                   <TouchableOpacity style={styles.actionBtn} onPress={() => call(item.phone!)}>
                     <Text style={styles.actionText}>Call</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {!num && item.address && item.site_id ? (
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.actionPrimary]}
+                    onPress={() => retryLocate(item)}
+                    disabled={locatingId === item.id}
+                  >
+                    {locatingId === item.id
+                      ? <ActivityIndicator size="small" color="#f97316" />
+                      : <Text style={[styles.actionText, styles.actionTextPrimary]}>Locate</Text>}
                   </TouchableOpacity>
                 ) : null}
                 {(hasCoords(item) || item.address) ? (
