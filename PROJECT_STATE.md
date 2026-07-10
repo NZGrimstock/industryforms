@@ -24,14 +24,15 @@ the older applied set; the 2026-07-07 local migrations listed below still need
 deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 — already validated + deployed via the PowerSync Dashboard.
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(built 2026-07-11 07:55 NZT, 148,771,781 bytes, SHA256
-`d157c61addb9cd147c4b5dfc115e96c832d2c28aafdafed4dd76c5fc5f4b9f12`). This
-build carries every mobile fix through the 2026-07-11 auto-track/schedule
-round below (see `git log` for current commit hashes — the commits that
-originally shipped this were rewritten, see the history-cleanup note
-directly below, so hashes cited in earlier session notes no longer exist).
-Build log: `tradiee-mobile/release-build-schedule-fix2.log` (`BUILD
-SUCCESSFUL`, 14m56s). The first rebuild attempt
+(built 2026-07-11 08:52 NZT, 148,773,857 bytes, SHA256
+`499126468a2101da46cbf168e9f668bef548bd1f6f1bb618ec28ce16b34dc07f`). This
+build carries every mobile fix through the Job Map locate-retry commit
+(`ec99cc5`) — see `git log` for current commit hashes if this line goes
+stale. Build log: `tradiee-mobile/release-build-jobmap-fix.log` (`BUILD
+SUCCESSFUL`, 6m28s — fast because most native modules were already
+compiled from the prior clean build). The `release-build-schedule-fix2.log`
+build (2026-07-11 07:55 NZT, `BUILD SUCCESSFUL`, 14m56s) preceded it and is
+superseded. The rebuild attempt before that
 (`release-build-schedule-fix.log`) failed with a stale `.cxx` CMake cache
 error (`Access is denied` on a leftover `c:/users/codexsandboxonline/...`
 path baked into `android/app/.cxx` and six `node_modules/*/android/.cxx`
@@ -252,8 +253,8 @@ address, and there was no way to retry afterward short of re-editing the
 whole site to trigger another save. Added a "Locate" button on unlocated
 `job-map.tsx` cards that re-runs `geocodeAddress()` against the already-
 stored address and writes `lat`/`lng` straight onto the `customer_sites`
-row. **Not yet rebuilt into an APK** — bundle this with the next mobile
-build rather than doing a build for this alone.
+row. **Rebuilt and confirmed** — see the "Latest APK" line at the top of
+this file (2026-07-11 08:52 NZT).
 
 **Sprint E (automations + growth reporting) shipped 2026-07-06.** New
 `automation_events` table (migration `20260704090000_automation_events.sql`)
