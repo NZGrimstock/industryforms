@@ -172,6 +172,7 @@ export default function RootLayout() {
             <Stack.Screen name="invoices/[id]" options={{ headerShown: true, title: 'Invoice', headerTintColor: '#f97316' }} />
             <Stack.Screen name="customers/[id]" options={{ headerShown: true, title: 'Customer', headerTintColor: '#f97316' }} />
             <Stack.Screen name="customers/index" options={{ headerShown: true, title: 'Customers', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="customers/new" options={{ headerShown: true, title: 'New Customer', headerTintColor: '#f97316' }} />
             <Stack.Screen name="projects/index" options={{ headerShown: true, title: 'Projects', headerTintColor: '#f97316' }} />
             <Stack.Screen name="invoices/index" options={{ headerShown: true, title: 'Invoices', headerTintColor: '#f97316' }} />
             <Stack.Screen name="timesheets" options={{ headerShown: true, title: 'Time Logs', headerTintColor: '#f97316' }} />

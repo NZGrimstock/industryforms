@@ -73,7 +73,7 @@ export default function ProfileScreen() {
             value={fullName}
             onChangeText={setFullName}
             placeholder="Your name"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
           />
         </View>
 
@@ -84,7 +84,7 @@ export default function ProfileScreen() {
             value={phone}
             onChangeText={setPhone}
             placeholder="+64 21 …"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
             keyboardType="phone-pad"
           />
         </View>
@@ -105,7 +105,7 @@ export default function ProfileScreen() {
             value={vehicleReg}
             onChangeText={setVehicleReg}
             placeholder="ABC123"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
             autoCapitalize="characters"
           />
           <Text style={s.hint}>Used in the GPS vehicle logbook</Text>
@@ -157,7 +157,7 @@ const s = StyleSheet.create({
   field: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
-  hint: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  hint: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   btn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   picker: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

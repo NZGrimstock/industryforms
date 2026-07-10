@@ -64,17 +64,17 @@ export default function SignupScreen() {
 
           <Text style={styles.label}>Your name</Text>
           <TextInput style={styles.input} value={form.fullName} onChangeText={v => set('fullName', v)}
-            placeholder="Full name" placeholderTextColor="#9ca3af" autoCapitalize="words" />
+            placeholder="Full name" placeholderTextColor="#6b7280" autoCapitalize="words" />
 
           <Text style={styles.label}>Work email</Text>
           <TextInput style={styles.input} value={form.email} onChangeText={v => set('email', v)}
-            placeholder="email@company.com" placeholderTextColor="#9ca3af"
+            placeholder="email@company.com" placeholderTextColor="#6b7280"
             autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
 
           <Text style={styles.label}>Password</Text>
           <View style={styles.passwordRow}>
             <TextInput style={styles.passwordInput} value={form.password} onChangeText={v => set('password', v)}
-              placeholder="Min. 8 characters" placeholderTextColor="#9ca3af"
+              placeholder="Min. 8 characters" placeholderTextColor="#6b7280"
               secureTextEntry={!showPassword} autoComplete="new-password" />
             <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(v => !v)}>
               <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
@@ -83,11 +83,11 @@ export default function SignupScreen() {
 
           <Text style={styles.label}>Business name</Text>
           <TextInput style={styles.input} value={form.companyName} onChangeText={v => set('companyName', v)}
-            placeholder="Your company name" placeholderTextColor="#9ca3af" />
+            placeholder="Your company name" placeholderTextColor="#6b7280" />
 
           <Text style={styles.label}>Trade type</Text>
           <TextInput style={styles.input} value={form.tradeType} onChangeText={v => set('tradeType', v)}
-            placeholder="e.g. Electrician, Plumber, Builder" placeholderTextColor="#9ca3af" />
+            placeholder="e.g. Electrician, Plumber, Builder" placeholderTextColor="#6b7280" />
 
           <Text style={styles.label}>Country</Text>
           <View style={styles.countryRow}>

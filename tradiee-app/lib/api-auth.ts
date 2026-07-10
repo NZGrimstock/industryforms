@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
  *  - an `Authorization: Bearer <access_token>` header (mobile).
  * Returns null if unauthenticated or the user has no company.
  */
-export async function resolveCompanyUser(req: Request): Promise<{ userId: string; companyId: string } | null> {
+export async function resolveCompanyUser(req: Request): Promise<{ userId: string; companyId: string; role: string } | null> {
   const authHeader = req.headers.get('authorization')
   let userId: string | null = null
 
@@ -25,11 +25,11 @@ export async function resolveCompanyUser(req: Request): Promise<{ userId: string
   if (!userId) return null
 
   const svc = createServiceClient()
-  const { data: profile } = await svc.from('profiles').select('company_id').eq('id', userId).single()
+  const { data: profile } = await svc.from('profiles').select('company_id, role').eq('id', userId).single()
   if (!profile?.company_id) {
     console.warn(`[auth] user ${userId} has no company_id on ${req.url}`)
     return null
   }
 
-  return { userId, companyId: profile.company_id }
+  return { userId, companyId: profile.company_id, role: profile.role }
 }

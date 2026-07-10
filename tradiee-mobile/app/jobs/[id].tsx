@@ -108,6 +108,12 @@ export default function JobDetailScreen() {
   const [fillTemplate, setFillTemplate] = useState<FormTemplate | null>(null)
   const [fillAnswers, setFillAnswers] = useState<Record<string, string>>({})
   const [savingForm, setSavingForm] = useState(false)
+  const [showInvoice, setShowInvoice] = useState(false)
+  const [invMode, setInvMode] = useState<'full' | 'deposit' | 'progress'>('full')
+  const [invPct, setInvPct] = useState('50')
+  const [invAmount, setInvAmount] = useState('')
+  const [invDepositUnit, setInvDepositUnit] = useState<'$' | '%'>('$')
+  const [invoicing, setInvoicing] = useState(false)
   const [formsY, setFormsY] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
 
@@ -515,6 +521,56 @@ export default function JobDetailScreen() {
     }
   }
 
+  async function createInvoice(force = false) {
+    const payload: Record<string, unknown> = { job_id: id, force }
+    if (invMode === 'full') {
+      payload.type = 'full'
+    } else if (invMode === 'progress') {
+      const pct = parseFloat(invPct)
+      if (!pct || pct <= 0 || pct > 100) { Alert.alert('Enter a percentage', 'Progress claims need a percentage between 1 and 100.'); return }
+      payload.type = 'progress'
+      payload.progress_pct = pct
+    } else {
+      payload.type = 'deposit'
+      if (invDepositUnit === '$') {
+        const amt = parseFloat(invAmount)
+        if (!amt || amt <= 0) { Alert.alert('Enter an amount', 'Enter the deposit amount in dollars.'); return }
+        payload.deposit_amount = amt
+      } else {
+        const pct = parseFloat(invAmount)
+        if (!pct || pct <= 0 || pct > 100) { Alert.alert('Enter a percentage', 'Enter the deposit as a percentage of the quote (1–100).'); return }
+        payload.progress_pct = pct
+      }
+    }
+    setInvoicing(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify(payload),
+      })
+      const inv = await res.json()
+      if (res.status === 409 && inv.confirm) {
+        setInvoicing(false)
+        Alert.alert('Bill above the quote?', `${inv.error}\n\nBill above the quote (e.g. extra time or variations)?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Bill anyway', style: 'destructive', onPress: () => createInvoice(true) },
+        ])
+        return
+      }
+      if (!res.ok) throw new Error(inv.error ?? 'Could not create invoice')
+      hapticSuccess()
+      setShowInvoice(false)
+      router.push(`/invoices/${inv.id}`)
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not create invoice')
+    } finally {
+      setInvoicing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -526,7 +582,7 @@ export default function JobDetailScreen() {
   if (!job) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#9ca3af' }}>Job not found</Text>
+        <Text style={{ color: '#6b7280' }}>Job not found</Text>
       </View>
     )
   }
@@ -684,6 +740,15 @@ export default function JobDetailScreen() {
           >
             <Text style={styles.qbtnIcon}>📋</Text><Text style={styles.qbtnLabel}>Forms</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); setShowInvoice(true) }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Invoice this job"
+          >
+            <Text style={styles.qbtnIcon}>💰</Text><Text style={styles.qbtnLabel}>Invoice</Text>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Forms — the app's namesake, finally on the job screen */}
@@ -783,7 +848,7 @@ export default function JobDetailScreen() {
                 style={styles.noteInput}
                 multiline
                 placeholder="Write a note…"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 value={noteText}
                 onChangeText={setNoteText}
                 autoFocus
@@ -888,6 +953,94 @@ export default function JobDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Invoice sheet — full / deposit / progress claim */}
+      <Modal visible={showInvoice} transparent animationType="fade" onRequestClose={() => !invoicing && setShowInvoice(false)}>
+        <TouchableOpacity style={styles.overlay} onPress={() => !invoicing && setShowInvoice(false)} activeOpacity={1}>
+          <TouchableOpacity activeOpacity={1} style={styles.picker}>
+            <Text style={styles.pickerTitle}>Invoice this job</Text>
+            <View style={styles.invModeRow}>
+              {([['full', 'Full'], ['deposit', 'Deposit'], ['progress', 'Progress']] as const).map(([mode, label]) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.invModeBtn, invMode === mode && styles.invModeBtnActive]}
+                  onPress={() => setInvMode(mode)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label} invoice`}
+                >
+                  <Text style={[styles.invModeText, invMode === mode && styles.invModeTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {invMode === 'full' && (
+              <Text style={styles.invHint}>Bills the full quoted amount — or the remaining balance if you've already invoiced a deposit or progress claim.</Text>
+            )}
+            {invMode === 'deposit' && (
+              <>
+                <Text style={styles.invHint}>Up-front payment before work starts.</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={styles.invUnitRow}>
+                    {(['$', '%'] as const).map(u => (
+                      <TouchableOpacity
+                        key={u}
+                        style={[styles.invUnitBtn, invDepositUnit === u && styles.invModeBtnActive]}
+                        onPress={() => setInvDepositUnit(u)}
+                        accessibilityRole="button"
+                        accessibilityLabel={u === '$' ? 'Fixed dollar deposit' : 'Percentage of quote deposit'}
+                      >
+                        <Text style={[styles.invModeText, invDepositUnit === u && styles.invModeTextActive]}>{u}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TextInput
+                    style={[styles.invInput, { flex: 1 }]}
+                    value={invAmount}
+                    onChangeText={setInvAmount}
+                    placeholder={invDepositUnit === '$' ? 'Deposit amount' : '% of quoted total'}
+                    placeholderTextColor="#6b7280"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </>
+            )}
+            {invMode === 'progress' && (
+              <>
+                <Text style={styles.invHint}>Bill a percentage of the quoted total as this stage completes.</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
+                  {['25', '50', '75'].map(p => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[styles.invChip, invPct === p && styles.invModeBtnActive]}
+                      onPress={() => setInvPct(p)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${p} percent`}
+                    >
+                      <Text style={[styles.invModeText, invPct === p && styles.invModeTextActive]}>{p}%</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TextInput
+                    style={[styles.invInput, { flex: 1 }]}
+                    value={invPct}
+                    onChangeText={setInvPct}
+                    placeholder="%"
+                    placeholderTextColor="#6b7280"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </>
+            )}
+            <TouchableOpacity
+              style={[styles.invCreateBtn, invoicing && { opacity: 0.6 }]}
+              onPress={() => createInvoice()}
+              disabled={invoicing}
+              accessibilityRole="button"
+              accessibilityLabel="Create invoice"
+            >
+              {invoicing ? <ActivityIndicator color="#fff" /> : <Text style={styles.invCreateText}>Create invoice</Text>}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Fill form modal */}
       <Modal visible={!!fillTemplate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => !savingForm && setFillTemplate(null)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -983,13 +1136,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   headerCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   headerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  jobNumber: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
+  jobNumber: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
   title: { fontSize: 20, fontWeight: '700', color: '#111827' },
   statusBadge: { borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start', minWidth: 80, alignItems: 'center' },
   statusText: { fontSize: 12, fontWeight: '700' },
   description: { fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 12 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#f9fafb' },
-  metaLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  metaLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   metaValue: { fontSize: 13, color: '#374151', fontWeight: '500', flex: 1, textAlign: 'right' },
   metaLink: { color: '#f97316', textDecorationLine: 'underline' },
   section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
@@ -1011,12 +1164,12 @@ const styles = StyleSheet.create({
   addNoteBox: { backgroundColor: '#f9fafb', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' },
   noteInput: { fontSize: 15, color: '#111827', minHeight: 80, textAlignVertical: 'top' },
   addNoteActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 8 },
-  cancelText: { fontSize: 15, color: '#9ca3af', paddingVertical: 4 },
+  cancelText: { fontSize: 15, color: '#6b7280', paddingVertical: 4 },
   saveNoteBtn: { backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6 },
   saveNoteBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   noteCard: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb' },
   noteBody: { fontSize: 14, color: '#374151', lineHeight: 20 },
-  noteMeta: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  noteMeta: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   emptyText: { color: '#d1d5db', fontSize: 14, textAlign: 'center', paddingVertical: 8 },
   bottomBar: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
   bigTimerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, borderRadius: 16, paddingVertical: 18 },
@@ -1034,7 +1187,7 @@ const styles = StyleSheet.create({
   completeSheet: { backgroundColor: '#f9fafb', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 16, height: '82%' },
   completeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, paddingBottom: 4 },
   completeTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  completeClose: { fontSize: 15, color: '#9ca3af', fontWeight: '600' },
+  completeClose: { fontSize: 15, color: '#6b7280', fontWeight: '600' },
   completeHint: { fontSize: 13, color: '#6b7280', lineHeight: 18, marginBottom: 12 },
   signatureLabel: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   signatureBox: { flex: 1, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff', marginBottom: 12 },
@@ -1043,6 +1196,18 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 32 },
   picker: { backgroundColor: '#fff', borderRadius: 20, padding: 20 },
   pickerTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 14 },
+  invModeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  invModeBtn: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
+  invModeBtnActive: { borderColor: '#f97316', backgroundColor: '#fff7ed' },
+  invModeText: { fontSize: 15, fontWeight: '700', color: '#6b7280' },
+  invModeTextActive: { color: '#c2410c' },
+  invHint: { fontSize: 13, color: '#6b7280', marginBottom: 12, lineHeight: 18 },
+  invUnitRow: { flexDirection: 'row', gap: 6 },
+  invUnitBtn: { width: 48, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  invChip: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  invInput: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: '#111827', backgroundColor: '#fff' },
+  invCreateBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 14 },
+  invCreateText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   pickerLabel: { fontSize: 16, color: '#374151' },
 })

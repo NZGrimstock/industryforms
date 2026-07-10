@@ -523,7 +523,7 @@ export default function TimesheetsScreen() {
             <TextInput
               style={styles.input}
               placeholder="Search jobs…"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#6b7280"
               value={timerJobSearch}
               onChangeText={setTimerJobSearch}
               autoCorrect={false}
@@ -531,7 +531,7 @@ export default function TimesheetsScreen() {
             {timerJob ? (
               <TouchableOpacity style={styles.selectedJob} onPress={() => setTimerJob(null)}>
                 <Text style={styles.selectedJobText}>{timerJob.job_number} — {timerJob.title}</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 12 }}>Tap to change</Text>
+                <Text style={{ color: '#6b7280', fontSize: 12 }}>Tap to change</Text>
               </TouchableOpacity>
             ) : (
               activeJobs
@@ -589,7 +589,7 @@ export default function TimesheetsScreen() {
                       keyboardType="number-pad"
                       maxLength={2}
                     />
-                    <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{tradingHours.startHour}:00</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{tradingHours.startHour}:00</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.fieldLabel}>End hour</Text>
@@ -600,7 +600,7 @@ export default function TimesheetsScreen() {
                       keyboardType="number-pad"
                       maxLength={2}
                     />
-                    <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{tradingHours.endHour}:00</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{tradingHours.endHour}:00</Text>
                   </View>
                 </View>
                 <View>
@@ -649,11 +649,11 @@ export default function TimesheetsScreen() {
           </View>
           <ScrollView contentContainerStyle={{ padding: 20 }}>
             <Text style={styles.fieldLabel}>Job</Text>
-            <TextInput style={styles.input} placeholder="Search jobs…" placeholderTextColor="#9ca3af" value={jobSearch} onChangeText={setJobSearch} autoCorrect={false} />
+            <TextInput style={styles.input} placeholder="Search jobs…" placeholderTextColor="#6b7280" value={jobSearch} onChangeText={setJobSearch} autoCorrect={false} />
             {selectedJob && (
               <TouchableOpacity style={styles.selectedJob} onPress={() => setSelectedJob(null)}>
                 <Text style={styles.selectedJobText}>{selectedJob.job_number} — {selectedJob.title}</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 12 }}>Tap to change</Text>
+                <Text style={{ color: '#6b7280', fontSize: 12 }}>Tap to change</Text>
               </TouchableOpacity>
             )}
             {!selectedJob && filteredJobs.slice(0, 30).map(job => (
@@ -663,9 +663,9 @@ export default function TimesheetsScreen() {
               </TouchableOpacity>
             ))}
             <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Break (minutes)</Text>
-            <TextInput style={styles.input} value={breakMin} onChangeText={setBreakMin} keyboardType="numeric" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={breakMin} onChangeText={setBreakMin} keyboardType="numeric" placeholderTextColor="#6b7280" />
             <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Notes (optional)</Text>
-            <TextInput style={[styles.input, { height: 80 }]} multiline value={notes} onChangeText={setNotes} placeholder="What did you work on?" placeholderTextColor="#9ca3af" />
+            <TextInput style={[styles.input, { height: 80 }]} multiline value={notes} onChangeText={setNotes} placeholder="What did you work on?" placeholderTextColor="#6b7280" />
             <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={logTime} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save entry'}</Text>
             </TouchableOpacity>
@@ -708,7 +708,7 @@ export default function TimesheetsScreen() {
               <TextInput
                 style={[styles.input, { marginBottom: 0, width: '100%' }]}
                 placeholder="Search jobs…"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 value={allocJobSearch}
                 onChangeText={setAllocJobSearch}
               />
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 4, backgroundColor: '#f3f4f6', borderRadius: 10, padding: 3 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  tabText: { fontSize: 13, fontWeight: '500', color: '#9ca3af' },
+  tabText: { fontSize: 13, fontWeight: '500', color: '#6b7280' },
   tabTextActive: { color: '#111827', fontWeight: '600' },
   addRow: { paddingHorizontal: 16, paddingVertical: 8 },
   addBtn: { backgroundColor: '#fff7ed', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#fed7aa' },
@@ -767,19 +767,19 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardUnallocated: { borderWidth: 1, borderColor: '#fed7aa' },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  jobNum: { fontSize: 11, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5 },
+  jobNum: { fontSize: 11, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5 },
   duration: { fontSize: 14, fontWeight: '700', color: '#f97316' },
   jobTitle: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 4 },
   timeRange: { fontSize: 12, color: '#6b7280' },
-  noteText: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  noteText: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   travelLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   travelKm: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  travelAuto: { fontSize: 11, color: '#9ca3af', backgroundColor: '#f3f4f6', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  travelAuto: { fontSize: 11, color: '#6b7280', backgroundColor: '#f3f4f6', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   purposeBadge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
   purposeText: { fontSize: 11, fontWeight: '600' },
   allocHint: { fontSize: 12, color: '#f97316', marginTop: 6, fontWeight: '500' },
   empty: { alignItems: 'center', paddingTop: 60 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
   modal: { flex: 1, backgroundColor: '#fff' },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
   selectedJob: { backgroundColor: '#fff7ed', borderRadius: 8, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#fed7aa' },
   selectedJobText: { fontSize: 14, color: '#c2410c', fontWeight: '500' },
   jobRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', gap: 8 },
-  jobRowNum: { fontSize: 12, color: '#9ca3af', fontWeight: '600', minWidth: 56 },
+  jobRowNum: { fontSize: 12, color: '#6b7280', fontWeight: '600', minWidth: 56 },
   jobRowTitle: { flex: 1, fontSize: 14, color: '#111827' },
   saveBtn: { backgroundColor: '#f97316', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
   allocRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   allocIcon: { fontSize: 24, width: 32 },
   allocLabel: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  allocDesc: { fontSize: 12, color: '#9ca3af' },
+  allocDesc: { fontSize: 12, color: '#6b7280' },
   allocCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12 },
   tripBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 6, backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fed7aa' },
   tripBannerTitle: { fontSize: 13, fontWeight: '700', color: '#c2410c' },

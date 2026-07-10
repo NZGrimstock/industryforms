@@ -415,20 +415,20 @@ export default function PayNowScreen() {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  listHeader: { fontSize: 13, color: '#9ca3af', fontWeight: '500', marginBottom: 4, textAlign: 'center' },
+  listHeader: { fontSize: 13, color: '#6b7280', fontWeight: '500', marginBottom: 4, textAlign: 'center' },
   card: {
     backgroundColor: '#fff', borderRadius: 14, padding: 16,
     flexDirection: 'row', alignItems: 'center', gap: 12,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
   },
   cardRight: { alignItems: 'flex-end', gap: 6 },
-  invNumber: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.4 },
+  invNumber: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.4 },
   invCustomer: { fontSize: 16, fontWeight: '700', color: '#111827', marginTop: 2 },
   invJob: { fontSize: 13, color: '#6b7280', marginTop: 1 },
   invAmount: { fontSize: 17, fontWeight: '800', color: '#111827' },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   empty: { alignItems: 'center', paddingTop: 60, gap: 14 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
 
   // confirm
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 20 },
@@ -438,19 +438,19 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
     alignItems: 'center',
   },
-  confirmLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
+  confirmLabel: { fontSize: 13, color: '#6b7280', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   confirmAmount: { fontSize: 44, fontWeight: '800', color: '#111827', letterSpacing: -1 },
-  confirmPartial: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
+  confirmPartial: { fontSize: 12, color: '#6b7280', marginTop: 4 },
   confirmDivider: { height: 1, backgroundColor: '#f3f4f6', width: '100%', marginVertical: 20 },
   confirmMeta: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingVertical: 5 },
-  confirmMetaLabel: { fontSize: 13, color: '#9ca3af' },
+  confirmMetaLabel: { fontSize: 13, color: '#6b7280' },
   confirmMetaValue: { fontSize: 13, fontWeight: '600', color: '#374151' },
   payBtn: {
     backgroundColor: '#22c55e', borderRadius: 16, paddingVertical: 18,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
   },
   payBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  payHint: { textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 14 },
+  payHint: { textAlign: 'center', color: '#6b7280', fontSize: 13, marginTop: 14 },
 
   // processing
   processingLabel: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },

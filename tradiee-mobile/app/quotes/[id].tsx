@@ -36,6 +36,7 @@ type Quote = {
   gst_amount: number
   total: number
   customer_name: string | null
+  customer_phone: string | null
   customer_id: string | null
   company_id: string | null
   expires_at: string | null
@@ -67,6 +68,8 @@ export default function QuoteDetailScreen() {
   const fmtDate = (iso: string | null) => iso ? formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
   const { id } = useLocalSearchParams<{ id: string }>()
   const [sending, setSending] = useState(false)
+  const [texting, setTexting] = useState(false)
+  const [declining, setDeclining] = useState(false)
   const [accepting, setAccepting] = useState(false)
   const [converting, setConverting] = useState(false)
   const [showAddItem, setShowAddItem] = useState(false)
@@ -80,7 +83,7 @@ export default function QuoteDetailScreen() {
     `SELECT q.id, q.quote_number, q.title, q.status, q.subtotal, q.gst_amount, q.total,
             q.expires_at, q.customer_message, q.notes,
             q.customer_id, q.company_id,
-            c.name AS customer_name
+            c.name AS customer_name, c.phone AS customer_phone
      FROM quotes q
      LEFT JOIN customers c ON c.id = q.customer_id
      WHERE q.id = ?`,
@@ -120,6 +123,50 @@ export default function QuoteDetailScreen() {
     } finally {
       setSending(false)
     }
+  }
+
+  async function sendByText() {
+    setTexting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/sms/quote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ quoteId: id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to send')
+      Alert.alert('Sent!', 'Quote texted to customer.')
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not send text')
+    } finally {
+      setTexting(false)
+    }
+  }
+
+  async function declineQuote() {
+    if (!quote) return
+    Alert.alert(
+      'Decline Quote',
+      `Mark "${quote.title}" as declined?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline', style: 'destructive', onPress: async () => {
+            setDeclining(true)
+            const { error } = await supabase.from('quotes')
+              .update({ status: 'declined', declined_at: new Date().toISOString() })
+              .eq('id', id!)
+            setDeclining(false)
+            if (error) Alert.alert('Error', error.message)
+          },
+        },
+      ]
+    )
   }
 
   async function acceptQuote() {
@@ -273,15 +320,16 @@ export default function QuoteDetailScreen() {
   if (!quote) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#9ca3af' }}>Quote not found</Text>
+        <Text style={{ color: '#6b7280' }}>Quote not found</Text>
       </View>
     )
   }
 
   const color = STATUS_COLOR[quote.status] ?? '#9ca3af'
   const isDraft = quote.status === 'draft'
-  const isSent = quote.status === 'sent'
+  const isSent = quote.status === 'sent' || quote.status === 'viewed'
   const isAccepted = quote.status === 'accepted'
+  const hasPhone = !!quote.customer_phone
 
   const sectionMap = new Map<string, LineItem[]>()
   const unsectioned: LineItem[] = []
@@ -349,6 +397,20 @@ export default function QuoteDetailScreen() {
                   }
                 </TouchableOpacity>
               )}
+              {isSent && (
+                <TouchableOpacity
+                  style={[s.actionBtn, s.declineBtn, declining && { opacity: 0.6 }]}
+                  onPress={declineQuote}
+                  disabled={declining}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Decline quote"
+                >
+                  {declining
+                    ? <ActivityIndicator color="#ef4444" size="small" />
+                    : <><Feather name="x-circle" size={14} color="#ef4444" /><Text style={[s.actionBtnText, { color: '#ef4444' }]}> Decline</Text></>
+                  }
+                </TouchableOpacity>
+              )}
               {isDraft && (
                 <TouchableOpacity
                   style={[s.actionBtn, s.sendBtn, sending && { opacity: 0.6 }]}
@@ -359,6 +421,20 @@ export default function QuoteDetailScreen() {
                   {sending
                     ? <ActivityIndicator color="#fff" size="small" />
                     : <><Feather name="send" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by email</Text></>
+                  }
+                </TouchableOpacity>
+              )}
+              {isDraft && (
+                <TouchableOpacity
+                  style={[s.actionBtn, s.textBtn, (texting || !hasPhone) && { opacity: 0.5 }]}
+                  onPress={sendByText}
+                  disabled={texting || !hasPhone}
+                  activeOpacity={0.85}
+                  accessibilityLabel="Send quote by text message"
+                >
+                  {texting
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <><Feather name="message-square" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by text</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -377,6 +453,9 @@ export default function QuoteDetailScreen() {
               )}
             </View>
           )}
+          {isDraft && !hasPhone && (
+            <Text style={s.actionHint}>Customer has no phone number — add one to send by text</Text>
+          )}
         </View>
 
         {/* Line items */}
@@ -392,10 +471,10 @@ export default function QuoteDetailScreen() {
 
           {showAddItem && isDraft && (
             <View style={s.addItemBox}>
-              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#9ca3af" autoFocus />
+              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#6b7280" autoFocus />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#9ca3af" />
-                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#9ca3af" />
+                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={[s.miniBtn, s.miniBtnOrange, addingItem && { opacity: 0.5 }]} onPress={addLineItem} disabled={addingItem}>
@@ -464,7 +543,7 @@ export default function QuoteDetailScreen() {
               value={editForm.description}
               onChangeText={v => setEditForm(p => ({ ...p, description: v }))}
               placeholder="Description"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#6b7280"
             />
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
               <TextInput
@@ -473,7 +552,7 @@ export default function QuoteDetailScreen() {
                 onChangeText={v => setEditForm(p => ({ ...p, quantity: v }))}
                 placeholder="Qty"
                 keyboardType="decimal-pad"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
               />
               <TextInput
                 style={[s.input, { flex: 2 }]}
@@ -481,7 +560,7 @@ export default function QuoteDetailScreen() {
                 onChangeText={v => setEditForm(p => ({ ...p, unit_price: v }))}
                 placeholder="Unit price ($)"
                 keyboardType="decimal-pad"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
               />
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -520,7 +599,7 @@ function LineRow({ item, isDraft, onEdit, onDelete }: {
       </TouchableOpacity>
       <Text style={s.lineTotal}>{fmt(item.line_total ?? 0)}</Text>
       {isDraft && (
-        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }} accessibilityLabel="Remove line item" accessibilityRole="button">
           <Feather name="trash-2" size={16} color="#ef4444" />
         </TouchableOpacity>
       )}
@@ -531,19 +610,22 @@ function LineRow({ item, isDraft, onEdit, onDelete }: {
 const s = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  docNum: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
+  docNum: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
   docTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   statusBadge: { borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
   statusText: { fontSize: 12, fontWeight: '700' },
   desc: { fontSize: 14, color: '#6b7280', lineHeight: 20, marginBottom: 12 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },
-  metaLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  metaLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   metaValue: { fontSize: 13, color: '#374151', fontWeight: '500', textAlign: 'right' },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingVertical: 13 },
   sendBtn: { backgroundColor: '#3b82f6' },
+  textBtn: { backgroundColor: '#f97316' },
+  declineBtn: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
   convertBtn: { backgroundColor: '#22c55e' },
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  actionHint: { fontSize: 12, color: '#6b7280', marginTop: 8, textAlign: 'center' },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
   addLink: { fontSize: 14, color: '#f97316', fontWeight: '600', marginBottom: 10 },

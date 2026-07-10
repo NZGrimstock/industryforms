@@ -96,7 +96,7 @@ export default function QuotesScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Search quotes…"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor="#6b7280"
           value={search}
           onChangeText={setSearch}
           autoCorrect={false}
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  quoteNumber: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5 },
+  quoteNumber: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5 },
   statusBadge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { fontSize: 11, fontWeight: '600' },
   title: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   customer: { flex: 1, fontSize: 13, color: '#6b7280', marginRight: 8 },
   amount: { fontSize: 15, fontWeight: '700', color: '#111827' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 14 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
   createBtn: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   createBtnText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
 })

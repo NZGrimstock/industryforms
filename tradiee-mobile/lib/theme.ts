@@ -19,7 +19,7 @@ export const colors = {
   purpleBg: '#ede9fe',
   ink: '#111827',
   sub: '#6b7280',
-  mut: '#9ca3af',
+  mut: '#6b7280',
   line: '#e5e7eb',
   surface: '#ffffff',
   bg: '#f9fafb',

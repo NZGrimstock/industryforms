@@ -7,9 +7,11 @@ import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { geocodeAddress } from '@/lib/geocode'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 type Customer = { id: string; name: string; phone: string | null }
+type Site = { id: string; label: string | null; address: string; lat: number | null; lng: number | null }
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
@@ -29,7 +31,13 @@ export default function NewJobScreen() {
   const [saving, setSaving] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [newCust, setNewCust] = useState({ name: '', phone: '', email: '', billing_address: '' })
+  const [newCustCoords, setNewCustCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
   const [creatingCust, setCreatingCust] = useState(false)
+  // Job site: pick one of the customer's sites, or type a new address (geocoded via autocomplete)
+  const [sites, setSites] = useState<Site[]>([])
+  const [siteId, setSiteId] = useState<string | null>(null)
+  const [newSiteAddress, setNewSiteAddress] = useState('')
+  const [newSiteCoords, setNewSiteCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
   const newCustValid = !!(newCust.name.trim() && newCust.phone.trim() && newCust.email.trim() && newCust.billing_address.trim())
 
   useEffect(() => {
@@ -68,6 +76,23 @@ export default function NewJobScreen() {
     c.name.toLowerCase().includes(customerSearch.toLowerCase())
   )
 
+  // Load the chosen customer's sites; auto-select when there's exactly one.
+  useEffect(() => {
+    setSiteId(null)
+    setNewSiteAddress('')
+    setNewSiteCoords({ lat: null, lng: null })
+    if (!customerId) { setSites([]); return }
+    supabase.from('customer_sites')
+      .select('id, label, address, lat, lng')
+      .eq('customer_id', customerId)
+      .order('created_at')
+      .then(({ data }) => {
+        const rows = (data ?? []) as Site[]
+        setSites(rows)
+        if (rows.length === 1) setSiteId(rows[0].id)
+      })
+  }, [customerId])
+
   async function createCustomer() {
     if (!newCustValid) { Alert.alert('Missing details', 'Name, email, phone, and billing address are all required.'); return }
     if (!companyId) return
@@ -81,19 +106,26 @@ export default function NewJobScreen() {
       is_active: true,
     }).select('id, name, phone').single()
     if (error) { setCreatingCust(false); Alert.alert('Error', error.message); return }
-    await supabase.from('customer_sites').insert({
+    const coords = newCustCoords.lat != null
+      ? newCustCoords
+      : (await geocodeAddress(newCust.billing_address)) ?? { lat: null, lng: null }
+    const { data: site } = await supabase.from('customer_sites').insert({
       customer_id: data.id,
       address: newCust.billing_address.trim(),
       label: 'Billing address',
-    })
+      lat: coords.lat,
+      lng: coords.lng,
+    }).select('id, label, address, lat, lng').single()
     setCreatingCust(false)
     setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setCustomerId(data.id)
     setCustomerName(data.name)
+    if (site) { setSites([site as Site]); setSiteId(site.id) }
     setShowNewCustomer(false)
     setShowPicker(false)
     setCustomerSearch('')
     setNewCust({ name: '', phone: '', email: '', billing_address: '' })
+    setNewCustCoords({ lat: null, lng: null })
   }
 
   async function save() {
@@ -101,6 +133,24 @@ export default function NewJobScreen() {
     if (!companyId || !userId) return
     if (!API_BASE) { Alert.alert('Error', 'Missing EXPO_PUBLIC_API_URL.'); return }
     setSaving(true)
+
+    // Typed a new site address? Create the site first so the job links to it.
+    let jobSiteId = siteId
+    if (!jobSiteId && newSiteAddress.trim() && customerId) {
+      // Typed without picking a suggestion → geocode the text so the site still gets coords
+      const coords = newSiteCoords.lat != null
+        ? newSiteCoords
+        : (await geocodeAddress(newSiteAddress)) ?? { lat: null, lng: null }
+      const { data: site, error: siteErr } = await supabase.from('customer_sites').insert({
+        customer_id: customerId,
+        address: newSiteAddress.trim(),
+        lat: coords.lat,
+        lng: coords.lng,
+      }).select('id').single()
+      if (siteErr) { setSaving(false); Alert.alert('Error', `Couldn't save job site: ${siteErr.message}`); return }
+      jobSiteId = site.id
+    }
+
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
     const res = await fetch(`${API_BASE}/api/jobs`, {
@@ -113,6 +163,7 @@ export default function NewJobScreen() {
         title: title.trim(),
         description: description.trim() || null,
         customer_id: customerId,
+        site_id: jobSiteId,
         status: 'unscheduled',
       }),
     })
@@ -138,7 +189,7 @@ export default function NewJobScreen() {
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Replace hot water cylinder"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
             autoFocus
           />
         </View>
@@ -153,10 +204,44 @@ export default function NewJobScreen() {
           </TouchableOpacity>
           {customerId && (
             <TouchableOpacity onPress={() => { setCustomerId(null); setCustomerName('') }} style={{ marginTop: 6 }}>
-              <Text style={{ fontSize: 12, color: '#9ca3af' }}>Clear ×</Text>
+              <Text style={{ fontSize: 12, color: '#6b7280' }}>Clear ×</Text>
             </TouchableOpacity>
           )}
         </View>
+
+        {customerId && (
+          <View style={s.field}>
+            <Text style={s.label}>Job site</Text>
+            {sites.map(site => (
+              <TouchableOpacity
+                key={site.id}
+                style={[s.siteRow, siteId === site.id && s.siteRowActive]}
+                onPress={() => { setSiteId(siteId === site.id ? null : site.id); setNewSiteAddress(''); setNewSiteCoords({ lat: null, lng: null }) }}
+                activeOpacity={0.7}
+                accessibilityLabel={`Job site: ${site.label ?? site.address}`}
+              >
+                <Feather
+                  name={siteId === site.id ? 'check-circle' : 'circle'}
+                  size={18}
+                  color={siteId === site.id ? '#f97316' : '#9ca3af'}
+                />
+                <View style={{ flex: 1 }}>
+                  {site.label ? <Text style={s.siteLabel}>{site.label}</Text> : null}
+                  <Text style={s.siteAddr} numberOfLines={2}>{site.address}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            {!siteId && (
+              <AddressAutocomplete
+                style={[s.input, sites.length > 0 && { marginTop: 8 }]}
+                value={newSiteAddress}
+                onChangeText={v => { setNewSiteAddress(v); setNewSiteCoords({ lat: null, lng: null }) }}
+                onSelect={sel => { setNewSiteAddress(sel.address); setNewSiteCoords({ lat: sel.lat, lng: sel.lng }) }}
+                placeholder={sites.length > 0 ? 'Or add a new site address…' : 'Site address…'}
+              />
+            )}
+          </View>
+        )}
 
         <View style={s.field}>
           <Text style={s.label}>Description</Text>
@@ -165,7 +250,7 @@ export default function NewJobScreen() {
             value={description}
             onChangeText={setDescription}
             placeholder="Optional details about the job…"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
             multiline
             numberOfLines={4}
             textAlignVertical="top"
@@ -204,7 +289,7 @@ export default function NewJobScreen() {
                 value={newCust.name}
                 onChangeText={v => setNewCust(p => ({ ...p, name: v }))}
                 placeholder="Full name *"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 autoFocus
               />
               <TextInput
@@ -212,7 +297,7 @@ export default function NewJobScreen() {
                 value={newCust.phone}
                 onChangeText={v => setNewCust(p => ({ ...p, phone: v }))}
                 placeholder="Phone number *"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 keyboardType="phone-pad"
               />
               <TextInput
@@ -220,14 +305,15 @@ export default function NewJobScreen() {
                 value={newCust.email}
                 onChangeText={v => setNewCust(p => ({ ...p, email: v }))}
                 placeholder="Email *"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#6b7280"
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
               <AddressAutocomplete
                 style={s.input}
                 value={newCust.billing_address}
-                onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))}
+                onChangeText={v => { setNewCust(p => ({ ...p, billing_address: v })); setNewCustCoords({ lat: null, lng: null }) }}
+                onSelect={sel => { setNewCust(p => ({ ...p, billing_address: sel.address })); setNewCustCoords({ lat: sel.lat, lng: sel.lng }) }}
                 placeholder="Billing address *"
               />
               <TouchableOpacity
@@ -251,7 +337,7 @@ export default function NewJobScreen() {
                   value={customerSearch}
                   onChangeText={setCustomerSearch}
                   placeholder="Search customers…"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor="#6b7280"
                   autoFocus
                 />
               </View>
@@ -285,7 +371,7 @@ export default function NewJobScreen() {
                   </TouchableOpacity>
                 )}
                 ListEmptyComponent={
-                  <Text style={{ color: '#9ca3af', textAlign: 'center', padding: 24 }}>No customers found</Text>
+                  <Text style={{ color: '#6b7280', textAlign: 'center', padding: 24 }}>No customers found</Text>
                 }
               />
             </>
@@ -304,7 +390,7 @@ const s = StyleSheet.create({
   multiline: { minHeight: 100, paddingTop: 12 },
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
   pickerVal: { fontSize: 15, color: '#111827' },
-  pickerPlaceholder: { fontSize: 15, color: '#9ca3af' },
+  pickerPlaceholder: { fontSize: 15, color: '#6b7280' },
   btn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
@@ -313,6 +399,10 @@ const s = StyleSheet.create({
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, height: 44, gap: 8 },
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
   custRow: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8 },
+  siteRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 8 },
+  siteRowActive: { borderColor: '#f97316', backgroundColor: '#fff7ed' },
+  siteLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  siteAddr: { fontSize: 13, color: '#6b7280', marginTop: 1 },
   custName: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  custSub: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
+  custSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
 })

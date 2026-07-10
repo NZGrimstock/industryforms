@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#9ca3af',
+    color: '#6b7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#9ca3af',
+    color: '#6b7280',
     marginBottom: 2,
   },
   fieldValue: {

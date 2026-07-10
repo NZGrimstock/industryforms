@@ -127,10 +127,10 @@ const styles = StyleSheet.create({
   statusPill: { borderRadius: 999, backgroundColor: '#fff7ed', paddingHorizontal: 9, paddingVertical: 4 },
   statusText: { color: '#ea580c', fontSize: 11, fontWeight: '700' },
   stageRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f9fafb', borderRadius: 12, padding: 12 },
-  stageLabel: { fontSize: 11, color: '#9ca3af', fontWeight: '700', textTransform: 'uppercase' },
+  stageLabel: { fontSize: 11, color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' },
   stageName: { fontSize: 15, color: '#111827', fontWeight: '600', marginTop: 2 },
   progress: { fontSize: 13, color: '#6b7280', fontWeight: '700' },
   due: { marginTop: 10, fontSize: 12, color: '#6b7280' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 8 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
 })

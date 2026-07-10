@@ -11,6 +11,7 @@ const bodySchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().max(5000).nullish(),
   customer_id: z.string().uuid().nullish(),
+  site_id: z.string().uuid().nullish(),
   quote_id: z.string().uuid().nullish(),
   status: z.string().min(1).max(50).default('unscheduled'),
 })
@@ -22,7 +23,25 @@ export async function POST(req: NextRequest) {
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
-  const { title, description, customer_id, quote_id, status } = parsed.data
+  const { title, description, customer_id, site_id, quote_id, status } = parsed.data
+
+  // A site must belong to the same company (and the chosen customer, if any)
+  if (site_id) {
+    const { data: site } = await createServiceClient()
+      .from('customer_sites').select('id, company_id, customer_id').eq('id', site_id).single()
+    if (!site || site.company_id !== companyId || (customer_id && site.customer_id !== customer_id)) {
+      return NextResponse.json({ error: 'Invalid site' }, { status: 400 })
+    }
+  }
+
+  // Same for the quote — the service client bypasses RLS, so scope it explicitly
+  if (quote_id) {
+    const { data: quote } = await createServiceClient()
+      .from('quotes').select('id, company_id').eq('id', quote_id).single()
+    if (!quote || quote.company_id !== companyId) {
+      return NextResponse.json({ error: 'Invalid quote' }, { status: 400 })
+    }
+  }
 
   const service = createServiceClient()
   const job_number = await nextDocNumber(service, companyId, 'job')
@@ -32,6 +51,7 @@ export async function POST(req: NextRequest) {
     title,
     description: description ?? null,
     customer_id: customer_id ?? null,
+    site_id: site_id ?? null,
     company_id: companyId,
     assigned_to: userId,
     status,

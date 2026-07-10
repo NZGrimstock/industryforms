@@ -6,7 +6,7 @@ import { View, TextInput, TouchableOpacity, Text, StyleSheet, TextInputProps } f
 // configured (EXPO_PUBLIC_LOCATIONIQ_KEY), suggestions otherwise.
 const API_KEY = process.env.EXPO_PUBLIC_LOCATIONIQ_KEY
 
-type Suggestion = { place_id: string; display_name: string }
+type Suggestion = { place_id: string; display_name: string; lat?: string; lon?: string }
 
 function cleanAddress(s: string) {
   return s.replace(/^(\d+[a-zA-Z]?),\s+/, '$1 ')
@@ -15,9 +15,11 @@ function cleanAddress(s: string) {
 interface Props extends Omit<TextInputProps, 'value' | 'onChangeText'> {
   value: string
   onChangeText: (address: string) => void
+  /** Fires when a suggestion is picked, with the geocoded coordinates. */
+  onSelect?: (sel: { address: string; lat: number | null; lng: number | null }) => void
 }
 
-export function AddressAutocomplete({ value, onChangeText, style, ...inputProps }: Props) {
+export function AddressAutocomplete({ value, onChangeText, onSelect, style, ...inputProps }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -40,7 +42,13 @@ export function AddressAutocomplete({ value, onChangeText, style, ...inputProps 
   }
 
   function select(s: Suggestion) {
-    onChangeText(cleanAddress(s.display_name))
+    const address = cleanAddress(s.display_name)
+    onChangeText(address)
+    onSelect?.({
+      address,
+      lat: s.lat ? parseFloat(s.lat) : null,
+      lng: s.lon ? parseFloat(s.lon) : null,
+    })
     setSuggestions([])
   }
 
@@ -50,7 +58,7 @@ export function AddressAutocomplete({ value, onChangeText, style, ...inputProps 
         style={style}
         value={value}
         onChangeText={handleChange}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor="#6b7280"
         {...inputProps}
       />
       {suggestions.length > 0 && (

@@ -67,6 +67,8 @@ export default function InvoiceDetailScreen() {
   }
   const { id } = useLocalSearchParams<{ id: string }>()
   const [recording, setRecording] = useState(false)
+  const [showPayment, setShowPayment] = useState(false)
+  const [payForm, setPayForm] = useState({ amount: '', method: 'cash', notes: '' })
   const [showEdit, setShowEdit] = useState(false)
   const [editForm, setEditForm] = useState({ due_date: '', notes: '' })
   const [savingEdit, setSavingEdit] = useState(false)
@@ -92,14 +94,50 @@ export default function InvoiceDetailScreen() {
     [id]
   )
 
+  function openPayment() {
+    if (!invoice) return
+    const remaining = invoice.total - (invoice.amount_paid ?? 0)
+    setPayForm({ amount: remaining > 0 ? remaining.toFixed(2) : '', method: 'cash', notes: '' })
+    setShowPayment(true)
+  }
+
+  // Mirrors web invoices/[id]/client.tsx: insert a payments row, then update
+  // amount_paid / status — never just force the invoice to paid.
   async function recordPayment() {
+    if (!invoice) return
+    const amount = parseFloat(payForm.amount)
+    if (!amount || amount <= 0) { Alert.alert('Enter an amount', 'How much was paid?'); return }
     setRecording(true)
-    const { error } = await supabase
-      .from('invoices')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('id', id)
+    const { error: payErr } = await supabase.from('payments').insert({
+      invoice_id: invoice.id,
+      amount,
+      method: payForm.method,
+      notes: payForm.notes.trim() || null,
+      paid_at: new Date().toISOString(),
+    })
+    if (payErr) { setRecording(false); Alert.alert('Error', payErr.message); return }
+
+    const newAmountPaid = (invoice.amount_paid ?? 0) + amount
+    const newStatus = newAmountPaid >= invoice.total ? 'paid' : 'partially_paid'
+    const { error } = await supabase.from('invoices').update({
+      amount_paid: newAmountPaid,
+      status: newStatus,
+      paid_at: newStatus === 'paid' ? new Date().toISOString() : null,
+    }).eq('id', id)
     setRecording(false)
-    if (error) Alert.alert('Error', error.message)
+    if (error) { Alert.alert('Error', error.message); return }
+
+    if (newStatus === 'paid') {
+      // Fire-and-forget review request — server enforces idempotency + opt-in.
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        fetch(`${apiBase}/api/invoices/${invoice.id}/review-request`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        }).catch(() => {})
+      })
+    }
+    setShowPayment(false)
   }
 
   function openEdit() {
@@ -130,7 +168,7 @@ export default function InvoiceDetailScreen() {
   if (!invoice) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#9ca3af' }}>Invoice not found</Text>
+        <Text style={{ color: '#6b7280' }}>Invoice not found</Text>
       </View>
     )
   }
@@ -241,19 +279,73 @@ export default function InvoiceDetailScreen() {
               <Text style={styles.tapPayBtnText}>Tap to Pay</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.manualBtn, recording && { opacity: 0.5 }]}
-              onPress={recordPayment}
-              disabled={recording}
+              style={styles.manualBtn}
+              onPress={openPayment}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Record a manual payment"
             >
-              {recording
-                ? <ActivityIndicator color="#374151" size="small" />
-                : <Text style={styles.manualBtnText}>Manual</Text>
-              }
+              <Text style={styles.manualBtnText}>Manual</Text>
             </TouchableOpacity>
           </View>
         )}
       </SafeAreaView>
+
+      {/* Record payment modal */}
+      <Modal visible={showPayment} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => !recording && setShowPayment(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Record Payment</Text>
+              <TouchableOpacity onPress={() => !recording && setShowPayment(false)}>
+                <Text style={styles.modalClose}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
+              {invoice && (invoice.amount_paid ?? 0) > 0 && (
+                <Text style={{ fontSize: 13, color: '#6b7280' }}>
+                  {`$${(invoice.amount_paid ?? 0).toFixed(2)} of $${invoice.total.toFixed(2)} already paid`}
+                </Text>
+              )}
+              <Text style={styles.metaLabel}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                value={payForm.amount}
+                onChangeText={v => setPayForm(f => ({ ...f, amount: v }))}
+                placeholder="0.00"
+                placeholderTextColor="#6b7280"
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+              <Text style={styles.metaLabel}>Method</Text>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                {([['cash', 'Cash'], ['bank_transfer', 'Bank transfer'], ['card', 'Card'], ['other', 'Other']] as const).map(([key, label]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.methodChip, payForm.method === key && styles.methodChipActive]}
+                    onPress={() => setPayForm(f => ({ ...f, method: key }))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Payment method: ${label}`}
+                  >
+                    <Text style={[styles.methodChipText, payForm.method === key && styles.methodChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.metaLabel}>Notes (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={payForm.notes}
+                onChangeText={v => setPayForm(f => ({ ...f, notes: v }))}
+                placeholder="e.g. paid cash on site"
+                placeholderTextColor="#6b7280"
+              />
+              <TouchableOpacity style={[styles.saveBtn, recording && { opacity: 0.5 }]} onPress={recordPayment} disabled={recording} activeOpacity={0.85}>
+                {recording ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Record payment</Text>}
+              </TouchableOpacity>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
 
       <Modal visible={showEdit} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowEdit(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
@@ -266,17 +358,17 @@ export default function InvoiceDetailScreen() {
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
             <Text style={styles.metaLabel}>Due date (YYYY-MM-DD)</Text>
-            <TextInput style={styles.input} value={editForm.due_date} onChangeText={v => setEditForm(f => ({ ...f, due_date: v }))} placeholder="2026-08-01" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={editForm.due_date} onChangeText={v => setEditForm(f => ({ ...f, due_date: v }))} placeholder="2026-08-01" placeholderTextColor="#6b7280" />
             <Text style={styles.metaLabel}>Notes</Text>
             <TextInput
               style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
               value={editForm.notes}
               onChangeText={v => setEditForm(f => ({ ...f, notes: v }))}
               placeholder="Notes shown on the invoice…"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#6b7280"
               multiline
             />
-            <Text style={{ fontSize: 12, color: '#9ca3af' }}>Line items aren&apos;t editable from mobile yet — use the web app for that.</Text>
+            <Text style={{ fontSize: 12, color: '#6b7280' }}>Line items aren&apos;t editable from mobile yet — use the web app for that.</Text>
             <TouchableOpacity style={[styles.saveBtn, savingEdit && { opacity: 0.5 }]} onPress={saveEdit} disabled={savingEdit} activeOpacity={0.85}>
               {savingEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
             </TouchableOpacity>
@@ -294,15 +386,19 @@ const styles = StyleSheet.create({
   modalClose: { fontSize: 15, color: '#f97316', fontWeight: '600' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
   saveBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  methodChip: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+  methodChipActive: { borderColor: '#f97316', backgroundColor: '#fff7ed' },
+  methodChipText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
+  methodChipTextActive: { color: '#c2410c' },
   saveBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  docNumber: { fontSize: 12, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
+  docNumber: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
   docTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   statusBadge: { borderRadius: 100, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
   statusText: { fontSize: 12, fontWeight: '700' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },
-  metaLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  metaLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   metaValue: { fontSize: 13, color: '#374151', fontWeight: '500', textAlign: 'right' },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
   lineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },

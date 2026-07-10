@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 import { sendSms } from '@/lib/sms'
 import { logCommunication } from '@/lib/comms'
 
 const bodySchema = z.object({ quoteId: z.string().uuid() })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Cookie (web) or Bearer token (mobile) auth, company-scoped
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'quoteId required' }, { status: 400 })
   const { quoteId } = parsed.data
   const service = createServiceClient()
-  const { data: callerProfile } = await service.from('profiles').select('company_id').eq('id', user.id).single()
 
   const { data: quote } = await service
     .from('quotes')
     .select('company_id, customer_id, quote_number, title, public_token, customers(name, phone), companies(name, country)')
     .eq('id', quoteId)
     .single()
-  if (!quote || quote.company_id !== callerProfile?.company_id) {
+  if (!quote || quote.company_id !== auth.companyId) {
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
   }
 

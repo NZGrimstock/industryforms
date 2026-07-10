@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#6b7280',
   },
   badge: {
     borderWidth: 1,

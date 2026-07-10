@@ -142,7 +142,7 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
   },
   sectionTitle: {
-    fontSize: 11, fontWeight: '700', color: '#9ca3af', textTransform: 'uppercase',
+    fontSize: 11, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase',
     letterSpacing: 0.8, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4,
   },
   row: {

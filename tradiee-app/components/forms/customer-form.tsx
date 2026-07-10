@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { geocodeAddress } from '@/lib/geocode'
 import { Customer } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,10 +70,13 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
     }
 
     if (addAsJobSite && form.billing_address.trim()) {
+      const coords = (await geocodeAddress(form.billing_address)) ?? { lat: null, lng: null }
       await supabase.from('customer_sites').insert({
         customer_id: customerId,
         address: form.billing_address.trim(),
         label: customer ? 'Billing address' : null,
+        lat: coords.lat,
+        lng: coords.lng,
       })
     }
 

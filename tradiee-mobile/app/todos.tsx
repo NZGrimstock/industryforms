@@ -162,7 +162,7 @@ export default function TodosScreen() {
               value={newTitle}
               onChangeText={setNewTitle}
               placeholder="What needs to be done?"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor="#6b7280"
               autoFocus
               multiline
             />
@@ -206,20 +206,20 @@ const s = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 14, padding: 14, gap: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   todoTitle: { fontSize: 15, fontWeight: '600', color: '#111827' },
   todoDesc: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  autoLabel: { fontSize: 11, color: '#9ca3af', marginTop: 3, fontStyle: 'italic' },
+  autoLabel: { fontSize: 11, color: '#6b7280', marginTop: 3, fontStyle: 'italic' },
   prioBadge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
   prioText: { fontSize: 11, fontWeight: '700' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
   addPromptBtn: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   addPromptText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  modalClose: { fontSize: 15, color: '#9ca3af', fontWeight: '600' },
+  modalClose: { fontSize: 15, color: '#6b7280', fontWeight: '600' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
   label: { fontSize: 13, fontWeight: '600', color: '#374151' },
   prioBtn: { flex: 1, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff' },
-  prioBtnText: { fontSize: 12, fontWeight: '600', color: '#9ca3af', textTransform: 'capitalize' },
+  prioBtnText: { fontSize: 12, fontWeight: '600', color: '#6b7280', textTransform: 'capitalize' },
   addBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   addBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
 })

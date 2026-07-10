@@ -206,8 +206,8 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
   },
   toggleTitle: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  toggleSub: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  toggleSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#fff', borderRadius: 14, padding: 14,
@@ -216,7 +216,7 @@ const s = StyleSheet.create({
   iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   itemTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
   itemSub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  timeText: { fontSize: 11, color: '#9ca3af', fontWeight: '500' },
+  timeText: { fontSize: 11, color: '#6b7280', fontWeight: '500' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
 })

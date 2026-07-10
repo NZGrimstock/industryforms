@@ -8,9 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { geocodeAddress } from '@/lib/geocode'
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null }
-type LineItem = { id: string; description: string; quantity: string; unit_price: string }
+type LineItem = { id: string; description: string; quantity: string; unit_price: string; sectionId: string | null }
+type QuoteSection = { id: string; title: string }
 type Site = { id: string; label: string | null; address: string }
 
 const EXPIRY_OPTIONS = [7, 14, 30, 60]
@@ -36,6 +38,9 @@ export default function NewQuoteScreen() {
   const [expiryDays, setExpiryDays] = useState(30)
   const [quoteNumber, setQuoteNumber] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
+  const [sections, setSections] = useState<QuoteSection[]>([])
+  const [showAddSection, setShowAddSection] = useState(false)
+  const [newSectionTitle, setNewSectionTitle] = useState('')
   const [showAddItem, setShowAddItem] = useState(false)
   const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' })
   const [companyId, setCompanyId] = useState<string | null>(null)
@@ -104,9 +109,23 @@ export default function NewQuoteScreen() {
 
   function addItem() {
     if (!newItem.description.trim() || !newItem.unit_price) return
-    setLineItems(prev => [...prev, { id: uid(), ...newItem }])
+    // New items land in the most recent section (or unsectioned if none yet)
+    setLineItems(prev => [...prev, { id: uid(), ...newItem, sectionId: sections.length ? sections[sections.length - 1].id : null }])
     setNewItem({ description: '', quantity: '1', unit_price: '' })
     setShowAddItem(false)
+  }
+
+  function addSection() {
+    if (!newSectionTitle.trim()) return
+    setSections(prev => [...prev, { id: uid(), title: newSectionTitle.trim() }])
+    setNewSectionTitle('')
+    setShowAddSection(false)
+  }
+
+  function removeSection(sectionId: string) {
+    setSections(prev => prev.filter(sec => sec.id !== sectionId))
+    // Items in the removed section become unsectioned rather than deleted
+    setLineItems(prev => prev.map(i => i.sectionId === sectionId ? { ...i, sectionId: null } : i))
   }
 
   const subtotal = lineItems.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unit_price) || 0), 0)
@@ -125,10 +144,13 @@ export default function NewQuoteScreen() {
     }).select('id, name, phone, email').single()
     if (error) { setCreatingCust(false); Alert.alert('Error', error.message); return }
     if (data) {
+      const coords = (await geocodeAddress(newCust.billing_address)) ?? { lat: null, lng: null }
       await supabase.from('customer_sites').insert({
         customer_id: data.id,
         address: newCust.billing_address.trim(),
         label: 'Billing address',
+        lat: coords.lat,
+        lng: coords.lng,
       })
       setCustomers(prev => [data, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
       selectCustomer(data)
@@ -163,11 +185,25 @@ export default function NewQuoteScreen() {
       }).select('id').single()
       if (error || !quote) throw new Error(error?.message ?? 'Failed to create quote')
 
+      // Insert sections first, keeping a local-id → db-id map (same model as web quote-builder)
+      const sectionIdMap = new Map<string, string>()
+      for (let si = 0; si < sections.length; si++) {
+        const { data: sec } = await supabase.from('quote_sections').insert({
+          quote_id: quote.id,
+          company_id: companyId,
+          title: sections[si].title,
+          is_optional: false,
+          sort_order: si,
+        }).select('id').single()
+        if (sec) sectionIdMap.set(sections[si].id, sec.id)
+      }
+
       if (lineItems.length > 0) {
         await supabase.from('quote_line_items').insert(
           lineItems.map((item, idx) => ({
             quote_id: quote.id,
             company_id: companyId,
+            section_id: item.sectionId ? sectionIdMap.get(item.sectionId) ?? null : null,
             description: item.description.trim(),
             quantity: parseFloat(item.quantity) || 1,
             unit_price: parseFloat(item.unit_price) || 0,
@@ -213,7 +249,7 @@ export default function NewQuoteScreen() {
       >
         <View style={s.field}>
           <Text style={s.label}>Title *</Text>
-          <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="e.g. Kitchen renovation quote" placeholderTextColor="#9ca3af" autoFocus />
+          <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="e.g. Kitchen renovation quote" placeholderTextColor="#6b7280" autoFocus />
         </View>
 
         <View style={s.field}>
@@ -253,24 +289,43 @@ export default function NewQuoteScreen() {
 
         <View style={s.field}>
           <Text style={s.label}>Message to customer</Text>
-          <TextInput style={[s.input, { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' }]} value={message} onChangeText={setMessage} placeholder="Included in the quote email…" placeholderTextColor="#9ca3af" multiline />
+          <TextInput style={[s.input, { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' }]} value={message} onChangeText={setMessage} placeholder="Included in the quote email…" placeholderTextColor="#6b7280" multiline />
         </View>
 
         {/* Line items */}
         <View style={s.section}>
           <View style={s.sectionHead}>
             <Text style={s.sectionTitle}>Line items</Text>
-            <TouchableOpacity onPress={() => setShowAddItem(v => !v)}>
-              <Text style={s.addLink}>+ Add item</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <TouchableOpacity onPress={() => setShowAddSection(v => !v)} hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
+                <Text style={s.addLink}>+ Section</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowAddItem(v => !v)} hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
+                <Text style={s.addLink}>+ Add item</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {showAddSection && (
+            <View style={s.addItemBox}>
+              <TextInput style={[s.input, { marginBottom: 8 }]} value={newSectionTitle} onChangeText={setNewSectionTitle} placeholder="Section title, e.g. Materials" placeholderTextColor="#6b7280" autoFocus />
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={[s.btn, { flex: 1, paddingVertical: 11 }]} onPress={addSection}>
+                  <Text style={s.btnText}>Add section</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.ghostBtn, { flex: 1 }]} onPress={() => setShowAddSection(false)}>
+                  <Text style={s.ghostBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {showAddItem && (
             <View style={s.addItemBox}>
-              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#9ca3af" autoFocus />
+              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#6b7280" autoFocus />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#9ca3af" />
-                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#9ca3af" />
+                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={[s.btn, { flex: 1, paddingVertical: 11 }]} onPress={addItem}>
@@ -283,21 +338,30 @@ export default function NewQuoteScreen() {
             </View>
           )}
 
-          {lineItems.length === 0 && !showAddItem ? (
+          {lineItems.length === 0 && sections.length === 0 && !showAddItem ? (
             <Text style={s.empty}>No line items — tap "+ Add item" above</Text>
           ) : (
-            lineItems.map(item => (
-              <View key={item.id} style={s.lineRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.lineDesc}>{item.description}</Text>
-                  <Text style={s.lineSub}>{item.quantity} × ${parseFloat(item.unit_price || '0').toFixed(2)}</Text>
+            <>
+              {lineItems.filter(i => !i.sectionId).map(item => (
+                <LineItemRow key={item.id} item={item} onRemove={() => setLineItems(p => p.filter(i => i.id !== item.id))} />
+              ))}
+              {sections.map(sec => (
+                <View key={sec.id}>
+                  <View style={s.qSectionRow}>
+                    <Text style={s.qSectionTitle}>{sec.title}</Text>
+                    <TouchableOpacity onPress={() => removeSection(sec.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove section ${sec.title}`} accessibilityRole="button">
+                      <Feather name="x" size={14} color="#d1d5db" />
+                    </TouchableOpacity>
+                  </View>
+                  {lineItems.filter(i => i.sectionId === sec.id).map(item => (
+                    <LineItemRow key={item.id} item={item} onRemove={() => setLineItems(p => p.filter(i => i.id !== item.id))} />
+                  ))}
+                  {lineItems.filter(i => i.sectionId === sec.id).length === 0 && (
+                    <Text style={s.empty}>Items added next will go in this section</Text>
+                  )}
                 </View>
-                <Text style={s.lineTotal}>${((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}</Text>
-                <TouchableOpacity onPress={() => setLineItems(p => p.filter(i => i.id !== item.id))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Feather name="x" size={16} color="#d1d5db" />
-                </TouchableOpacity>
-              </View>
-            ))
+              ))}
+            </>
           )}
 
           {lineItems.length > 0 && (
@@ -340,7 +404,7 @@ export default function NewQuoteScreen() {
             <>
               <View style={s.searchBox}>
                 <Feather name="search" size={15} color="#9ca3af" />
-                <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder="Search customers…" placeholderTextColor="#9ca3af" autoFocus />
+                <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder="Search customers…" placeholderTextColor="#6b7280" autoFocus />
               </View>
               <FlatList
                 data={filteredCustomers}
@@ -361,7 +425,7 @@ export default function NewQuoteScreen() {
                     {item.email && <Text style={s.custSub}>{item.email}</Text>}
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={<Text style={{ color: '#9ca3af', textAlign: 'center', padding: 24 }}>No customers found</Text>}
+                ListEmptyComponent={<Text style={{ color: '#6b7280', textAlign: 'center', padding: 24 }}>No customers found</Text>}
               />
             </>
           ) : (
@@ -371,11 +435,11 @@ export default function NewQuoteScreen() {
                 <Text style={{ color: '#f97316', fontWeight: '600' }}>Back to search</Text>
               </TouchableOpacity>
               <Text style={s.label}>Name *</Text>
-              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.name} onChangeText={v => setNewCust(p => ({ ...p, name: v }))} placeholder="Customer name" placeholderTextColor="#9ca3af" autoFocus />
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.name} onChangeText={v => setNewCust(p => ({ ...p, name: v }))} placeholder="Customer name" placeholderTextColor="#6b7280" autoFocus />
               <Text style={s.label}>Email *</Text>
-              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.email} onChangeText={v => setNewCust(p => ({ ...p, email: v }))} placeholder="customer@email.com" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.email} onChangeText={v => setNewCust(p => ({ ...p, email: v }))} placeholder="customer@email.com" placeholderTextColor="#6b7280" keyboardType="email-address" autoCapitalize="none" />
               <Text style={s.label}>Phone *</Text>
-              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.phone} onChangeText={v => setNewCust(p => ({ ...p, phone: v }))} placeholder="+64 21 000 0000" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.phone} onChangeText={v => setNewCust(p => ({ ...p, phone: v }))} placeholder="+64 21 000 0000" placeholderTextColor="#6b7280" keyboardType="phone-pad" />
               <Text style={s.label}>Billing address *</Text>
               <AddressAutocomplete style={[s.input, { marginBottom: 24 }]} value={newCust.billing_address} onChangeText={v => setNewCust(p => ({ ...p, billing_address: v }))} placeholder="Start typing an address…" />
               <TouchableOpacity
@@ -416,6 +480,21 @@ export default function NewQuoteScreen() {
   )
 }
 
+function LineItemRow({ item, onRemove }: { item: LineItem; onRemove: () => void }) {
+  return (
+    <View style={s.lineRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.lineDesc}>{item.description}</Text>
+        <Text style={s.lineSub}>{item.quantity} × ${parseFloat(item.unit_price || '0').toFixed(2)}</Text>
+      </View>
+      <Text style={s.lineTotal}>${((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}</Text>
+      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove ${item.description}`} accessibilityRole="button">
+        <Feather name="x" size={16} color="#d1d5db" />
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   field: { marginBottom: 14 },
@@ -423,7 +502,7 @@ const s = StyleSheet.create({
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827' },
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
   pickerVal: { fontSize: 15, color: '#111827' },
-  pickerPh: { fontSize: 15, color: '#9ca3af' },
+  pickerPh: { fontSize: 15, color: '#6b7280' },
   expiryChip: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   expiryChipActive: { backgroundColor: '#fff7ed', borderColor: '#f97316' },
   expiryChipText: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
@@ -435,8 +514,10 @@ const s = StyleSheet.create({
   addItemBox: { backgroundColor: '#fff7ed', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#fed7aa' },
   empty: { color: '#d1d5db', fontSize: 14, textAlign: 'center', paddingVertical: 8 },
   lineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },
+  qSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 2 },
+  qSectionTitle: { fontSize: 13, fontWeight: '700', color: '#f97316' },
   lineDesc: { fontSize: 14, color: '#374151', fontWeight: '500' },
-  lineSub: { fontSize: 12, color: '#9ca3af', marginTop: 1 },
+  lineSub: { fontSize: 12, color: '#6b7280', marginTop: 1 },
   lineTotal: { fontSize: 14, fontWeight: '700', color: '#111827', minWidth: 60, textAlign: 'right' },
   totals: { marginTop: 10, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 10 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
@@ -457,5 +538,5 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
   custRow: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 8 },
   custName: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  custSub: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
+  custSub: { fontSize: 13, color: '#6b7280', marginTop: 2 },
 })

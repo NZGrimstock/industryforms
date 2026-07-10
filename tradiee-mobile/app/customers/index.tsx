@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 
 type Customer = {
@@ -63,7 +64,18 @@ export default function CustomersScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen options={{ title: 'Customers', headerTintColor: '#f97316' }} />
+      <Stack.Screen options={{
+        title: 'Customers', headerTintColor: '#f97316',
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => router.push('/customers/new')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="New customer"
+          >
+            <Feather name="plus-circle" size={26} color="#f97316" />
+          </TouchableOpacity>
+        ),
+      }} />
       <View style={styles.header}>
         <Text style={styles.count}>{filtered.length} customer{filtered.length === 1 ? '' : 's'}</Text>
       </View>
@@ -73,7 +85,7 @@ export default function CustomersScreen() {
         <TextInput
           style={styles.searchInput}
           placeholder="Search customers…"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor="#6b7280"
           value={search}
           onChangeText={setSearch}
           autoCorrect={false}
@@ -133,7 +145,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   heading: { fontSize: 24, fontWeight: '700', color: '#111827' },
-  count: { fontSize: 14, color: '#9ca3af', fontWeight: '500' },
+  count: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 4, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, height: 44 },
   searchIcon: { marginRight: 8, fontSize: 14 },
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
@@ -146,7 +158,7 @@ const styles = StyleSheet.create({
   typeBadge: { borderRadius: 100, paddingHorizontal: 7, paddingVertical: 2 },
   typeText: { fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
   contactPerson: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
-  detail: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  detail: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   empty: { flex: 1, alignItems: 'center', paddingTop: 60 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
 })

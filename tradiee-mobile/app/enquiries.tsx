@@ -184,11 +184,11 @@ export default function EnquiriesScreen() {
           </View>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
-              <TextInput style={s.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="Customer name *" placeholderTextColor="#9ca3af" autoFocus />
-              <TextInput style={s.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
-              <TextInput style={s.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="Email" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
-              <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm(p => ({ ...p, notes: v }))} placeholder="What are they looking for?" placeholderTextColor="#9ca3af" multiline />
-              <TextInput style={s.input} value={form.source} onChangeText={v => setForm(p => ({ ...p, source: v }))} placeholder="Source (phone call, website, referral…)" placeholderTextColor="#9ca3af" />
+              <TextInput style={s.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="Customer name *" placeholderTextColor="#6b7280" autoFocus />
+              <TextInput style={s.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor="#6b7280" keyboardType="phone-pad" />
+              <TextInput style={s.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="Email" placeholderTextColor="#6b7280" keyboardType="email-address" autoCapitalize="none" />
+              <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm(p => ({ ...p, notes: v }))} placeholder="What are they looking for?" placeholderTextColor="#6b7280" multiline />
+              <TextInput style={s.input} value={form.source} onChangeText={v => setForm(p => ({ ...p, source: v }))} placeholder="Source (phone call, website, referral…)" placeholderTextColor="#6b7280" />
               <TouchableOpacity
                 style={[s.addBtn, (!form.name.trim() || adding) && { opacity: 0.5 }]}
                 onPress={addEnquiry}
@@ -210,26 +210,26 @@ const s = StyleSheet.create({
   filterRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 8, marginBottom: 4, backgroundColor: '#f3f4f6', borderRadius: 10, padding: 3 },
   filterBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   filterBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  filterText: { fontSize: 13, fontWeight: '500', color: '#9ca3af' },
+  filterText: { fontSize: 13, fontWeight: '500', color: '#6b7280' },
   filterTextActive: { color: '#111827', fontWeight: '600' },
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   name: { fontSize: 16, fontWeight: '700', color: '#111827' },
   phone: { fontSize: 13, color: '#f97316', marginTop: 2 },
   notes: { fontSize: 13, color: '#6b7280', marginTop: 4, lineHeight: 18 },
-  source: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  source: { fontSize: 11, color: '#6b7280', marginTop: 4 },
   badge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   badgeText: { fontSize: 11, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f9fafb', flexWrap: 'wrap' },
   actionBtn: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
   actionText: { fontSize: 12, fontWeight: '600', color: '#374151' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 14 },
-  emptyText: { color: '#9ca3af', fontSize: 15 },
+  emptyText: { color: '#6b7280', fontSize: 15 },
   addPromptBtn: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   addPromptText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  modalClose: { fontSize: 15, color: '#9ca3af', fontWeight: '600' },
+  modalClose: { fontSize: 15, color: '#6b7280', fontWeight: '600' },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: '#111827' },
   addBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 4 },
   addBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },

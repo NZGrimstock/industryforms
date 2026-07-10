@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 interface Props {
   value: string
   onChange: (address: string) => void
+  /** Fires when a suggestion is picked, with the geocoded coordinates. */
+  onSelect?: (sel: { address: string; lat: number | null; lng: number | null }) => void
   placeholder?: string
   required?: boolean
   className?: string
@@ -12,7 +14,7 @@ interface Props {
 
 const API_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY
 
-type Suggestion = { place_id: string; display_name: string }
+type Suggestion = { place_id: string; display_name: string; lat?: string; lon?: string }
 
 // LocationIQ returns "123, Any Street, …" — strip the comma after the house number
 function cleanAddress(s: string) {
@@ -22,6 +24,7 @@ function cleanAddress(s: string) {
 export function AddressAutocomplete({
   value,
   onChange,
+  onSelect,
   placeholder = 'Start typing an address…',
   required,
   className,
@@ -71,6 +74,11 @@ export function AddressAutocomplete({
     const addr = cleanAddress(s.display_name)
     setQuery(addr)
     onChange(addr)
+    onSelect?.({
+      address: addr,
+      lat: s.lat ? parseFloat(s.lat) : null,
+      lng: s.lon ? parseFloat(s.lon) : null,
+    })
     setSuggestions([])
     setOpen(false)
   }

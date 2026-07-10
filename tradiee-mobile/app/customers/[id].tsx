@@ -8,6 +8,7 @@ import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { geocodeAddress } from '@/lib/geocode'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 function openPhone(phone: string) {
@@ -67,8 +68,15 @@ type Job = {
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [showEdit, setShowEdit] = useState(false)
-  const [form, setForm] = useState({ name: '', type: '', email: '', phone: '', billing_address: '', contact_person: '' })
+  const [form, setForm] = useState({ name: '', type: '', email: '', phone: '', billing_address: '', contact_person: '', notes: '', pricing_group_id: '' })
   const [saving, setSaving] = useState(false)
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([])
+  // Site add/edit modal
+  const [showSite, setShowSite] = useState(false)
+  const [editingSite, setEditingSite] = useState<Site | null>(null)
+  const [siteForm, setSiteForm] = useState({ label: '', address: '', access_notes: '' })
+  const [siteCoords, setSiteCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
+  const [savingSite, setSavingSite] = useState(false)
 
   const { data: customers, isLoading } = useQuery<Customer>(
     `SELECT id, name, type, email, phone, billing_address, contact_person
@@ -77,7 +85,7 @@ export default function CustomerDetailScreen() {
   )
   const customer = customers?.[0]
 
-  function openEdit() {
+  async function openEdit() {
     if (!customer) return
     setForm({
       name: customer.name ?? '',
@@ -86,8 +94,16 @@ export default function CustomerDetailScreen() {
       phone: customer.phone ?? '',
       billing_address: customer.billing_address ?? '',
       contact_person: customer.contact_person ?? '',
+      notes: '',
+      pricing_group_id: '',
     })
     setShowEdit(true)
+    // notes / pricing_group_id aren't in the PowerSync schema — fetch from supabase
+    const { data } = await supabase.from('customers').select('notes, pricing_group_id, company_id').eq('id', id).single()
+    if (!data) return
+    setForm(f => ({ ...f, notes: data.notes ?? '', pricing_group_id: data.pricing_group_id ?? '' }))
+    const { data: g } = await supabase.from('customer_groups').select('id, name').eq('company_id', data.company_id).order('name')
+    setGroups(g ?? [])
   }
 
   async function saveEdit() {
@@ -100,10 +116,62 @@ export default function CustomerDetailScreen() {
       phone: form.phone.trim() || null,
       billing_address: form.billing_address.trim() || null,
       contact_person: form.contact_person.trim() || null,
+      notes: form.notes.trim() || null,
+      pricing_group_id: form.pricing_group_id || null,
     }).eq('id', id)
     setSaving(false)
     if (error) { Alert.alert('Error', error.message); return }
     setShowEdit(false)
+  }
+
+  function openAddSite() {
+    setEditingSite(null)
+    setSiteForm({ label: '', address: '', access_notes: '' })
+    setSiteCoords({ lat: null, lng: null })
+    setShowSite(true)
+  }
+
+  function openEditSite(site: Site) {
+    setEditingSite(site)
+    setSiteForm({ label: site.label ?? '', address: site.address, access_notes: site.access_notes ?? '' })
+    setSiteCoords({ lat: null, lng: null })
+    setShowSite(true)
+  }
+
+  async function saveSite() {
+    const addr = siteForm.address.trim()
+    if (!addr) { Alert.alert('Address required', 'Please enter a site address.'); return }
+    setSavingSite(true)
+    // Re-geocode only when the address is new or changed; keep coords from a picked suggestion
+    const addressChanged = !editingSite || addr !== editingSite.address
+    const coords = siteCoords.lat != null
+      ? siteCoords
+      : addressChanged ? (await geocodeAddress(addr)) ?? { lat: null, lng: null } : null
+    const row = {
+      label: siteForm.label.trim() || null,
+      address: addr,
+      access_notes: siteForm.access_notes.trim() || null,
+      ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+    }
+    const { error } = editingSite
+      ? await supabase.from('customer_sites').update(row).eq('id', editingSite.id)
+      : await supabase.from('customer_sites').insert({ ...row, customer_id: id })
+    setSavingSite(false)
+    if (error) { Alert.alert('Error', error.message); return }
+    setShowSite(false)
+  }
+
+  function deleteSite(site: Site) {
+    Alert.alert('Delete site?', site.label ? `${site.label}\n${site.address}` : site.address, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('customer_sites').delete().eq('id', site.id)
+          if (error) Alert.alert('Error', error.message)
+        },
+      },
+    ])
   }
 
   const { data: sites } = useQuery<Site>(
@@ -132,7 +200,7 @@ export default function CustomerDetailScreen() {
   if (!customer) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#9ca3af' }}>Customer not found</Text>
+        <Text style={{ color: '#6b7280' }}>Customer not found</Text>
       </View>
     )
   }
@@ -192,24 +260,37 @@ export default function CustomerDetailScreen() {
         </View>
 
         {/* Sites */}
-        {(sites ?? []).length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Sites</Text>
-            {(sites ?? []).map((site, idx) => (
-              <TouchableOpacity key={site.id} style={[styles.siteRow, idx === 0 && { borderTopWidth: 0 }]} onPress={() => openMaps(site.address)} activeOpacity={0.7}>
-                <View style={{ flex: 1 }}>
-                  {site.label && (
-                    <Text style={styles.siteLabel}>{site.label}</Text>
-                  )}
-                  <Text style={[styles.siteAddress, { color: '#f97316' }]}>{site.address}</Text>
-                  {site.access_notes && (
-                    <Text style={styles.siteNotes} numberOfLines={2}>{site.access_notes}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Sites</Text>
+            <TouchableOpacity style={styles.addSiteBtn} onPress={openAddSite} hitSlop={8} accessibilityLabel="Add site">
+              <Feather name="plus-circle" size={17} color="#f97316" />
+              <Text style={styles.addSiteText}>Add site</Text>
+            </TouchableOpacity>
           </View>
-        )}
+          {(sites ?? []).map((site, idx) => (
+            <View key={site.id} style={[styles.siteRow, idx === 0 && { borderTopWidth: 0 }]}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => openMaps(site.address)} activeOpacity={0.7}>
+                {site.label && (
+                  <Text style={styles.siteLabel}>{site.label}</Text>
+                )}
+                <Text style={[styles.siteAddress, { color: '#f97316' }]}>{site.address}</Text>
+                {site.access_notes && (
+                  <Text style={styles.siteNotes} numberOfLines={2}>{site.access_notes}</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.siteIconBtn} onPress={() => openEditSite(site)} accessibilityLabel={`Edit site ${site.label ?? site.address}`}>
+                <Feather name="edit-2" size={17} color="#9ca3af" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.siteIconBtn} onPress={() => deleteSite(site)} accessibilityLabel={`Delete site ${site.label ?? site.address}`}>
+                <Feather name="trash-2" size={17} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {(sites ?? []).length === 0 && (
+            <Text style={styles.siteNotes}>No sites yet</Text>
+          )}
+        </View>
 
         {/* Recent jobs */}
         {(jobs ?? []).length > 0 && (
@@ -250,7 +331,7 @@ export default function CustomerDetailScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
-            <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Name *" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Name *" placeholderTextColor="#6b7280" />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {(['residential', 'commercial'] as const).map(t => (
                 <TouchableOpacity
@@ -264,12 +345,72 @@ export default function CustomerDetailScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput style={styles.input} value={form.contact_person} onChangeText={v => setForm(f => ({ ...f, contact_person: v }))} placeholder="Contact person" placeholderTextColor="#9ca3af" />
-            <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="Email" placeholderTextColor="#9ca3af" keyboardType="email-address" autoCapitalize="none" />
-            <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} placeholder="Phone" placeholderTextColor="#9ca3af" keyboardType="phone-pad" />
+            <TextInput style={styles.input} value={form.contact_person} onChangeText={v => setForm(f => ({ ...f, contact_person: v }))} placeholder="Contact person" placeholderTextColor="#6b7280" />
+            <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(f => ({ ...f, email: v }))} placeholder="Email" placeholderTextColor="#6b7280" keyboardType="email-address" autoCapitalize="none" />
+            <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(f => ({ ...f, phone: v }))} placeholder="Phone" placeholderTextColor="#6b7280" keyboardType="phone-pad" />
             <AddressAutocomplete style={styles.input} value={form.billing_address} onChangeText={v => setForm(f => ({ ...f, billing_address: v }))} placeholder="Billing address" />
+            {groups.length > 0 && (
+              <View>
+                <Text style={styles.fieldLabel}>Pricing level</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[{ id: '', name: 'Standard pricing' }, ...groups].map(g => (
+                    <TouchableOpacity
+                      key={g.id || 'standard'}
+                      style={[styles.typeToggle, { flex: 0, paddingHorizontal: 14, paddingVertical: 12 }, form.pricing_group_id === g.id && styles.typeToggleActive]}
+                      onPress={() => setForm(f => ({ ...f, pricing_group_id: g.id }))}
+                    >
+                      <Text style={[styles.typeToggleText, form.pricing_group_id === g.id && styles.typeToggleTextActive]}>{g.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+            <TextInput style={[styles.input, styles.multiline]} value={form.notes} onChangeText={v => setForm(f => ({ ...f, notes: v }))} placeholder="Notes" placeholderTextColor="#6b7280" multiline numberOfLines={4} textAlignVertical="top" />
             <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={saveEdit} disabled={saving} activeOpacity={0.85}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={showSite} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSite(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{editingSite ? 'Edit Site' : 'Add Site'}</Text>
+            <TouchableOpacity onPress={() => setShowSite(false)}>
+              <Text style={styles.modalClose}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <TextInput
+              style={styles.input}
+              value={siteForm.label}
+              onChangeText={v => setSiteForm(f => ({ ...f, label: v }))}
+              placeholder="Label (e.g. Warehouse, Rental unit)"
+              placeholderTextColor="#6b7280"
+              autoFocus
+            />
+            <AddressAutocomplete
+              style={styles.input}
+              value={siteForm.address}
+              onChangeText={v => { setSiteForm(f => ({ ...f, address: v })); setSiteCoords({ lat: null, lng: null }) }}
+              onSelect={sel => { setSiteForm(f => ({ ...f, address: sel.address })); setSiteCoords({ lat: sel.lat, lng: sel.lng }) }}
+              placeholder="Site address *"
+            />
+            <TextInput
+              style={[styles.input, styles.multiline]}
+              value={siteForm.access_notes}
+              onChangeText={v => setSiteForm(f => ({ ...f, access_notes: v }))}
+              placeholder="Access notes (gate codes, dogs, parking…)"
+              placeholderTextColor="#6b7280"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <TouchableOpacity style={[styles.saveBtn, (savingSite || !siteForm.address.trim()) && { opacity: 0.5 }]} onPress={saveSite} disabled={savingSite || !siteForm.address.trim()} activeOpacity={0.85}>
+              {savingSite ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{editingSite ? 'Save site' : 'Add site'}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -298,15 +439,21 @@ const styles = StyleSheet.create({
   typeBadge: { alignSelf: 'flex-start', backgroundColor: '#eff6ff', borderRadius: 100, paddingHorizontal: 8, paddingVertical: 2 },
   typeText: { fontSize: 11, fontWeight: '600', color: '#3b82f6', textTransform: 'capitalize' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },
-  metaLabel: { fontSize: 13, color: '#9ca3af', fontWeight: '500' },
+  metaLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
   metaValue: { fontSize: 13, color: '#374151', fontWeight: '500', textAlign: 'right' },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 },
-  siteRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb' },
+  siteRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb' },
+  siteIconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  addSiteBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 44, paddingHorizontal: 4 },
+  addSiteText: { fontSize: 13, fontWeight: '600', color: '#f97316' },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  multiline: { minHeight: 100, paddingTop: 12 },
   siteLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 2 },
   siteAddress: { fontSize: 14, color: '#111827' },
-  siteNotes: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  siteNotes: { fontSize: 12, color: '#6b7280', marginTop: 2 },
   jobRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 10 },
-  jobNumber: { fontSize: 11, color: '#9ca3af', fontWeight: '600', letterSpacing: 0.5, marginBottom: 1 },
+  jobNumber: { fontSize: 11, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5, marginBottom: 1 },
   jobTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
   statusBadge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
   statusText: { fontSize: 11, fontWeight: '600' },
