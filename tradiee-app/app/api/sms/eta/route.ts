@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { notifyPreferred } from '@/lib/notify'
 import { logCommunication } from '@/lib/comms'
+import { brandedEmailHtml } from '@/lib/email'
 
 const bodySchema = z.object({
   jobId: z.string().uuid(),
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   const { data: job } = await service
     .from('jobs')
-    .select('id, company_id, job_number, customer_id, customers(name, phone, email), companies(name, country)')
+    .select('id, company_id, job_number, customer_id, customers(name, phone, email), companies(name, country, logo_url)')
     .eq('id', jobId)
     .single()
   if (!job || job.company_id !== profile.company_id) {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   const customer = job.customers as unknown as { name: string; phone: string | null; email: string | null } | null
-  const company = job.companies as unknown as { name: string; country: string | null } | null
+  const company = job.companies as unknown as { name: string; country: string | null; logo_url: string | null } | null
   if (!customer || (!customer.phone && !customer.email)) {
     return NextResponse.json({ error: 'Customer has no phone or email' }, { status: 400 })
   }
@@ -65,7 +66,15 @@ export async function POST(req: NextRequest) {
     customerId: job.customer_id,
     eventType: 'job_eta',
     sms: customer.phone ? { to: customer.phone, country: (company?.country as 'NZ' | 'AU' | undefined) ?? 'NZ', body } : undefined,
-    email: customer.email ? { to: customer.email, subject: `${companyName} — ${status === 'arrived' ? 'Arrived' : 'On the way'}`, html: `<p>${body}</p>` } : undefined,
+    email: customer.email ? {
+      to: customer.email,
+      subject: `${companyName} — ${status === 'arrived' ? 'Arrived' : 'On the way'}`,
+      html: brandedEmailHtml({
+        companyName,
+        logoUrl: company?.logo_url,
+        bodyHtml: `<p style="margin:0;color:#4b5563;font-size:16px;line-height:1.5">${body}</p>`,
+      }),
+    } : undefined,
   })
 
   const sentChannel = results.find(r => r.status === 'sent')?.channel ?? 'email'

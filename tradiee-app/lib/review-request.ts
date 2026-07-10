@@ -25,7 +25,7 @@ export async function maybeSendReviewRequest(service: SupabaseClient, invoiceId:
     .select(`
       id, invoice_number, status, review_request_sent_at, total, company_id, customer_id,
       customers ( name, email, phone ),
-      companies ( name, email, phone, country, review_link, review_request_enabled )
+      companies ( name, email, phone, country, logo_url, review_link, review_request_enabled )
     `)
     .eq('id', invoiceId)
     .single()
@@ -34,7 +34,7 @@ export async function maybeSendReviewRequest(service: SupabaseClient, invoiceId:
   const customer = (inv.customers as unknown as { name: string; email: string | null; phone: string | null } | null)
   const company = (inv.companies as unknown as {
     name: string; email: string | null; phone: string | null; country: string | null;
-    review_link: string | null; review_request_enabled: boolean
+    logo_url: string | null; review_link: string | null; review_request_enabled: boolean
   } | null)
   if (!customer || !company?.review_link || !company.review_request_enabled) return
   if (!customer.email && !customer.phone) return
@@ -45,6 +45,7 @@ export async function maybeSendReviewRequest(service: SupabaseClient, invoiceId:
     invoiceNumber: inv.invoice_number,
     reviewUrl: company.review_link,
     companyPhone: company.phone,
+    logoUrl: company.logo_url,
   })
 
   const { data: linkedBooking } = await service.from('bookings').select('id').eq('invoice_id', invoiceId).maybeSingle()

@@ -27,6 +27,36 @@ export async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions
   return { id: data.id }
 }
 
+function emailBrandHeader(companyName: string, logoUrl?: string | null) {
+  return `<div style="background:#f97316;padding:24px 32px">
+      ${logoUrl ? `<img src="${logoUrl}" alt="${companyName}" style="max-height:32px;max-width:200px;display:block" />` : `<p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>`}
+    </div>`
+}
+
+export function brandedEmailHtml({
+  companyName,
+  bodyHtml,
+  logoUrl,
+}: {
+  companyName: string
+  bodyHtml: string
+  logoUrl?: string | null
+}) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    ${emailBrandHeader(companyName, logoUrl)}
+    <div style="padding:32px">${bodyHtml}</div>
+    <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">
+      <p style="margin:0;font-size:12px;color:#9ca3af">Sent by ${companyName} · Powered by IndustryForms</p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
 export function quoteEmailHtml({
   companyName,
   customerName,
@@ -148,12 +178,14 @@ export function reviewRequestEmailHtml({
   invoiceNumber,
   reviewUrl,
   companyPhone,
+  logoUrl,
 }: {
   companyName: string
   customerName: string
   invoiceNumber: string
   reviewUrl: string
   companyPhone?: string | null
+  logoUrl?: string | null
 }) {
   const subject = `Thanks from ${companyName} — could you leave us a quick review?`
   const html = `<!DOCTYPE html>
@@ -161,9 +193,7 @@ export function reviewRequestEmailHtml({
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
-    <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
-    </div>
+    ${emailBrandHeader(companyName, logoUrl)}
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
       <p style="margin:0 0 16px;color:#4b5563">Thanks so much for paying invoice <strong>${invoiceNumber}</strong> — we really appreciate your business.</p>
@@ -190,6 +220,7 @@ export function bookingConfirmationEmailHtml({
   timezone,
   siteAddress,
   companyPhone,
+  logoUrl,
 }: {
   companyName: string
   customerName: string
@@ -198,6 +229,7 @@ export function bookingConfirmationEmailHtml({
   timezone: string
   siteAddress?: string | null
   companyPhone?: string | null
+  logoUrl?: string | null
 }) {
   const when = new Date(startsAt).toLocaleString('en-NZ', {
     timeZone: timezone, weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit',
@@ -208,9 +240,7 @@ export function bookingConfirmationEmailHtml({
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
-    <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
-    </div>
+    ${emailBrandHeader(companyName, logoUrl)}
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
       <p style="margin:0 0 16px;color:#4b5563">Your booking is confirmed:</p>
@@ -239,6 +269,7 @@ export function bookingRequestedEmailHtml({
   startsAt,
   timezone,
   companyPhone,
+  logoUrl,
 }: {
   companyName: string
   customerName: string
@@ -246,6 +277,7 @@ export function bookingRequestedEmailHtml({
   startsAt: string
   timezone: string
   companyPhone?: string | null
+  logoUrl?: string | null
 }) {
   const when = new Date(startsAt).toLocaleString('en-NZ', {
     timeZone: timezone, weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit',
@@ -256,9 +288,7 @@ export function bookingRequestedEmailHtml({
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
-    <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
-    </div>
+    ${emailBrandHeader(companyName, logoUrl)}
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
       <p style="margin:0 0 16px;color:#4b5563">Thanks for your booking request — we've got it and will confirm shortly:</p>
@@ -287,6 +317,7 @@ export function reminderEmailHtml({
   amountDue,
   daysOverdue,
   viewUrl,
+  logoUrl,
 }: {
   type: 'quote_followup' | 'invoice_overdue' | 'invoice_due_soon'
   companyName: string
@@ -295,6 +326,7 @@ export function reminderEmailHtml({
   amountDue: string
   daysOverdue?: number
   viewUrl: string
+  logoUrl?: string | null
 }) {
   const isQuote = type === 'quote_followup'
   const days = daysOverdue ?? 0
@@ -316,9 +348,7 @@ export function reminderEmailHtml({
 <head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
-    <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${companyName}</p>
-    </div>
+    ${emailBrandHeader(companyName, logoUrl)}
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
       <p style="margin:0 0 24px;color:#6b7280">${body}</p>

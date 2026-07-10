@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tradar — Interactive Prototype</title>
+<style>
+  :root{
+    --brand:#1D4ED8;      /* primary */
+    --brand-dark:#1739a8;
+    --accent:#F97316;     /* on-my-way / ETA */
+    --accent-dark:#e0630a;
+    --green:#10B981;
+    --red:#EF4444;
+    --amber:#F59E0B;
+    --ink:#0F172A;
+    --sub:#64748B;
+    --line:#E2E8F0;
+    --bg:#F1F5F9;
+    --card:#FFFFFF;
+    --radius:18px;
+    --shadow:0 10px 30px rgba(15,23,42,.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       background:linear-gradient(160deg,#0b1220,#1e293b);color:var(--ink);min-height:100vh;padding:28px 16px 60px}
+  h1.title{color:#fff;text-align:center;font-size:22px;margin:6px 0 2px;font-weight:800;letter-spacing:.2px}
+  p.sub{color:#94a3b8;text-align:center;margin:0 0 22px;font-size:13px}
+  .stage{display:flex;flex-wrap:wrap;gap:34px;justify-content:center;align-items:flex-start}
+  .phone-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .phone-label{color:#cbd5e1;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
+  .phone{width:330px;height:690px;background:#000;border-radius:44px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);position:relative}
+  .notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:120px;height:26px;background:#000;border-radius:0 0 18px 18px;z-index:40}
+  .screen{position:relative;width:100%;height:100%;background:var(--bg);border-radius:33px;overflow:hidden;display:flex;flex-direction:column}
+  /* status bar */
+  .statusbar{height:34px;display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0;font-size:12px;font-weight:700;color:var(--ink);flex:0 0 auto}
+  .statusbar .dots{letter-spacing:1px}
+  /* app header */
+  .apphead{background:var(--brand);color:#fff;padding:8px 16px 14px;flex:0 0 auto}
+  .apphead .row{display:flex;align-items:center;justify-content:space-between}
+  .apphead h2{margin:0;font-size:20px;font-weight:800}
+  .apphead .sm{font-size:12px;opacity:.85;margin-top:2px}
+  .iconbtn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;border:none;cursor:pointer}
+  /* body scroll */
+  .body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .body::-webkit-scrollbar{width:0}
+  /* tab bar */
+  .tabbar{flex:0 0 auto;height:62px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding-bottom:4px;position:relative}
+  .tab{flex:1;text-align:center;color:var(--sub);font-size:10px;font-weight:600;cursor:pointer;padding-top:6px}
+  .tab .ic{font-size:20px;display:block;line-height:1.1}
+  .tab.active{color:var(--brand)}
+  .fab{width:54px;height:54px;border-radius:50%;background:var(--brand);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center;margin-top:-24px;box-shadow:0 8px 18px rgba(29,78,216,.45);border:none;cursor:pointer}
+  /* generic cards */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin:12px;padding:14px}
+  .list{padding:6px 0}
+  .enq{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#fff}
+  .enq:active{background:#f8fafc}
+  .avatar{width:44px;height:44px;border-radius:14px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px}
+  .enq .main{flex:1;min-width:0}
+  .enq .top{display:flex;justify-content:space-between;align-items:center}
+  .enq .name{font-weight:700;font-size:15px}
+  .enq .time{font-size:11px;color:var(--sub);flex:0 0 auto;margin-left:8px}
+  .enq .msg{font-size:13px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .pill{display:inline-block;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;margin-top:5px}
+  .pill.new{background:#fef3c7;color:#b45309}
+  .pill.quote{background:#dbeafe;color:#1d4ed8}
+  .pill.prog{background:#dcfce7;color:#15803d}
+  .pill.won{background:#e0e7ff;color:#4338ca}
+  .unread{width:9px;height:9px;border-radius:50%;background:var(--brand);flex:0 0 auto;align-self:center}
+  .seg{display:flex;background:#e2e8f0;border-radius:12px;margin:12px 16px 4px;padding:3px}
+  .seg div{flex:1;text-align:center;font-size:12px;font-weight:600;padding:7px;border-radius:9px;color:var(--sub);cursor:pointer}
+  .seg div.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  /* detail */
+  .banner{background:linear-gradient(135deg,var(--brand),#3b82f6);color:#fff;padding:18px 16px}
+  .banner h3{margin:0;font-size:20px;font-weight:800}
+  .banner .meta{font-size:12px;opacity:.9;margin-top:3px}
+  .kv{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:14px;align-items:flex-start;background:#fff}
+  .kv .k{width:22px;text-align:center;flex:0 0 auto}
+  .kv .v{flex:1}
+  .kv .v small{display:block;color:var(--sub);font-size:11px;margin-top:1px}
+  .photos{display:flex;gap:8px;padding:12px 16px;background:#fff;flex-wrap:wrap}
+  .photo{width:70px;height:70px;border-radius:12px;background-size:cover;background-position:center;flex:0 0 auto;border:1px solid var(--line)}
+  .qhead{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin:16px 16px 6px}
+  .chipwrap{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px}
+  .chip{background:#eff6ff;border:1px solid #bfdbfe;color:var(--brand);font-size:12.5px;font-weight:600;padding:9px 13px;border-radius:22px;cursor:pointer}
+  .chip:active{background:#dbeafe}
+  .actionbar{display:flex;gap:8px;padding:12px 16px}
+  .btn{flex:1;border:none;border-radius:14px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.accent{background:var(--accent);color:#fff}
+  .btn.green{background:var(--green);color:#fff}
+  .btn.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  .btn.block{width:100%;margin:10px 16px;flex:none;width:calc(100% - 32px)}
+  /* conversation */
+  .bubble{max-width:76%;padding:10px 13px;border-radius:16px;font-size:13.5px;margin:8px 16px;line-height:1.35}
+  .bubble.them{background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}
+  .bubble.me{background:var(--brand);color:#fff;margin-left:auto;border-bottom-right-radius:5px}
+  .bubble .t{font-size:10px;opacity:.7;margin-top:4px;display:block}
+  .composer{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);background:#fff}
+  .composer input{flex:1;border:1px solid var(--line);border-radius:22px;padding:11px 14px;font-size:14px;outline:none}
+  .composer .send{width:40px;height:40px;border-radius:50%;background:var(--brand);color:#fff;border:none;font-size:17px;cursor:pointer}
+  /* ETA sheet */
+  .etahero{background:linear-gradient(140deg,var(--accent),#fb923c);color:#fff;padding:22px 18px;text-align:center}
+  .etahero .big{font-size:52px;font-weight:800;line-height:1}
+  .etahero .lbl{font-size:13px;opacity:.95;margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+  .mapfake{height:120px;background:
+     linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px) 0 0/26px 26px,
+     linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px) 0 0/26px 26px,
+     linear-gradient(120deg,#dbeafe,#bfdbfe);position:relative}
+  .mapfake .route{position:absolute;left:16%;top:70%;width:66%;height:3px;background:var(--accent);border-radius:3px;transform:rotate(-24deg)}
+  .mapfake .pinA,.mapfake .pinB{position:absolute;font-size:20px}
+  .mapfake .pinA{left:12%;top:60%}.mapfake .pinB{right:14%;top:22%}
+  .preview{margin:14px 16px;background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:13px;font-size:13px;color:var(--ink);line-height:1.4}
+  .preview b{color:var(--brand)}
+  /* job screen */
+  .stepper{display:flex;padding:14px 12px;background:#fff;gap:0;align-items:center;overflow-x:auto}
+  .step{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;font-size:9.5px;color:var(--sub);width:60px;position:relative}
+  .step .dot{width:26px;height:26px;border-radius:50%;background:#e2e8f0;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-bottom:4px;z-index:2}
+  .step.done .dot{background:var(--green);color:#fff}
+  .step.cur .dot{background:var(--brand);color:#fff;box-shadow:0 0 0 4px #dbeafe}
+  .step.cur{color:var(--brand);font-weight:700}
+  .step .bar{position:absolute;top:13px;left:-30px;width:60px;height:3px;background:#e2e8f0;z-index:1}
+  .step.done .bar,.step.cur .bar{background:var(--green)}
+  .quickrow{display:flex;gap:8px;padding:12px 16px;overflow-x:auto}
+  .quick{flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 14px;font-size:12.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:74px;cursor:pointer}
+  .quick .ic{font-size:20px}
+  .sectitle{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin:16px 16px 0}
+  /* customer form */
+  .formhead{background:#fff;padding:18px 18px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .brandmark{width:44px;height:44px;border-radius:12px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}
+  .fld{padding:12px 18px}
+  .fld label{font-size:13px;font-weight:700;display:block;margin-bottom:6px}
+  .fld label span{color:var(--red)}
+  .fld input,.fld textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:15px;font-family:inherit;outline:none}
+  .fld input:focus,.fld textarea:focus{border-color:var(--brand)}
+  .uploadbox{border:2px dashed #cbd5e1;border-radius:14px;padding:20px;text-align:center;color:var(--sub);font-size:13px}
+  .uploadbox .cam{font-size:30px}
+  .progressline{height:4px;background:#e2e8f0}
+  .progressline i{display:block;height:100%;background:var(--brand);width:66%}
+  /* push notif */
+  .lockscreen{background:linear-gradient(160deg,#0f172a,#334155);height:100%;display:flex;flex-direction:column;align-items:center;padding-top:60px}
+  .lock-time{color:#fff;font-size:64px;font-weight:200}
+  .lock-date{color:#cbd5e1;font-size:15px;margin-bottom:40px}
+  .notif{background:rgba(255,255,255,.92);backdrop-filter:blur(8px);width:88%;border-radius:20px;padding:13px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .notif .nh{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);font-weight:600;margin-bottom:5px}
+  .notif .nh .ap{width:18px;height:18px;border-radius:5px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}
+  .notif .title{font-weight:700;font-size:14px}
+  .notif .txt{font-size:13px;color:#334155;margin-top:2px}
+  .notif .acts{display:flex;gap:8px;margin-top:10px;border-top:1px solid #e2e8f0;padding-top:8px}
+  .notif .acts button{flex:1;background:none;border:none;color:var(--brand);font-weight:700;font-size:12.5px;cursor:pointer;padding:4px}
+  .toast{position:absolute;bottom:76px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;font-size:12.5px;padding:10px 16px;border-radius:22px;opacity:0;transition:.3s;pointer-events:none;z-index:60;white-space:nowrap}
+  .toast.show{opacity:1;bottom:82px}
+  .hidden{display:none!important}
+  .legend{max-width:760px;margin:34px auto 0;color:#cbd5e1;font-size:13px;line-height:1.6;background:rgba(255,255,255,.05);padding:16px 20px;border-radius:14px}
+  .legend b{color:#fff}
+  .tag{display:inline-block;background:var(--accent);color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;vertical-align:middle;margin-left:6px;letter-spacing:.5px}
+</style>
+</head>
+<body>
+  <h1 class="title">Tradar <span style="font-weight:400;font-size:15px;color:#94a3b8">— redesign prototype</span></h1>
+  <p class="sub">Tap around. Two hero flows: <b style="color:#fff">Instant Enquiry → Reply</b> and <b style="color:#fff">One-touch "On my way"</b>. Working name — rename freely.</p>
+
+  <div class="stage">
+    <!-- ============ PHONE 1: TRADIE APP ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">Tradie app</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen" id="app">
+
+          <!-- LOCK SCREEN / PUSH -->
+          <div class="scr" data-scr="lock">
+            <div class="lockscreen">
+              <div class="lock-time">8:24</div>
+              <div class="lock-date">Thursday 9 July</div>
+              <div class="notif" onclick="go('inbox')">
+                <div class="nh"><span class="ap">T</span> TRADAR · now</div>
+                <div class="title">New enquiry — Daniel S. (Massey)</div>
+                <div class="txt">Brake job on a Hilux · 2 photos · 4.2km away</div>
+                <div class="acts">
+                  <button onclick="event.stopPropagation();go('enquiry')">Reply</button>
+                  <button onclick="event.stopPropagation();go('enquiry')">Quote</button>
+                  <button onclick="event.stopPropagation();toast('Calling Daniel…')">Call</button>
+                </div>
+              </div>
+              <p style="color:#64748b;font-size:11px;margin-top:24px">▲ Push replaces the old "check your email" step</p>
+            </div>
+          </div>
+
+          <!-- INBOX -->
+          <div class="scr hidden" data-scr="inbox">
+            <div class="statusbar"><span>8:24</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+            <div class="apphead">
+              <div class="row"><h2>Inbox</h2><button class="iconbtn" onclick="toast('Filter & search')">⌕</button></div>
+              <div class="sm">3 new enquiries · 1 waiting on you</div>
+            </div>
+            <div class="seg">
+              <div class="on">All</div><div onclick="toast('Filter: Enquiries')">Enquiries</div><div onclick="toast('Filter: Messages')">Messages</div>
+            </div>
+            <div class="body">
+              <div class="list">
+                <div class="enq" onclick="go('enquiry')">
+                  <div class="avatar" style="background:#f97316">DS</div>
+                  <div class="main">
+                    <div class="top"><span class="name">Daniel Satich</span><span class="time">now</span></div>
+                    <div class="msg">Brake job on a Hilux — front pads grinding…</div>
+                    <span class="pill new">NEW ENQUIRY</span>
+                  </div>
+                  <div class="unread"></div>
+                </div>
+                <div class="enq" onclick="go('convo')">
+                  <div class="avatar" style="background:#2563eb">TP</div>
+                  <div class="main">
+                    <div class="top"><span class="name">Turin Panel & Paint</span><span class="time">12m</span></div>
+                    <div class="msg">Yep that works, see you then 👍</div>
+                    <span class="pill prog">JOB · IN PROGRESS</span>
+                  </div>
+                  <div class="unread"></div>
+                </div>
+                <div class="enq" onclick="go('enquiry')">
+                  <div class="avatar" style="background:#10b981">MK</div>
+                  <div class="main">
+                    <div class="top"><span class="name">Mereana K.</span><span class="time">1h</span></div>
+                    <div class="msg">Auto electrical — dash lights flickering</div>
+                    <span class="pill new">NEW ENQUIRY</span>
+                  </div>
+                </div>
+                <div class="enq" onclick="go('convo')">
+                  <div class="avatar" style="background:#8b5cf6">RB</div>
+                  <div class="main">
+                    <div class="top"><span class="name">Ray Bennett</span><span class="time">3h</span></div>
+                    <div class="msg">You: Quote sent — $480 +GST</div>
+                    <span class="pill quote">QUOTE SENT</span>
+                  </div>
+                </div>
+                <div class="enq" onclick="go('enquiry')">
+                  <div class="avatar" style="background:#0ea5e9">JW</div>
+                  <div class="main">
+                    <div class="top"><span class="name">Jess Wong</span><span class="time">Yest</span></div>
+                    <div class="msg">WOF + service booking request</div>
+                    <span class="pill won">CONVERTED</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab active"><span class="ic">✉️</span>Inbox</div>
+              <div class="tab" onclick="go('jobs')"><span class="ic">🗓️</span>Schedule</div>
+              <button class="fab" onclick="toast('Quick create: Quote · Job · Message')">+</button>
+              <div class="tab" onclick="go('jobs')"><span class="ic">🧰</span>Jobs</div>
+              <div class="tab" onclick="toast('More: Forms · Invoices · Team · Settings')"><span class="ic">⋯</span>More</div>
+            </div>
+          </div>
+
+          <!-- ENQUIRY DETAIL -->
+          <div class="scr hidden" data-scr="enquiry">
+            <div class="statusbar"><span>8:24</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+            <div class="banner" style="display:flex;align-items:center;gap:10px">
+              <button class="iconbtn" onclick="go('inbox')" style="background:rgba(255,255,255,.2)">‹</button>
+              <div><h3>Daniel Satich</h3><div class="meta">ENQ-0009 · received just now · 4.2 km away</div></div>
+            </div>
+            <div class="body">
+              <div class="kv"><span class="k">📍</span><div class="v">133c State Highway 16, Massey, Auckland<small>Tap to navigate · 9 min drive</small></div></div>
+              <div class="kv"><span class="k">🔧</span><div class="v">Front brake pads grinding on a 2016 Hilux. Started this morning. Need it sorted before the weekend if possible.</div></div>
+              <div class="kv"><span class="k">📞</span><div class="v">021 555 0193 · daniel@example.co.nz</div></div>
+              <div class="photos">
+                <div class="photo" style="background:linear-gradient(135deg,#94a3b8,#475569)"></div>
+                <div class="photo" style="background:linear-gradient(135deg,#78716c,#44403c)"></div>
+              </div>
+              <div class="qhead">Quick reply — 1 tap</div>
+              <div class="chipwrap">
+                <div class="chip" onclick="toast('Sent: On it, back to you within the hour')">👍 On it — reply in 1hr</div>
+                <div class="chip" onclick="toast('Sent: Can I call you now?')">📞 Can I call now?</div>
+                <div class="chip" onclick="go('convo')">✏️ Write reply…</div>
+                <div class="chip" onclick="toast('Booking link sent')">📅 Send booking link</div>
+              </div>
+              <div class="actionbar" style="margin-top:6px">
+                <button class="btn accent" onclick="toast('Draft quote created from enquiry')">＄ Quote</button>
+                <button class="btn green" onclick="toast('Converted to job DS00011')">✓ Convert to job</button>
+              </div>
+            </div>
+            <div class="tabbar">
+              <div class="tab" onclick="go('inbox')"><span class="ic">✉️</span>Inbox</div>
+              <div class="tab" onclick="go('jobs')"><span class="ic">🗓️</span>Schedule</div>
+              <button class="fab" onclick="toast('Quick create')">+</button>
+              <div class="tab" onclick="go('jobs')"><span class="ic">🧰</span>Jobs</div>
+              <div class="tab" onclick="toast('More')"><span class="ic">⋯</span>More</div>
+            </div>
+          </div>
+
+          <!-- CONVERSATION -->
+          <div class="scr hidden" data-scr="convo">
+            <div class="statusbar"><span>8:24</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+            <div class="banner" style="display:flex;align-items:center;gap:10px;padding:12px 16px">
+              <button class="iconbtn" onclick="go('inbox')" style="background:rgba(255,255,255,.2)">‹</button>
+              <div style="flex:1"><h3 style="font-size:17px">Daniel Satich</h3><div class="meta">SMS · replies land here & in your inbox</div></div>
+              <button class="iconbtn" onclick="go('eta')" style="background:rgba(255,255,255,.2)">🚗</button>
+            </div>
+            <div class="body" style="background:#f8fafc;display:flex;flex-direction:column">
+              <div class="bubble them">Hi, brake pads grinding on my Hilux — can you look this week?<span class="t">8:02</span></div>
+              <div class="bubble me">On it Daniel — I'll be back to you within the hour with a time 👍<span class="t">8:04 · delivered</span></div>
+              <div class="bubble them">Choice, thanks!<span class="t">8:06</span></div>
+              <div style="text-align:center;margin:10px"><button class="btn accent" style="display:inline-flex;width:auto;padding:11px 20px" onclick="go('eta')">🚗 Send "On my way" ETA</button></div>
+            </div>
+            <div class="composer">
+              <button class="iconbtn" style="background:#eef2ff;color:var(--brand)" onclick="toast('Templates: On my way · Running late · Finished · Invoice due')">⚡</button>
+              <input placeholder="Message… or pick a template" onfocus="this.blur();toast('Templates & merge fields')">
+              <button class="send" onclick="toast('Sent')">➤</button>
+            </div>
+          </div>
+
+          <!-- ONE-TOUCH ETA -->
+          <div class="scr hidden" data-scr="eta">
+            <div class="statusbar"><span>8:24</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+            <div class="banner" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--accent)">
+              <button class="iconbtn" onclick="go('convo')" style="background:rgba(255,255,255,.25)">‹</button>
+              <div><h3 style="font-size:17px">On my way</h3><div class="meta">Auto-calculated from your location</div></div>
+            </div>
+            <div class="body">
+              <div class="etahero">
+                <div class="big" id="etaNum">22</div>
+                <div class="lbl">minutes away · 14.6 km</div>
+              </div>
+              <div class="mapfake"><div class="route"></div><div class="pinA">🚗</div><div class="pinB">📍</div></div>
+              <div class="preview">
+                Hi <b>Daniel</b>, it's <b>Josh from Grimstock Auto</b>. I'm on my way — ETA about <b>22 min</b>. Track me live: <b>trdr.nz/x9k2</b>
+              </div>
+              <div class="qhead">Or pick another update</div>
+              <div class="chipwrap">
+                <div class="chip" onclick="setEta('45','Running ~15 min late, sorry!')">⏰ Running late</div>
+                <div class="chip" onclick="setEta('0','I\'ve arrived — heading in now')">📍 I've arrived</div>
+                <div class="chip" onclick="toast('Reschedule flow')">📅 Need to reschedule</div>
+              </div>
+              <button class="btn accent block" onclick="toast('✓ ETA sent to Daniel · live tracking on')" style="margin-top:12px">Send with live tracking →</button>
+              <p style="text-align:center;color:var(--sub);font-size:11px;margin:0 16px 16px">Branded, no signature to type. Link auto-updates until you arrive.</p>
+            </div>
+          </div>
+
+          <!-- JOB SCREEN -->
+          <div class="scr hidden" data-scr="jobs">
+            <div class="statusbar"><span>8:24</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+            <div class="apphead">
+              <div class="row">
+                <button class="iconbtn" onclick="go('inbox')">‹</button>
+                <button class="iconbtn" onclick="toast('Job options')">⋯</button>
+              </div>
+              <h2 style="margin-top:6px">Turin Panel &amp; Paint</h2>
+              <div class="sm">DS00010 · <span style="background:rgba(255,255,255,.25);padding:2px 8px;border-radius:10px">In progress</span></div>
+            </div>
+            <div class="body">
+              <div class="stepper">
+                <div class="step done"><div class="dot">✓</div>Enquiry</div>
+                <div class="step done"><div class="bar"></div><div class="dot">✓</div>Quoted</div>
+                <div class="step done"><div class="bar"></div><div class="dot">✓</div>Booked</div>
+                <div class="step cur"><div class="bar"></div><div class="dot">4</div>On site</div>
+                <div class="step"><div class="bar"></div><div class="dot">5</div>Invoiced</div>
+                <div class="step"><div class="bar"></div><div class="dot">6</div>Paid</div>
+              </div>
+              <div class="kv"><span class="k">📍</span><div class="v">11 Lawrence Stevens Drive, Auckland Airport<small>Tap to navigate</small></div></div>
+              <div class="quickrow">
+                <div class="quick" onclick="go('eta')"><span class="ic" style="color:var(--accent)">🚗</span>On my way</div>
+                <div class="quick" onclick="toast('Timer started · Standard labour rate')"><span class="ic" style="color:var(--brand)">⏱️</span>Start timer</div>
+                <div class="quick" onclick="toast('Camera opens')"><span class="ic" style="color:var(--green)">📷</span>Add photo</div>
+                <div class="quick" onclick="go('convo')"><span class="ic">💬</span>Message</div>
+                <div class="quick" onclick="toast('Call client')"><span class="ic">📞</span>Call</div>
+              </div>
+              <div class="sectitle">Reference</div>
+              <div class="card" style="margin-top:6px;padding:12px 14px;font-size:14px">LSG #66 — insurance repair, front quarter panel</div>
+              <div class="sectitle">Today</div>
+              <div class="card" style="margin-top:6px;padding:0;overflow:hidden">
+                <div class="kv" style="border:none"><span class="k">⏱️</span><div class="v">1h 20m logged<small>Standard labour rate · running</small></div></div>
+                <div class="kv" style="border:none;border-top:1px solid var(--line)"><span class="k">📷</span><div class="v">3 photos added</div></div>
+              </div>
+              <button class="btn primary block" onclick="toast('Build invoice from logged time + parts')" style="margin-bottom:20px">Create invoice →</button>
+            </div>
+            <div class="tabbar">
+              <div class="tab" onclick="go('inbox')"><span class="ic">✉️</span>Inbox</div>
+              <div class="tab" onclick="toast('Schedule')"><span class="ic">🗓️</span>Schedule</div>
+              <button class="fab" onclick="toast('Quick create')">+</button>
+              <div class="tab active"><span class="ic">🧰</span>Jobs</div>
+              <div class="tab" onclick="toast('More')"><span class="ic">⋯</span>More</div>
+            </div>
+          </div>
+
+          <div class="toast" id="toast"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:330px">
+        <button class="navmini" onclick="go('lock')">Push</button>
+        <button class="navmini" onclick="go('inbox')">Inbox</button>
+        <button class="navmini" onclick="go('enquiry')">Enquiry</button>
+        <button class="navmini" onclick="go('convo')">Chat</button>
+        <button class="navmini" onclick="go('eta')">ETA</button>
+        <button class="navmini" onclick="go('jobs')">Job</button>
+      </div>
+    </div>
+
+    <!-- ============ PHONE 2: CUSTOMER FORM ============ -->
+    <div class="phone-wrap">
+      <div class="phone-label">Customer enquiry form</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar"><span>8:20</span><span class="dots">5G ▮▮▮ 🔋</span></div>
+          <div class="progressline"><i></i></div>
+          <div class="formhead">
+            <div class="brandmark">G</div>
+            <div><div style="font-weight:800;font-size:16px">Grimstock Auto</div><div style="font-size:12px;color:var(--sub)">Request a quote · 60 seconds</div></div>
+          </div>
+          <div class="body">
+            <div style="padding:14px 18px 0;font-size:13px;color:var(--sub)">Step 2 of 3 · Your job</div>
+            <div class="fld">
+              <label>Job address <span>*</span></label>
+              <input value="133c State Highway 16, Massey">
+            </div>
+            <div class="fld">
+              <label>What do you need done? <span>*</span></label>
+              <textarea rows="3">Front brake pads grinding on a 2016 Hilux — need it before the weekend</textarea>
+            </div>
+            <div class="fld">
+              <label>Add photos <span style="color:var(--sub);font-weight:400">(helps us quote)</span></label>
+              <div class="uploadbox"><div class="cam">📷</div>Take a photo or upload<br><span style="font-size:11px">Tap — no pinch-zoom, no drag &amp; drop</span></div>
+            </div>
+            <button class="btn primary block" onclick="fToast('✓ Sent! Grimstock will reply shortly')" style="margin-top:4px">Send request →</button>
+            <p style="text-align:center;color:var(--sub);font-size:11px;margin:2px 16px 20px">🔒 Protected · no CAPTCHA puzzles · we never share your details</p>
+          </div>
+          <div class="toast" id="ftoast"></div>
+        </div>
+      </div>
+      <div style="color:#94a3b8;font-size:12px;max-width:280px;text-align:center">Mobile-first: big fields, camera-first upload, invisible spam protection, autosave.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>What changed vs the app in the recordings.</b> Old: enquiries arrived by email → you tapped "View Enquiry in Tradify" to leave your inbox. ETAs were typed by hand into the phone's SMS app with a guessed time and a manual signature. The customer form had tiny text, drag-and-drop upload and a reCAPTCHA. The job screen crammed six tabs across the top with a clipped button.<br><br>
+    <b>New:</b> enquiries hit a rich push you can answer in one tap; a unified <b>Inbox</b> holds enquiries + client threads; <b>"On my way"</b> auto-calculates drive time and sends a branded, tracked message with no typing; the job screen uses a status stepper, thumb-friendly quick actions and clear sections; the customer form is rebuilt mobile-first. Full rationale, screen specs and architecture are in the accompanying Word brief.
+  </div>
+
+<style>
+  .navmini{background:#334155;color:#cbd5e1;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer}
+  .navmini:hover{background:var(--brand);color:#fff}
+</style>
+<script>
+  function go(scr){
+    document.querySelectorAll('#app .scr').forEach(s=>s.classList.add('hidden'));
+    var el=document.querySelector('#app .scr[data-scr="'+scr+'"]');
+    if(el){el.classList.remove('hidden'); el.querySelector('.body') && (el.querySelector('.body').scrollTop=0);}
+  }
+  var tt;
+  function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1900);}
+  var ft;
+  function fToast(msg){var t=document.getElementById('ftoast');t.textContent=msg;t.classList.add('show');clearTimeout(ft);ft=setTimeout(()=>t.classList.remove('show'),2200);}
+  function setEta(n,line){
+    document.getElementById('etaNum').textContent = n==='0' ? '✓' : n;
+    toast(line);
+  }
+</script>
+</body>
+</html>

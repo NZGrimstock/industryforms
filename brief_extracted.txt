@@ -1,0 +1,339 @@
+MOBILE OVERHAUL &amp; WEB-PARITY PLAN
+IndustryForms
+Code-aware overhaul of the tradiee-mobile app
+Keep everything that works — bring the web app&apos;s inbox, messaging &amp; one-touch ETA to mobile
+Built on the real stack: Expo SDK 56 · React Native · Supabase · PowerSync · Cloudflare R2 · Stripe Tap-to-Pay · LocationIQ
+Aligned to the Growth-Engine sprint plan (Unified Inbox, channel-aware sends, Twilio-dark-safe)
+Prepared for Josh, Grimstock  ·  9 July 2026  ·  supersedes the greenfield Tradar concept
+
+Contents
+
+
+
+1. Executive summary
+This supersedes the earlier greenfield concept. After reviewing the actual codebase, the reality is: tradiee-mobile is already a serious, offline-first field-service app, and the web app (tradiee-app) is far ahead of it — it already has a unified inbox, two-way SMS threads, enquiries, bookings, a customer portal and a channel-aware notification layer. The mobile app has none of that yet, by design: every Growth-Engine sprint explicitly says “do not touch the mobile app.” So this is not a rebuild — it is an enhancement and parity job.
+Two things drive the overhaul, and both are exactly what you asked for. (1) A mobile Unified Inbox that mirrors the web /messages page — enquiries, website leads, booking requests and SMS threads in one place, answerable in one or two taps, with real-time push. (2) One-touch “On my way” with an auto-calculated ETA — a mobile-native feature that finally uses the GPS, LocationIQ geocoding, site coordinates and geofencing the app already ships.
+The guiding rule throughout: keep the architecture and reuse the web APIs. The phone should consume /api/messages/*, /api/sms/send and /api/notify rather than re-implement business logic on-device, and it must honour the same channel-aware, Twilio-dark-safe contract as the web — SMS paths are built now but stay cleanly disabled until Twilio is enabled.
+Delivery: this document is the plan (opusplan-style — review before build). It is paired with an updated interactive prototype (IndustryForms_Mobile_Prototype.html) in the app&apos;s real orange brand, showing the Inbox, enquiry reply, one-touch ETA and the redesigned job screen. On sign-off, section 13 is a file-by-file build plan and section 14 phases the work to slot in beside the web sprints.
+
+2. What the mobile app already has (keep it)
+A frank inventory so nothing good gets thrown away. All of this stays; most of it just gets re-skinned or surfaced better.
+Area
+What exists today
+Verdict
+Platform
+Expo SDK 56, RN 0.85, expo-router (typed routes), EAS Update OTA, new-arch off.
+KEEP
+Offline-first
+PowerSync mirrors ~20 tables to on-device SQLite; job screen reads via useQuery.
+KEEP
+Jobs
+Deep job detail: status (custom company statuses), materials, photos→R2, notes, visits, timer, complete + customer signature sign-off, complete-&amp;-invoice.
+KEEP + redesign
+Time &amp; travel
+Manual timer, sticky running badge across tabs, GPS geofence auto check-in (150 m), automatic speed-based travel logbook.
+KEEP
+Money
+Quotes (optional customer-selectable sections), invoices incl. progress invoices, Stripe Tap-to-Pay.
+KEEP
+Data
+Customers + sites (lat/lng, access notes), price list, projects/stages, todos, timesheets, job map.
+KEEP
+Forms
+form_templates / form_submissions exist in the PowerSync schema — the app&apos;s namesake — but are not surfaced on the mobile job screen.
+SURFACE
+Enquiries
+Supabase enquiries table + a manual “log enquiry” screen, buried under More; statuses new→contacted→quoted→won→lost.
+PROMOTE
+Push
+expo-notifications; token saved to profiles.expo_push_token; a polled 14-day activity feed on Notifications.
+UPGRADE
+
+3. The parity gap — web has it, mobile doesn&apos;t
+The web app already ships the capabilities you want on the phone. The overhaul closes this gap by consuming the same endpoints, not rebuilding them.
+Capability
+On web today
+On mobile
+Unified inbox
+/messages — conversations list + thread + triage, 15s poll, owner/admin.
+MISSING → build (Hero 1)
+Two-way SMS threads
+customer_messages (mig 042) + /api/sms/send + /api/sms/inbound (Twilio, dark).
+MISSING → build
+Enquiries / web leads
+enquiries + /api/site/lead capture, enquiry detail, convert to quote/job.
+Log-only, buried, online-only
+Booking requests
+bookings + widget + deposits (Sprints C/D) land in the inbox.
+Surface in inbox when live
+Channel-aware notify
+notify() + /api/notify picks email now, SMS when Twilio flips.
+Reuse from device
+One-touch ETA / on-my-way
+Not on web either — but all inputs (site coords, SMS send) exist.
+MISSING → build (Hero 2)
+Customer portal
+portal/[token] — customer-facing job/quote/tracking pages.
+Reuse for ETA tracking link
+
+4. UX audit of the current mobile app
+Specific, file-referenced findings. Severity by impact on the daily win-the-lead / do-the-job / get-paid loop.
+#
+Finding
+Evidence / file
+Severity
+1
+No inbox or messaging on mobile; enquiries are a buried “log” screen
+app/(tabs)/more.tsx → /enquiries; no /messages equivalent
+HIGH
+2
+No “on my way” / ETA despite full location stack present
+lib/location/tracking.ts has GPS+geofence; no send path
+HIGH
+3
+Enquiries are online-only (not in PowerSync) — no offline, no push-first
+lib/powersync/schema.ts omits enquiries/customer_messages
+HIGH
+4
+“Convert to quote” drops the enquiry — routes to /quotes/new with no data
+app/enquiries.tsx convertToQuote()
+MED
+5
+Job screen is one long scroll; only the timer is a first-class action
+app/jobs/[id].tsx — call/maps buried in meta rows
+MED
+6
+Forms (the namesake) never appear on the mobile job screen
+schema has form_templates/submissions; no job UI
+MED
+7
+Notifications is a 14-day poll, not real-time actionable push
+app/notifications.tsx polls Supabase
+MED
+8
+Enquiries buried under More, not a bottom-tab destination
+app/(tabs)/_layout.tsx tabs = Home/Jobs/Schedule/Quotes/More
+MED
+9
+No status stepper — a job&apos;s lifecycle isn&apos;t visible at a glance
+status shown only as a tappable badge
+LOW
+
+5. Design principles &amp; tokens
+The app already has a consistent visual language (orange #F97316 on light grey). We formalise it into tokens and hold every screen to seven principles.
+1.	One-thumb, on-site. Primary actions in the bottom thumb zone; ≥48dp targets; nothing critical near the top edge.
+2.	Speed beats features. Every hero action ≤2 taps; defaults and templates over typing.
+3.	Reuse the server, don&apos;t duplicate it. The phone calls the web APIs; business rules live in one place.
+4.	Channel-aware &amp; Twilio-dark-safe. SMS UI is built but disabled until Twilio is live; nothing SMS-related may hard-fail while dark.
+5.	Offline-tolerant. Reads work offline via PowerSync; sends queue and reconcile — matching the existing timer/geofence patterns.
+6.	Legible outdoors. 16–17px base, bold labels, high contrast; support Dynamic Type.
+7.	Branded automatically. Company name and tech name merge into every outbound message; no hand-typed signatures.
+
+Design tokens (formalise what&apos;s already there)
+Token
+Value
+Use
+color.brand
+#F97316 / #EA580C
+Active tab, primary buttons, links (already the app&apos;s accent).
+color.accent
+#F97316 (ETA orange)
+One-touch ETA / on-my-way — same family, reinforced by an icon.
+color.success
+#22C55E
+Won / paid / running timer (already used).
+color.info / warn / danger
+#3B82F6 / #EAB308 / #EF4444
+Scheduled, on-hold, overdue/destructive (already used).
+surface / ink
+#FFFFFF / #F9FAFB / #111827
+Cards, background, text (already used).
+radius / shadow
+14–16px / soft elevation-2
+Card system already in place — tokenise, don&apos;t change.
+Net: no rebrand. The palette and card system are good and consistent; we extract them into a tokens module so new screens (Inbox, ETA) match without copy-paste.
+6. Navigation change
+The single highest-leverage change: promote the inbox to a bottom tab. Enquiries are currently three taps deep under More. The app opens to Home; leads can go cold before they&apos;re seen.
+Today
+Proposed
+Home · Jobs · Schedule · Quotes · More
+Enquiries hidden in More → /enquiries. No messaging.
+Home · Jobs · Inbox · Schedule · More
+Inbox is a first-class tab with an unread badge. Quotes moves into More and the New-Quote quick action (it&apos;s already admin-only).
+Implementation: edit BOTTOM_TABS in app/(tabs)/_layout.tsx (add inbox, drop quotes), add app/(tabs)/inbox.tsx. The existing pending-invitations badge pattern is reused for the unread count.
+
+7. Hero 1 — Mobile Unified Inbox
+Mirror the web /messages experience on the phone: one list of every inbound communication, answerable instantly. It consumes the web&apos;s existing endpoints so the two stay in lock-step.
+Data &amp; endpoints (reuse — do not rebuild)
+GET /api/messages/conversations — unified feed (SMS threads + enquiries + web leads + bookings), already normalised server-side into ConversationSummary.
+GET /api/messages/thread — a selected thread; POST /api/messages/action — mark read/closed/spam, create/link customer, create quote/job.
+POST /api/sms/send — outbound reply, dark-aware: render a disabled “SMS not enabled — configure Twilio in Settings” state until live (same contract as the web thread component).
+Add enquiries and customer_messages to lib/powersync/schema.ts + sync-rules.yaml so the inbox reads offline; writes (reply, triage) go through the APIs online and reconcile.
+Real-time push (upgrade the poll)
+The web should call /api/notify → Expo push (token already on profiles.expo_push_token) on new inbound. Register notification categories/actions (Reply · Quote · Call) so a lead can be answered from the lock screen.
+Keep the Notifications activity feed as history; the Inbox tab becomes the live surface with an unread badge.
+Screen — Inbox
+Purpose
+Answer “who is waiting on me?” — every enquiry, lead, booking and SMS in one list.
+Elements
+Tabs mirroring web (Open / Unread / Enquiries / Bookings / Unmatched / Closed); rows with avatar, name (or sender for unmatched), snippet, channel icon, status pill, unread dot; pull-to-refresh + 15s poll.
+Primary action
+Tap → thread / enquiry detail; 1-tap quick replies; Convert to quote/job (carrying the enquiry data — fixes finding #4).
+Acceptance criteria
+A new enquiry/lead reaches the phone as an actionable push within seconds; a first reply is ≤2 taps.
+The mobile Inbox and web /messages show the same conversations for the same company (same endpoints).
+With Twilio dark, the reply box is disabled with the standard message and nothing throws.
+Convert-to-quote/job pre-fills the customer from the enquiry.
+
+8. Hero 2 — One-touch “On my way” + ETA
+A mobile-native feature that finally uses the location stack already in the app. From a job, a thread, or the schedule, one tap sends the customer a branded, ETA-accurate arrival message — no typing.
+How it works with what exists
+1.	Read current GPS via expo-location (already permissioned for background tracking) and the job&apos;s site lat/lng from customer_sites.
+2.	Compute a live drive-time ETA (LocationIQ Directions — the key is already configured as EXPO_PUBLIC_LOCATIONIQ_KEY; or a small /api/eta route if you prefer to keep the key server-side).
+3.	Send a branded message through the channel-aware layer — ideally a new /api/sms/eta (sibling of the existing /api/sms/quote and /api/sms/invoice) that logs to customer_messages and uses notify() so it emails now and SMSes when Twilio flips.
+4.	Optionally attach a live tracking link built on the existing portal/[token] surface; it auto-expires on arrival.
+5.	Arrival is already detected — the geofence auto-check-in in lib/location/tracking.ts fires within 150 m. Hook it to flip the ETA state to “Arrived” and (optionally) auto-send an arrival message.
+Screen — On my way
+Purpose
+Tell the customer you&apos;re coming, accurately and branded, in one tap.
+Elements
+Big ETA number + distance; route map; branded message preview (merge fields resolved); alternate chips (Running late / Arrived / Reschedule); dark-aware send.
+Primary action
+Send (1 tap) — with optional live-tracking link.
+Acceptance criteria
+From the job screen, “On my way” sends a correctly-branded, ETA-accurate message in one tap (email now; SMS when Twilio live).
+Arrival flips state automatically via the existing geofence; the event is logged on the job/thread.
+With Twilio dark, ETA still sends via the live channel (email/portal) and never hard-fails.
+
+9. Job screen redesign
+Keep every capability in app/jobs/[id].tsx (timer, materials, photos, notes, signature sign-off, complete-&amp;-invoice, Tap-to-Pay). Change the layout so the on-site actions are reachable one-handed.
+Add a horizontal quick-action row under the header: On my way · Navigate · Call · Message · Start timer · Add photo · Forms. (Call/Navigate exist but are buried in meta rows; Message/On-my-way/Forms are new.)
+Add a status stepper driven by the company&apos;s custom job statuses (lib/job-statuses.ts) so lifecycle is visible at a glance — replaces the lone tappable badge.
+Surface Forms (the namesake): list form_templates for the company and any form_submissions on the job; fill/submit on-site. This is the biggest missing piece of the app&apos;s own identity on mobile.
+Keep the fixed bottom timer button; fold Tap to Pay (already at /pay-now) into the money section for on-site card payments.
+Nothing is removed — the long scroll gains a compact action bar and a stepper, and Forms finally appears.
+
+10. Architecture &amp; integration rules (must-follow)
+These keep the mobile changes consistent with the web app and its sprint contract. Breaking them is how the two apps drift apart.
+Reuse web APIs; don&apos;t duplicate logic on device. Inbox, SMS, ETA and invoicing all call existing routes.
+Channel-aware, Twilio-dark-safe. Every send goes through the notify/SMS layer that no-ops cleanly while dark; SMS UI shows the disabled state.
+Session client, never the service client, from the phone. All calls run under the user&apos;s Supabase session (RLS-scoped), matching the web rule.
+Idempotent writes. Reuse the timer/geofence reconciliation pattern already in the codebase for any queued mobile write.
+PowerSync additions are additive. Add tables to schema.ts and sync-rules.yaml together; respect the mig-047 columns (read_at, status, source).
+Respect roles. Inbox/messaging is owner/admin on web; mirror that gating on mobile (staff already hidden from Quotes).
+11. Data &amp; sync changes
+Change
+Detail
+Add enquiries to PowerSync
+New table in lib/powersync/schema.ts + sync-rules.yaml (company-scoped) so the Inbox reads offline.
+Add customer_messages
+Same, incl. mig-047 columns read_at / assigned_to / status / source; drives threads offline-read.
+Bookings (later)
+Add when Sprint D lands so booking requests surface in the mobile Inbox.
+ETA/arrival logging
+Reuse customer_messages / communications for the sent ETA + geofenced arrival; no new mobile-only table needed.
+Push token
+Already stored (profiles.expo_push_token) — ensure web /api/notify targets it for inbound events.
+12. Screens in the prototype
+The companion prototype (IndustryForms_Mobile_Prototype.html) demonstrates, in the real orange brand:
+Inbox (tabbed feed) → enquiry detail with 1-tap quick replies → SMS thread (dark-aware reply box).
+One-touch “On my way” with live ETA and branded preview.
+Redesigned job screen: quick-action row, status stepper, Forms section, timer, Tap-to-Pay.
+Push notification with inline Reply / Quote / Call actions.
+
+13. File-by-file build plan (mobile)
+Concrete edits, grouped by hero. Each is small and testable.
+File
+Change
+app/(tabs)/_layout.tsx
+Tabs → Home/Jobs/Inbox/Schedule/More; add unread badge on Inbox.
+app/(tabs)/inbox.tsx  (new)
+Unified feed; tabs Open/Unread/Enquiries/Bookings/Unmatched/Closed; 15s poll; consumes /api/messages/conversations.
+app/messages/[key].tsx  (new)
+Thread view; SMS bubbles + dark-aware reply via /api/sms/send; quick replies; Convert to quote/job.
+app/enquiries.tsx
+Fix convertToQuote to pass customer/enquiry; fold into Inbox as the Enquiries tab.
+lib/powersync/schema.ts + sync-rules.yaml
+Add enquiries, customer_messages (mig-047 cols); bookings later.
+lib/notify.ts  (new)
+Thin client wrapper over /api/notify + /api/sms/* ; channel-aware, dark-safe.
+app/on-my-way.tsx  (new)
+ETA screen; expo-location + LocationIQ; send via /api/sms/eta.
+app/api (web) /api/sms/eta  (new, web)
+Sibling of /api/sms/quote; templated ETA body; logs to customer_messages via notify().
+lib/location/tracking.ts
+On geofence check-in, flip active ETA → Arrived + optional arrival message.
+app/jobs/[id].tsx
+Quick-action row + status stepper + Forms section; keep all existing logic.
+lib/theme.ts  (new)
+Extract color/radius/shadow tokens used across new + existing screens.
+app/notifications.tsx
+Register push categories (Reply/Quote/Call); keep feed as history.
+
+14. Phased roadmap
+Sequenced so the two hero flows ship first and each phase is shippable. Runs beside the web Growth-Engine sprints without touching them until Inbox is proven.
+Phase
+Scope
+Depends on
+Size
+M0 · Foundation
+lib/theme tokens; add enquiries + customer_messages to PowerSync; Inbox tab shell.
+web mig 047 (done)
+S
+M1 · Inbox + push
+Consume /api/messages/*; thread; quick replies; actionable push via /api/notify.
+web Sprint A
+M
+M2 · On my way / ETA
+on-my-way screen; /api/sms/eta; geofence→Arrived; live tracking link.
+LocationIQ (live)
+M
+M3 · Job screen + Forms
+Quick-action row, status stepper, surface form_templates/submissions.
+none
+M
+M4 · Parity surfacing
+Bookings in Inbox; reports snapshot on Home; portal tracking polish.
+web Sprints C/D
+M
+M5 · Polish
+Dynamic Type, haptics, empty states, accessibility pass, Twilio go-live QA.
+Twilio flip
+S
+
+Recommendation: build M0–M1 and pilot the Inbox with your own crew before M2. It&apos;s the change that most directly answers “receive enquiries and respond instantly,” and it rides entirely on endpoints that already exist.
+15. Success metrics
+Metric
+Target
+Source
+Time to first response (enquiry→reply)
+Median &lt; 60 sec
+customer_messages / enquiries timestamps
+% enquiries replied within 5 min
+&gt; 80%
+same
+Notification → reply taps
+≤ 2
+instrumented in app
+‘On my way’ sent per on-site job
+&gt; 60% adoption
+/api/sms/eta logs
+Forms submitted on mobile
+trend up from ~0
+form_submissions.source
+Enquiry → job conversion
+trend up
+enquiries.status → jobs
+16. Risks &amp; open decisions
+Twilio is dark. ETA and replies must send by email/portal now and flip to SMS on go-live with no code change — reuse the web&apos;s notify() contract.
+Background location battery. ETA reuses existing tracking; don&apos;t add a second location subscription — piggyback the running task.
+Offline writes. Replies/triage are online-only v1 (queued with clear pending state); don&apos;t attempt offline SMS.
+iOS notification actions. Lock-screen Reply needs a notification category + a background handler; scope in M1.
+Decide: ETA routing via LocationIQ on-device vs a server /api/eta (keeps the key off the client). Recommend server route.
+Decide: live-tracking link scope/expiry on the portal (privacy — expire on arrival).
+17. Handover
+This plan (inventory, parity gap, audit, principles/tokens, nav, two hero flows, job redesign, architecture rules, data/sync, file-by-file plan, roadmap, metrics, risks).
+The updated prototype IndustryForms_Mobile_Prototype.html in the app&apos;s real brand.
+On sign-off, section 13 + 14 become the build backlog; M0–M1 can start immediately since they ride existing web endpoints.
+
+</w:pBdr><w:spacing w:before="200"/></w:pPr><w:r><w:rPr><w:i/><w:iCs/><w:color w:val="475569"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">Plan-first (opusplan): review and adjust this before any code is written. Nothing in tradiee-mobile or the web sprints changes until you approve the phases.

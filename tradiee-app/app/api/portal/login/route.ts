@@ -14,7 +14,7 @@ type PortalCustomer = {
   name: string
   email: string | null
   company_id: string
-  companies: { name: string; email: string | null; phone: string | null } | { name: string; email: string | null; phone: string | null }[] | null
+  companies: { name: string; email: string | null; phone: string | null; logo_url: string | null } | { name: string; email: string | null; phone: string | null; logo_url: string | null }[] | null
 }
 
 const GENERIC_RESPONSE = {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
   const { data: customers, error } = await service
     .from('customers')
-    .select('id, name, email, company_id, companies(name, email, phone)')
+    .select('id, name, email, company_id, companies(name, email, phone, logo_url)')
     .ilike('email', email)
     .limit(10)
 
@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
       portalUrl,
       companyPhone: company.phone,
       companyEmail: company.email,
+      logoUrl: company.logo_url,
     })
 
     const { error: emailError } = await sendEmail({

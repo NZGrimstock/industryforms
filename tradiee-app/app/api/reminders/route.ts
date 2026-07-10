@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendEmail, reminderEmailHtml, invoiceEmailHtml } from '@/lib/email'
+import { sendEmail, reminderEmailHtml, invoiceEmailHtml, brandedEmailHtml } from '@/lib/email'
 import { isSmsBillingDisabledError, retryFailedSmsMeterEvents, sendSms, smsConfigured, toE164 } from '@/lib/sms'
 import { nextDocNumber } from '@/lib/numbering'
 import { notify } from '@/lib/notify'
@@ -63,14 +63,14 @@ async function runReminders() {
   // Sent quotes not viewed/accepted in 3 days, follow_up_at <= now
   const { data: quotesToRemind } = await service
     .from('quotes')
-    .select('id, company_id, customer_id, quote_number, title, public_token, subtotal, expires_at, customers(name, email, phone), companies(name, email, phone, country)')
+    .select('id, company_id, customer_id, quote_number, title, public_token, subtotal, expires_at, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
     .eq('status', 'sent')
     .lte('follow_up_at', new Date().toISOString())
     .is('viewed_at', null)
 
   for (const quote of quotesToRemind ?? []) {
     const customer = quote.customers as unknown as { name: string; email: string | null; phone: string | null } | null
-    const company = quote.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null } | null
+    const company = quote.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null; logo_url: string | null } | null
     if (!customer || !company) continue
     const viewUrl = `${appUrl}/q/${quote.public_token}`
     let delivered = false
@@ -78,7 +78,7 @@ async function runReminders() {
     if (customer.email) {
       const { subject, html } = reminderEmailHtml({
         type: 'quote_followup', companyName: company.name, customerName: customer.name,
-        documentNumber: quote.quote_number, amountDue: `$${Number(quote.subtotal).toFixed(2)}`, viewUrl,
+        documentNumber: quote.quote_number, amountDue: `$${Number(quote.subtotal).toFixed(2)}`, viewUrl, logoUrl: company.logo_url,
       })
       const r = await sendEmail({ to: customer.email, subject, html, replyTo: company.email ?? undefined })
       if (r.error) errors.push(`Quote ${quote.quote_number} email: ${r.error}`)
@@ -107,7 +107,7 @@ async function runReminders() {
   const sixDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString()
   const { data: dueInvoices } = await service
     .from('invoices')
-    .select('id, company_id, customer_id, invoice_number, total, amount_paid, public_token, due_date, last_reminder_at, customers(name, email, phone), companies(name, email, phone, country)')
+    .select('id, company_id, customer_id, invoice_number, total, amount_paid, public_token, due_date, last_reminder_at, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
     .in('status', ['sent', 'partially_paid', 'overdue'])
     .not('due_date', 'is', null)
     .lte('due_date', windowEnd)
@@ -115,7 +115,7 @@ async function runReminders() {
 
   for (const invoice of dueInvoices ?? []) {
     const customer = invoice.customers as unknown as { name: string; email: string | null; phone: string | null } | null
-    const company = invoice.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null } | null
+    const company = invoice.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null; logo_url: string | null } | null
     if (!customer || !company) continue
     const daysFromDue = Math.floor((Date.now() - new Date(invoice.due_date as string).getTime()) / 86400000)
     const overdue = daysFromDue > 0
@@ -128,7 +128,7 @@ async function runReminders() {
     if (customer.email) {
       const { subject, html } = reminderEmailHtml({
         type: overdue ? 'invoice_overdue' : 'invoice_due_soon', companyName: company.name, customerName: customer.name,
-        documentNumber: invoice.invoice_number, amountDue: `$${amountDue.toFixed(2)}`, daysOverdue: overdue ? daysFromDue : -daysFromDue, viewUrl,
+        documentNumber: invoice.invoice_number, amountDue: `$${amountDue.toFixed(2)}`, daysOverdue: overdue ? daysFromDue : -daysFromDue, viewUrl, logoUrl: company.logo_url,
       })
       const r = await sendEmail({ to: customer.email, subject, html, replyTo: company.email ?? undefined })
       if (r.error) errors.push(`Invoice ${invoice.invoice_number} email: ${r.error}`)
@@ -187,7 +187,7 @@ async function runReminders() {
       }
 
       const [{ data: company }, { data: settingsRow }, { data: pkg }] = await Promise.all([
-        service.from('companies').select('name, country').eq('id', b.company_id).single(),
+        service.from('companies').select('name, country, logo_url').eq('id', b.company_id).single(),
         service.from('booking_settings').select('timezone, confirmation_channel').eq('company_id', b.company_id).maybeSingle(),
         service.from('bookable_packages').select('name').eq('id', b.package_id).single(),
       ])
@@ -200,7 +200,11 @@ async function runReminders() {
         service, companyId: b.company_id, customerId: b.customer_id, bookingId: b.id, eventType: 'booking_reminder_24h',
         email: b.customer_email ? {
           to: b.customer_email, subject: `Reminder: ${pkg?.name ?? 'your booking'} tomorrow`,
-          html: `<p>Hi ${b.customer_name.split(' ')[0]},</p><p>Reminder — ${company.name} has you booked for <strong>${pkg?.name ?? 'your appointment'}</strong> on ${when}.</p>`,
+          html: brandedEmailHtml({
+            companyName: company.name,
+            logoUrl: company.logo_url,
+            bodyHtml: `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${b.customer_name.split(' ')[0]},</p><p style="margin:0;color:#4b5563">Reminder — ${company.name} has you booked for <strong>${pkg?.name ?? 'your appointment'}</strong> on ${when}.</p>`,
+          }),
         } : undefined,
         sms: smsTo ? { to: smsTo, country: company.country, body: `Hi ${b.customer_name.split(' ')[0]}, reminder: ${company.name} has your ${pkg?.name ?? 'booking'} ${when}.` } : undefined,
       })
@@ -384,7 +388,7 @@ async function runReminders() {
     if (already) continue
 
     const [{ data: company }, { data: site }] = await Promise.all([
-      service.from('companies').select('name, country').eq('id', b.company_id).maybeSingle(),
+      service.from('companies').select('name, country, logo_url').eq('id', b.company_id).maybeSingle(),
       service.from('company_websites').select('slug').eq('company_id', b.company_id).maybeSingle(),
     ])
     if (!company) continue
@@ -394,7 +398,11 @@ async function runReminders() {
       service, companyId: b.company_id, customerId: b.customer_id, bookingId: b.id, eventType: 'win_back',
       email: b.customer_email ? {
         to: b.customer_email, subject: `Time for another ${pkg.name}?`,
-        html: `<p>Hi ${b.customer_name.split(' ')[0]},</p><p>It's been a while since your last ${pkg.name} with ${company.name} — ready to book again?</p><p><a href="${rebookUrl}">Book now</a></p>`,
+        html: brandedEmailHtml({
+          companyName: company.name,
+          logoUrl: company.logo_url,
+          bodyHtml: `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${b.customer_name.split(' ')[0]},</p><p style="margin:0 0 24px;color:#4b5563">It's been a while since your last ${pkg.name} with ${company.name} — ready to book again?</p><p style="margin:0"><a href="${rebookUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">Book now</a></p>`,
+        }),
       } : undefined,
       sms: b.customer_phone ? { to: toE164(b.customer_phone, company.country), body: `Hi ${b.customer_name.split(' ')[0]}, it's ${company.name} — time to re-book your ${pkg.name}? ${rebookUrl}` } : undefined,
     })
@@ -465,19 +473,23 @@ async function runReminders() {
   // ── Service reminders ─────────────────────────────────────────────────────
   const { data: dueReminders } = await service
     .from('service_reminders')
-    .select('id, due_date, interval, title, customers(name, email), companies(name, email)')
+    .select('id, due_date, interval, title, customers(name, email), companies(name, email, logo_url)')
     .eq('status', 'pending')
     .lte('due_date', today)
 
   for (const sr of dueReminders ?? []) {
     const customer = sr.customers as unknown as { name: string; email: string | null } | null
-    const company = sr.companies as unknown as { name: string; email: string | null } | null
+    const company = sr.companies as unknown as { name: string; email: string | null; logo_url: string | null } | null
     let delivered = false
     if (customer?.email && company) {
       const r = await sendEmail({
         to: customer.email,
         subject: `${sr.title} — service due`,
-        html: `<p>Hi ${customer.name.split(' ')[0]},</p><p>This is a friendly reminder from ${company.name} that <strong>${sr.title}</strong> is now due. We'll be in touch to arrange a suitable time, or reply to this email to book.</p><p>${company.name}</p>`,
+        html: brandedEmailHtml({
+          companyName: company.name,
+          logoUrl: company.logo_url,
+          bodyHtml: `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customer.name.split(' ')[0]},</p><p style="margin:0 0 16px;color:#4b5563">This is a friendly reminder from ${company.name} that <strong>${sr.title}</strong> is now due. We'll be in touch to arrange a suitable time, or reply to this email to book.</p><p style="margin:0;color:#4b5563">${company.name}</p>`,
+        }),
         replyTo: company.email ?? undefined,
       })
       if (r.error) errors.push(`Service reminder ${sr.id}: ${r.error}`)

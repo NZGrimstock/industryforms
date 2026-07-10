@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IndustryForms — Mobile Overhaul Prototype</title>
+<style>
+  :root{
+    --brand:#F97316; --brand-dark:#EA580C; --brandbg:#FFF7ED; --brandbd:#FED7AA;
+    --green:#22C55E; --greenbg:#DCFCE7; --blue:#3B82F6; --purple:#8B5CF6;
+    --amber:#EAB308; --red:#EF4444;
+    --ink:#111827; --sub:#6B7280; --mut:#9CA3AF; --line:#E5E7EB;
+    --bg:#F9FAFB; --card:#FFFFFF; --radius:16px; --shadow:0 4px 10px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+       background:linear-gradient(160deg,#1c1917,#292524);min-height:100vh;padding:28px 16px 60px;color:var(--ink)}
+  h1.title{color:#fff;text-align:center;font-size:22px;margin:6px 0 2px;font-weight:800}
+  h1.title span{color:var(--brand)}
+  p.sub{color:#a8a29e;text-align:center;margin:0 0 22px;font-size:13px}
+  .stage{display:flex;flex-wrap:wrap;gap:34px;justify-content:center;align-items:flex-start}
+  .pw{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .plabel{color:#e7e5e4;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
+  .phone{width:330px;height:690px;background:#000;border-radius:44px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);position:relative}
+  .notch{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:120px;height:26px;background:#000;border-radius:0 0 18px 18px;z-index:40}
+  .screen{position:relative;width:100%;height:100%;background:var(--bg);border-radius:33px;overflow:hidden;display:flex;flex-direction:column}
+  .statusbar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0;font-size:12px;font-weight:700;flex:0 0 auto}
+  /* white app header (matches real app) */
+  .apphead{background:#fff;border-bottom:1px solid var(--line);padding:8px 16px 12px;flex:0 0 auto}
+  .apphead .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .apphead h2{margin:0;font-size:22px;font-weight:800;color:var(--ink)}
+  .apphead .sm{font-size:12px;color:var(--mut);margin-top:2px}
+  .iconbtn{width:34px;height:34px;border-radius:10px;background:var(--brandbg);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--brand);border:none;cursor:pointer}
+  .backbtn{width:32px;height:32px;border:none;background:none;color:var(--brand);font-size:24px;cursor:pointer;display:flex;align-items:center}
+  .body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .body::-webkit-scrollbar{width:0}
+  /* tabs bottom */
+  .tabbar{flex:0 0 auto;height:60px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-around;padding-bottom:4px}
+  .tab{flex:1;text-align:center;color:var(--mut);font-size:10px;font-weight:600;cursor:pointer;padding-top:8px;position:relative}
+  .tab .ic{font-size:19px;display:block;line-height:1.2}
+  .tab.active{color:var(--brand)}
+  .tab .dot{position:absolute;top:5px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--brand)}
+  /* segmented filter (Inbox tabs) */
+  .segwrap{background:#fff;border-bottom:1px solid var(--line);padding:8px 10px;flex:0 0 auto;overflow-x:auto;white-space:nowrap}
+  .segwrap::-webkit-scrollbar{height:0}
+  .seg{display:inline-block;font-size:12.5px;font-weight:600;color:var(--sub);padding:7px 13px;border-radius:20px;margin-right:6px;cursor:pointer;background:#f3f4f6}
+  .seg.on{background:var(--brand);color:#fff}
+  .seg .n{background:rgba(255,255,255,.35);border-radius:10px;padding:0 5px;margin-left:4px;font-size:11px}
+  /* inbox rows */
+  .row{display:flex;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line);cursor:pointer;background:#fff;align-items:center}
+  .row:active{background:#fafafa}
+  .av{width:44px;height:44px;border-radius:12px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px}
+  .row .main{flex:1;min-width:0}
+  .row .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .row .name{font-weight:700;font-size:15px;color:var(--ink)}
+  .row .time{font-size:11px;color:var(--mut);flex:0 0 auto}
+  .row .msg{font-size:13px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .chip-ch{font-size:10px;color:var(--mut);font-weight:700;margin-right:4px}
+  .pill{display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;margin-top:5px;text-transform:uppercase;letter-spacing:.3px}
+  .p-new{background:#fff7ed;color:#c2410c}.p-book{background:#ede9fe;color:#6d28d9}
+  .p-open{background:#dbeafe;color:#1d4ed8}.p-un{background:#fee2e2;color:#b91c1c}.p-won{background:#dcfce7;color:#15803d}
+  .unread{width:9px;height:9px;border-radius:50%;background:var(--brand);flex:0 0 auto}
+  /* detail banner */
+  .banner{background:linear-gradient(135deg,var(--brand),#fb923c);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .banner h3{margin:0;font-size:19px;font-weight:800}
+  .banner .meta{font-size:12px;opacity:.92;margin-top:2px}
+  .banner .backbtn{background:rgba(255,255,255,.25);border-radius:9px;color:#fff}
+  .kv{display:flex;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);font-size:14px;align-items:flex-start;background:#fff}
+  .kv .k{width:22px;text-align:center;flex:0 0 auto}
+  .kv .v{flex:1;color:var(--ink)}
+  .kv .v small{display:block;color:var(--mut);font-size:11px;margin-top:1px}
+  .photos{display:flex;gap:8px;padding:12px 16px;background:#fff;flex-wrap:wrap}
+  .photo{width:66px;height:66px;border-radius:11px;background-size:cover;flex:0 0 auto;border:1px solid var(--line)}
+  .qhead{font-size:11px;font-weight:800;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;margin:16px 16px 6px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px}
+  .chip{background:var(--brandbg);border:1px solid var(--brandbd);color:var(--brand-dark);font-size:12.5px;font-weight:600;padding:9px 13px;border-radius:22px;cursor:pointer}
+  .chip:active{background:#ffedd5}
+  .abar{display:flex;gap:8px;padding:14px 16px}
+  .btn{flex:1;border:none;border-radius:13px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+  .btn.primary{background:var(--brand);color:#fff}
+  .btn.green{background:var(--green);color:#fff}
+  .btn.ghost{background:var(--brandbg);color:var(--brand);border:1px solid var(--brandbd)}
+  .btn.block{width:calc(100% - 32px);margin:10px 16px}
+  /* thread */
+  .bubble{max-width:76%;padding:10px 13px;border-radius:16px;font-size:13.5px;margin:8px 16px;line-height:1.35}
+  .bubble.them{background:#fff;border:1px solid var(--line);border-bottom-left-radius:5px}
+  .bubble.me{background:var(--brand);color:#fff;margin-left:auto;border-bottom-right-radius:5px}
+  .bubble .t{font-size:10px;opacity:.7;margin-top:4px;display:block}
+  .darkbox{margin:8px 12px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:12px;padding:12px;display:flex;gap:10px;align-items:center}
+  .darkbox .lock{font-size:18px}
+  .darkbox .txt{font-size:12px;color:var(--sub);line-height:1.35}
+  .darkbox a{color:var(--brand);font-weight:700}
+  /* ETA */
+  .etahero{background:linear-gradient(140deg,var(--brand),#fb923c);color:#fff;padding:22px 18px;text-align:center}
+  .etahero .big{font-size:52px;font-weight:800;line-height:1}
+  .etahero .lbl{font-size:13px;opacity:.95;margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+  .mapfake{height:110px;background:linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px) 0 0/26px 26px,linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px) 0 0/26px 26px,linear-gradient(120deg,#ffedd5,#fed7aa);position:relative}
+  .mapfake .route{position:absolute;left:14%;top:70%;width:70%;height:3px;background:var(--brand);border-radius:3px;transform:rotate(-22deg)}
+  .mapfake .a{position:absolute;left:11%;top:60%;font-size:20px}.mapfake .b{position:absolute;right:12%;top:20%;font-size:20px}
+  .preview{margin:14px 16px;background:#fff7ed;border:1px solid var(--brandbd);border-radius:13px;padding:13px;font-size:13px;color:var(--ink);line-height:1.45}
+  .preview b{color:var(--brand-dark)}
+  /* job */
+  .stepper{display:flex;padding:14px 10px 8px;background:#fff;align-items:flex-start;overflow-x:auto;border-bottom:1px solid var(--line)}
+  .step{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;font-size:9px;color:var(--mut);width:58px;position:relative}
+  .step .dot{width:24px;height:24px;border-radius:50%;background:#e5e7eb;color:#9ca3af;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-bottom:4px;z-index:2}
+  .step.done .dot{background:var(--green);color:#fff}
+  .step.cur .dot{background:var(--brand);color:#fff;box-shadow:0 0 0 4px var(--brandbg)}
+  .step.cur{color:var(--brand);font-weight:800}
+  .step .bar{position:absolute;top:12px;left:-29px;width:58px;height:3px;background:#e5e7eb;z-index:1}
+  .step.done .bar,.step.cur .bar{background:var(--green)}
+  .quick{display:flex;gap:9px;padding:12px 16px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--line)}
+  .qbtn{flex:0 0 auto;background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:10px 12px;font-size:11.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:70px;cursor:pointer;color:var(--ink)}
+  .qbtn .ic{font-size:19px}
+  .qbtn.hot{background:var(--brandbg);border-color:var(--brandbd);color:var(--brand-dark)}
+  .sec{margin:12px 16px 0}
+  .sec .h{font-size:12px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+  .sec .h a{color:var(--brand);font-size:12px;font-weight:700;cursor:pointer}
+  .cardbox{background:#fff;border-radius:13px;box-shadow:var(--shadow);overflow:hidden}
+  .lin{display:flex;gap:10px;padding:11px 13px;font-size:13.5px;border-top:1px solid var(--line);align-items:center}
+  .lin:first-child{border-top:none}
+  .lin .ic{font-size:16px}.lin .g{flex:1}.lin small{color:var(--mut);font-size:11px;display:block}
+  .formrow{display:flex;align-items:center;gap:10px;padding:11px 13px;border-top:1px solid var(--line);font-size:13.5px;cursor:pointer}
+  .formrow:first-child{border-top:none}
+  .formrow .st{margin-left:auto;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+  .st.todo{background:#fff7ed;color:#c2410c}.st.done{background:#dcfce7;color:#15803d}
+  .bottombar{flex:0 0 auto;padding:10px 14px;background:#fff;border-top:1px solid var(--line)}
+  .bigbtn{width:100%;border:none;border-radius:14px;padding:15px;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+  .bigbtn.start{background:var(--green);color:#fff}
+  .toast{position:absolute;bottom:78px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;font-size:12.5px;padding:10px 16px;border-radius:22px;opacity:0;transition:.3s;pointer-events:none;z-index:60;white-space:nowrap;max-width:88%;text-align:center}
+  .toast.show{opacity:1;bottom:84px}
+  .hidden{display:none!important}
+  /* customer tracking phone */
+  .track-head{background:var(--brand);color:#fff;padding:16px;text-align:center}
+  .track-head .biz{font-weight:800;font-size:17px}
+  .track-map{height:230px;background:linear-gradient(90deg,rgba(255,255,255,.55) 1px,transparent 1px) 0 0/30px 30px,linear-gradient(rgba(255,255,255,.55) 1px,transparent 1px) 0 0/30px 30px,linear-gradient(135deg,#ffedd5,#fdba74);position:relative}
+  .track-map .van{position:absolute;left:24%;top:60%;font-size:26px}.track-map .home{position:absolute;right:22%;top:26%;font-size:24px}
+  .track-map .rt{position:absolute;left:28%;top:62%;width:46%;height:3px;background:var(--brand);border-radius:3px;transform:rotate(-24deg)}
+  .track-card{margin:-24px 16px 0;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:18px;text-align:center;position:relative}
+  .track-eta{font-size:44px;font-weight:800;color:var(--brand-dark);line-height:1}
+  .navmini{background:#44403c;color:#e7e5e4;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer}
+  .navmini:hover{background:var(--brand);color:#fff}
+  .legend{max-width:770px;margin:32px auto 0;color:#d6d3d1;font-size:13px;line-height:1.6;background:rgba(255,255,255,.05);padding:16px 20px;border-radius:14px}
+  .legend b{color:#fff}
+  .legend code{background:rgba(255,255,255,.12);padding:1px 5px;border-radius:4px;font-size:12px;color:#fdba74}
+</style>
+</head>
+<body>
+  <h1 class="title">Industry<span>Forms</span> — mobile overhaul</h1>
+  <p class="sub">Built on the real app. Two hero flows: <b style="color:#fff">Unified Inbox → reply</b> and <b style="color:#fff">One-touch "On my way"</b>. SMS shown dark-aware (Twilio not yet live).</p>
+
+  <div class="stage">
+    <!-- ============ TRADIE PHONE ============ -->
+    <div class="pw">
+      <div class="plabel">Tradie app</div>
+      <div class="phone"><div class="notch"></div>
+        <div class="screen" id="app">
+
+          <!-- LOCK / PUSH -->
+          <div class="scr" data-scr="lock">
+            <div style="background:linear-gradient(160deg,#1c1917,#44403c);height:100%;display:flex;flex-direction:column;align-items:center;padding-top:58px">
+              <div style="color:#fff;font-size:60px;font-weight:200">8:24</div>
+              <div style="color:#d6d3d1;font-size:15px;margin-bottom:36px">Thursday 9 July</div>
+              <div style="background:rgba(255,255,255,.94);width:88%;border-radius:20px;padding:13px 14px;box-shadow:0 10px 30px rgba(0,0,0,.4)" onclick="go('inbox')">
+                <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);font-weight:700;margin-bottom:5px">
+                  <span style="width:18px;height:18px;border-radius:5px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800">IF</span>
+                  INDUSTRYFORMS · now
+                </div>
+                <div style="font-weight:700;font-size:14px">New enquiry — Daniel S. (Massey)</div>
+                <div style="font-size:13px;color:#374151;margin-top:2px">Brake job on a Hilux · 2 photos · from website</div>
+                <div style="display:flex;gap:8px;margin-top:10px;border-top:1px solid #e5e7eb;padding-top:8px">
+                  <button style="flex:1;background:none;border:none;color:var(--brand);font-weight:800;font-size:12.5px" onclick="event.stopPropagation();go('enq')">Reply</button>
+                  <button style="flex:1;background:none;border:none;color:var(--brand);font-weight:800;font-size:12.5px" onclick="event.stopPropagation();go('enq')">Quote</button>
+                  <button style="flex:1;background:none;border:none;color:var(--brand);font-weight:800;font-size:12.5px" onclick="event.stopPropagation();toast('Calling Daniel…')">Call</button>
+                </div>
+              </div>
+              <p style="color:#a8a29e;font-size:11px;margin-top:22px">▲ Real-time push via <b style="color:#fdba74">/api/notify</b> — replaces the 14-day poll</p>
+            </div>
+          </div>
+
+          <!-- INBOX -->
+          <div class="scr hidden" data-scr="inbox">
+            <div class="statusbar"><span>8:24</span><span>5G ▮▮▮ 🔋</span></div>
+            <div class="apphead"><div class="row"><h2>Inbox</h2><button class="iconbtn" onclick="toast('Search & filters')">⌕</button></div>
+              <div class="sm">3 new · 2 waiting on you</div></div>
+            <div class="segwrap">
+              <span class="seg on">Open</span><span class="seg" onclick="toast('Filter: Unread')">Unread <span class="n">2</span></span>
+              <span class="seg" onclick="toast('Filter: Enquiries')">Enquiries</span><span class="seg" onclick="toast('Bookings — live after Sprint D')">Bookings</span>
+              <span class="seg" onclick="toast('Unmatched inbound SMS')">Unmatched</span><span class="seg" onclick="toast('Closed')">Closed</span>
+            </div>
+            <div class="body">
+              <div class="row" onclick="go('enq')">
+                <div class="av" style="background:#f97316">DS</div>
+                <div class="main"><div class="top"><span class="name">Daniel Satich</span><span class="time">now</span></div>
+                  <div class="msg"><span class="chip-ch">✉ WEB LEAD</span>Brake pads grinding on a Hilux…</div>
+                  <span class="pill p-new">New enquiry</span></div>
+                <div class="unread"></div>
+              </div>
+              <div class="row" onclick="go('thread')">
+                <div class="av" style="background:#3b82f6">TP</div>
+                <div class="main"><div class="top"><span class="name">Turin Panel &amp; Paint</span><span class="time">12m</span></div>
+                  <div class="msg"><span class="chip-ch">💬 SMS</span>Yep that works, see you then 👍</div>
+                  <span class="pill p-open">Open · Job</span></div>
+                <div class="unread"></div>
+              </div>
+              <div class="row" onclick="toast('Booking request detail')">
+                <div class="av" style="background:#8b5cf6">JW</div>
+                <div class="main"><div class="top"><span class="name">Jess Wong</span><span class="time">1h</span></div>
+                  <div class="msg"><span class="chip-ch">📅 BOOKING</span>WOF + service — Fri 9am requested</div>
+                  <span class="pill p-book">Booking</span></div>
+              </div>
+              <div class="row" onclick="toast('Unmatched — Create customer')">
+                <div class="av" style="background:#6b7280">?</div>
+                <div class="main"><div class="top"><span class="name">+64 21 555 0147</span><span class="time">2h</span></div>
+                  <div class="msg"><span class="chip-ch">💬 SMS</span>Hey do you do heat pump installs?</div>
+                  <span class="pill p-un">Unmatched</span></div>
+              </div>
+              <div class="row" onclick="toast('Won enquiry → job')">
+                <div class="av" style="background:#22c55e">MK</div>
+                <div class="main"><div class="top"><span class="name">Mereana K.</span><span class="time">Yest</span></div>
+                  <div class="msg"><span class="chip-ch">✉ ENQUIRY</span>Dash lights flickering — converted</div>
+                  <span class="pill p-won">Won</span></div>
+              </div>
+            </div>
+            <div class="tabbar" id="tb-inbox"></div>
+          </div>
+
+          <!-- ENQUIRY DETAIL -->
+          <div class="scr hidden" data-scr="enq">
+            <div class="statusbar"><span>8:24</span><span>5G ▮▮▮ 🔋</span></div>
+            <div class="banner"><button class="backbtn" onclick="go('inbox')">‹</button>
+              <div><h3>Daniel Satich</h3><div class="meta">Website lead · just now · Massey</div></div></div>
+            <div class="body">
+              <div class="kv"><span class="k">📍</span><div class="v">133c State Highway 16, Massey, Auckland<small>Tap to navigate · 9 min drive</small></div></div>
+              <div class="kv"><span class="k">🔧</span><div class="v">Front brake pads grinding on a 2016 Hilux. Started this morning — need it before the weekend.</div></div>
+              <div class="kv"><span class="k">📞</span><div class="v">021 555 0193 · daniel@example.co.nz</div></div>
+              <div class="photos"><div class="photo" style="background:linear-gradient(135deg,#a8a29e,#57534e)"></div><div class="photo" style="background:linear-gradient(135deg,#78716c,#44403c)"></div></div>
+              <div class="qhead">Quick reply — 1 tap (branded automatically)</div>
+              <div class="chips">
+                <div class="chip" onclick="toast('Sent: On it — back to you within the hour')">👍 On it — reply in 1hr</div>
+                <div class="chip" onclick="toast('Sent: Can I call you now?')">📞 Can I call now?</div>
+                <div class="chip" onclick="go('thread')">✏️ Write reply…</div>
+              </div>
+              <div class="abar" style="margin-top:6px">
+                <button class="btn ghost" onclick="toast('Draft quote created — customer pre-filled')">＄ Quote</button>
+                <button class="btn green" onclick="toast('Converted to job DS00011 — customer carried over')">✓ Convert to job</button>
+              </div>
+              <p style="text-align:center;color:var(--mut);font-size:11px;margin:0 16px 14px">Convert carries the enquiry data across — fixes the current dead-end.</p>
+            </div>
+            <div class="tabbar" id="tb-enq"></div>
+          </div>
+
+          <!-- SMS THREAD (dark-aware) -->
+          <div class="scr hidden" data-scr="thread">
+            <div class="statusbar"><span>8:24</span><span>5G ▮▮▮ 🔋</span></div>
+            <div class="banner" style="padding:12px 16px"><button class="backbtn" onclick="go('inbox')">‹</button>
+              <div style="flex:1"><h3 style="font-size:17px">Daniel Satich</h3><div class="meta">SMS thread · same data as web /messages</div></div>
+              <button class="iconbtn" style="background:rgba(255,255,255,.25);color:#fff" onclick="go('eta')">🚗</button></div>
+            <div class="body" style="background:var(--bg);display:flex;flex-direction:column">
+              <div class="bubble them">Hi, brake pads grinding on my Hilux — can you look this week?<span class="t">8:02</span></div>
+              <div class="bubble me">On it Daniel — I'll be back to you within the hour with a time 👍<span class="t">8:04 · will send when Twilio live</span></div>
+              <div class="bubble them">Choice, thanks!<span class="t">8:06</span></div>
+              <div style="text-align:center;margin:10px"><button class="btn primary" style="display:inline-flex;width:auto;padding:11px 20px" onclick="go('eta')">🚗 Send "On my way"</button></div>
+            </div>
+            <div class="darkbox">
+              <span class="lock">🔒</span>
+              <div class="txt"><b>SMS not enabled.</b> Configure Twilio in <a>Settings → Integrations</a> to reply here. Email replies work now.</div>
+            </div>
+            <div class="tabbar" id="tb-thread"></div>
+          </div>
+
+          <!-- ON MY WAY / ETA -->
+          <div class="scr hidden" data-scr="eta">
+            <div class="statusbar"><span>8:24</span><span>5G ▮▮▮ 🔋</span></div>
+            <div class="banner" style="padding:12px 16px"><button class="backbtn" onclick="go('job')">‹</button>
+              <div><h3 style="font-size:17px">On my way</h3><div class="meta">ETA from your GPS → job site</div></div></div>
+            <div class="body">
+              <div class="etahero"><div class="big" id="etaNum">22</div><div class="lbl">minutes away · 14.6 km</div></div>
+              <div class="mapfake"><div class="route"></div><div class="a">🚗</div><div class="b">📍</div></div>
+              <div class="preview">Hi <b>Daniel</b>, it's <b>Josh from Grimstock Auto</b>. On my way — ETA about <b>22 min</b>. Track me live: <b>ind.fm/t/x9k2</b></div>
+              <div class="qhead">Or pick another update</div>
+              <div class="chips">
+                <div class="chip" onclick="setEta('40','Running ~15 min late — sorry!')">⏰ Running late</div>
+                <div class="chip" onclick="setEta('✓','Arrived — heading in now')">📍 I've arrived</div>
+                <div class="chip" onclick="toast('Reschedule flow')">📅 Reschedule</div>
+              </div>
+              <button class="btn primary block" style="margin-top:12px" onclick="toast('✓ Sent to Daniel (email now · SMS when Twilio live) · tracking on')">Send with live tracking →</button>
+              <p style="text-align:center;color:var(--mut);font-size:11px;margin:0 16px 16px">Channel-aware: sends by email/portal now, SMS on go-live. Arrival auto-detected by the existing geofence.</p>
+            </div>
+            <div class="tabbar" id="tb-eta"></div>
+          </div>
+
+          <!-- JOB SCREEN -->
+          <div class="scr hidden" data-scr="job">
+            <div class="statusbar"><span>8:24</span><span>5G ▮▮▮ 🔋</span></div>
+            <div class="apphead"><div class="row"><button class="backbtn" onclick="go('inbox')">‹</button>
+              <span style="font-weight:700;color:var(--brand)">DS00010</span><button class="iconbtn" onclick="toast('Job options')">⋯</button></div>
+              <h2 style="margin-top:4px;font-size:20px">Turin Panel &amp; Paint</h2></div>
+            <div class="stepper">
+              <div class="step done"><div class="dot">✓</div>Enquiry</div>
+              <div class="step done"><div class="bar"></div><div class="dot">✓</div>Quoted</div>
+              <div class="step done"><div class="bar"></div><div class="dot">✓</div>Booked</div>
+              <div class="step cur"><div class="bar"></div><div class="dot">4</div>On site</div>
+              <div class="step"><div class="bar"></div><div class="dot">5</div>Invoiced</div>
+              <div class="step"><div class="bar"></div><div class="dot">6</div>Paid</div>
+            </div>
+            <div class="quick">
+              <div class="qbtn hot" onclick="go('eta')"><span class="ic">🚗</span>On my way</div>
+              <div class="qbtn" onclick="toast('Opens maps')"><span class="ic">🧭</span>Navigate</div>
+              <div class="qbtn" onclick="toast('Calling…')"><span class="ic">📞</span>Call</div>
+              <div class="qbtn" onclick="go('thread')"><span class="ic">💬</span>Message</div>
+              <div class="qbtn" onclick="toast('Camera')"><span class="ic">📷</span>Photo</div>
+              <div class="qbtn" onclick="toast('Fill a form')"><span class="ic">📋</span>Forms</div>
+            </div>
+            <div class="body" style="padding-bottom:16px">
+              <div class="sec"><div class="h">Forms <a onclick="toast('Add form from template')">+ Add</a></div>
+                <div class="cardbox">
+                  <div class="formrow" onclick="toast('Open: Vehicle Safety Check')">📋 Vehicle Safety Check<span class="st done">Submitted</span></div>
+                  <div class="formrow" onclick="toast('Open: Brake Job Sheet')">📋 Brake Job Sheet<span class="st todo">To do</span></div>
+                </div>
+              </div>
+              <div class="sec"><div class="h">Today</div>
+                <div class="cardbox">
+                  <div class="lin"><span class="ic">⏱️</span><div class="g">1h 20m logged<small>Standard labour rate · running</small></div></div>
+                  <div class="lin"><span class="ic">📷</span><div class="g">3 photos added</div></div>
+                  <div class="lin"><span class="ic">🧾</span><div class="g">Materials — $184.50</div></div>
+                </div>
+              </div>
+              <div class="sec"><div class="h">Money</div>
+                <div class="cardbox">
+                  <div class="lin" onclick="toast('Complete & create invoice')"><span class="ic">✅</span><div class="g">Complete &amp; invoice<small>Builds from time + materials</small></div><span style="color:var(--mut)">›</span></div>
+                  <div class="lin" onclick="toast('Tap to Pay — present card')"><span class="ic">⚡</span><div class="g">Take payment — Tap to Pay<small>Stripe Terminal</small></div><span style="color:var(--mut)">›</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="bottombar"><button class="bigbtn start" onclick="toast('Timer started · Standard labour rate')">▶ Start Job Timer</button></div>
+          </div>
+
+          <div class="toast" id="toast"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:330px">
+        <button class="navmini" onclick="go('lock')">Push</button>
+        <button class="navmini" onclick="go('inbox')">Inbox</button>
+        <button class="navmini" onclick="go('enq')">Enquiry</button>
+        <button class="navmini" onclick="go('thread')">Thread</button>
+        <button class="navmini" onclick="go('eta')">ETA</button>
+        <button class="navmini" onclick="go('job')">Job</button>
+      </div>
+    </div>
+
+    <!-- ============ CUSTOMER TRACKING PHONE ============ -->
+    <div class="pw">
+      <div class="plabel">Customer — live tracking link</div>
+      <div class="phone"><div class="notch"></div>
+        <div class="screen">
+          <div class="statusbar"><span>8:25</span><span>5G ▮▮▮ 🔋</span></div>
+          <div class="track-head"><div class="biz">Grimstock Auto</div><div style="font-size:12px;opacity:.9;margin-top:2px">is on the way to you</div></div>
+          <div class="track-map"><div class="rt"></div><div class="van">🚚</div><div class="home">🏠</div></div>
+          <div class="track-card">
+            <div style="font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:1px">Arriving in</div>
+            <div class="track-eta">22 min</div>
+            <div style="color:var(--sub);font-size:13px;margin-top:2px">Josh · 14.6 km away · updating live</div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <button class="btn ghost" style="flex:1" onclick="ctoast('Calling Grimstock Auto…')">📞 Call</button>
+              <button class="btn primary" style="flex:1" onclick="ctoast('Message sent')">💬 Message</button>
+            </div>
+          </div>
+          <div style="text-align:center;color:var(--mut);font-size:11px;margin-top:22px;padding:0 24px;line-height:1.5">
+            Built on the existing customer <b style="color:var(--sub)">portal/[token]</b> page — no app, no login. Link auto-expires on arrival.
+          </div>
+          <div class="toast" id="ctoast"></div>
+        </div>
+      </div>
+      <div style="color:#a8a29e;font-size:12px;max-width:280px;text-align:center">What the customer sees after you tap "On my way".</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>What changed vs the app you have.</b> The mobile app is already strong (offline PowerSync, jobs, timers, quotes, invoices, Tap-to-Pay, auto travel-log + geofence check-in) — but it has <b>no inbox, no messaging and no ETA</b>, and the web app already ships all of that. This overhaul brings it to mobile by <b>reusing the web endpoints</b>: <code>/api/messages/*</code>, <code>/api/sms/send</code>, <code>/api/notify</code>, plus a new <code>/api/sms/eta</code>.<br><br>
+    <b>New on mobile:</b> a first-class <b>Inbox tab</b> (enquiries + SMS + bookings + unmatched, mirroring web <code>/messages</code>); <b>one-touch "On my way"</b> using the GPS/LocationIQ/site-coords/geofence already in the app; a <b>redesigned job screen</b> with a quick-action row, status stepper and the <b>Forms</b> the app is named for. SMS is shown <b>dark-aware</b> — the reply UI is built but disabled until Twilio is switched on, exactly like the web. Full rationale, file-by-file plan and phased roadmap are in the accompanying Word brief.
+  </div>
+
+<script>
+  var TABS=[['home','🏠','Home'],['jobs','🧰','Jobs'],['inbox','✉️','Inbox'],['schedule','🗓️','Schedule'],['more','⋯','More']];
+  function tabbar(active){
+    return TABS.map(function(t){
+      var on=t[0]===active?' active':'';
+      var dot=t[0]==='inbox'?'<span class="dot"></span>':'';
+      var act=(t[0]==='inbox')?"go('inbox')":(t[0]==='jobs'?"go('job')":"toast('"+t[2]+"')");
+      return '<div class="tab'+on+'" onclick="'+act+'">'+dot+'<span class="ic">'+t[1]+'</span>'+t[2]+'</div>';
+    }).join('');
+  }
+  ['inbox','enq','thread','eta'].forEach(function(k){
+    var el=document.getElementById('tb-'+k); if(el) el.innerHTML=tabbar(k==='inbox'?'inbox':'inbox');
+  });
+  function go(scr){
+    document.querySelectorAll('#app .scr').forEach(function(s){s.classList.add('hidden')});
+    var el=document.querySelector('#app .scr[data-scr="'+scr+'"]');
+    if(el){el.classList.remove('hidden');var b=el.querySelector('.body');if(b)b.scrollTop=0;}
+  }
+  var tt; function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(function(){t.classList.remove('show')},2000);}
+  var ct; function ctoast(m){var t=document.getElementById('ctoast');t.textContent=m;t.classList.add('show');clearTimeout(ct);ct=setTimeout(function(){t.classList.remove('show')},2000);}
+  function setEta(n,line){document.getElementById('etaNum').textContent=n;toast(line);}
+</script>
+</body>
+</html>

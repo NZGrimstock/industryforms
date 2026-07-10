@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImagePicker from 'expo-image-picker'
 import { WebView } from 'react-native-webview'
 import { supabase } from '@/lib/supabase'
+import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { getJobStatuses, resolveStatus, statusHex, DEFAULT_JOB_STATUSES, type JobStatus } from '@/lib/job-statuses'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz, formatDateTime as formatDateTimeTz } from '@/lib/datetime'
@@ -80,6 +81,7 @@ type Job = {
 
 type Note = { id: string; body: string; author_id: string | null; created_at: string }
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number }
+type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string }
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
 type Photo = { id: string; storage_path: string; caption: string | null; taken_at: string }
 type FormField = { id: string; type: string; label: string; required: boolean; options?: string[] }
@@ -94,6 +96,8 @@ export default function JobDetailScreen() {
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+  const [savingMaterial, setSavingMaterial] = useState(false)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -105,6 +109,8 @@ export default function JobDetailScreen() {
   const [showComplete, setShowComplete] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null)
+  const [companyName, setCompanyName] = useState<string | null>(null)
   const [fillTemplate, setFillTemplate] = useState<FormTemplate | null>(null)
   const [fillAnswers, setFillAnswers] = useState<Record<string, string>>({})
   const [savingForm, setSavingForm] = useState(false)
@@ -125,6 +131,11 @@ export default function JobDetailScreen() {
           if (profile?.company_id) {
             setCompanyId(profile.company_id)
             getJobStatuses(profile.company_id).then(setStatuses)
+            supabase.from('companies').select('name, logo_url').eq('id', profile.company_id).single()
+              .then(({ data: company }) => {
+                setCompanyName(company?.name ?? null)
+                setCompanyLogoUrl(company?.logo_url ?? null)
+              })
           }
         })
     })
@@ -272,6 +283,14 @@ export default function JobDetailScreen() {
     [id]
   )
 
+  const { data: priceItems } = useQuery<PriceListLookupItem>(
+    `SELECT id, name, unit, sell_price, cost_price, category
+     FROM price_list_items
+     WHERE company_id = ? AND is_active = 1
+     ORDER BY name ASC`,
+    [companyId ?? '']
+  )
+
   const { data: visits } = useQuery<Visit>(
     `SELECT id, scheduled_start, scheduled_end, status
      FROM job_visits WHERE job_id = ?
@@ -399,6 +418,30 @@ export default function JobDetailScreen() {
       { text: 'Photo Library', onPress: () => addPhoto('gallery') },
       { text: 'Cancel', style: 'cancel' },
     ])
+  }
+
+  async function addMaterial() {
+    if (!companyId || !materialLine.description.trim()) return
+    const qty = parseFloat(materialLine.quantity) || 1
+    const unitCost = parseFloat(materialLine.unit_cost) || 0
+    const unitPrice = parseFloat(materialLine.unit_price) || 0
+    setSavingMaterial(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('job_materials').insert({
+      job_id: id,
+      company_id: companyId,
+      added_by: user?.id ?? null,
+      price_list_item_id: materialLine.price_list_item_id,
+      description: materialLine.description.trim(),
+      quantity: qty,
+      unit: materialLine.unit || 'ea',
+      unit_cost: unitCost,
+      unit_price: unitPrice,
+    })
+    setSavingMaterial(false)
+    if (error) { Alert.alert('Could not add material', error.message); return }
+    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    hapticSuccess()
   }
 
   async function addNote() {
@@ -788,22 +831,81 @@ export default function JobDetailScreen() {
         )}
 
         {/* Materials */}
-        {(materials ?? []).length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Materials</Text>
-            {materials!.map(m => (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Materials</Text>
+          <View style={styles.materialAddBox}>
+            <PriceListDescriptionInput
+              value={materialLine.description}
+              items={priceItems ?? []}
+              onChangeText={value => setMaterialLine(line => ({ ...line, description: value, price_list_item_id: null }))}
+              onPick={item => setMaterialLine(line => ({
+                ...line,
+                price_list_item_id: item.id,
+                description: item.name,
+                unit: item.unit || 'ea',
+                unit_cost: String(Number(item.cost_price) || 0),
+                unit_price: String(Number(item.sell_price) || 0),
+              }))}
+              inputStyle={[styles.input, { marginBottom: 0 }]}
+              containerStyle={{ marginBottom: 8 }}
+              placeholder="Description"
+            />
+            <View style={styles.materialInputsRow}>
+              <TextInput
+                style={[styles.input, styles.materialSmallInput]}
+                value={materialLine.quantity}
+                onChangeText={value => setMaterialLine(line => ({ ...line, quantity: value }))}
+                placeholder="Qty"
+                placeholderTextColor="#6b7280"
+                keyboardType="decimal-pad"
+              />
+              <TextInput
+                style={[styles.input, styles.materialSmallInput]}
+                value={materialLine.unit}
+                onChangeText={value => setMaterialLine(line => ({ ...line, unit: value }))}
+                placeholder="Unit"
+                placeholderTextColor="#6b7280"
+              />
+              <TextInput
+                style={[styles.input, { flex: 1.4 }]}
+                value={materialLine.unit_price}
+                onChangeText={value => setMaterialLine(line => ({ ...line, unit_price: value }))}
+                placeholder="Unit price"
+                placeholderTextColor="#6b7280"
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <View style={styles.materialActions}>
+              <TouchableOpacity
+                style={[styles.saveNoteBtn, (!materialLine.description.trim() || savingMaterial) && { opacity: 0.5 }]}
+                onPress={addMaterial}
+                disabled={!materialLine.description.trim() || savingMaterial}
+              >
+                {savingMaterial ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveNoteBtnText}>Add item</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' })}>
+                <Text style={styles.addLink}>Add sundry</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {(materials ?? []).length === 0 ? (
+            <Text style={styles.emptyText}>No materials yet</Text>
+          ) : (
+            <>
+              {materials!.map(m => (
               <View key={m.id} style={styles.materialRow}>
                 <Text style={styles.materialDesc} numberOfLines={1}>{m.description}</Text>
                 <Text style={styles.materialQty}>{m.quantity}{m.unit ? ` ${m.unit}` : ''}</Text>
                 <Text style={styles.materialPrice}>${(m.quantity * m.unit_price).toFixed(2)}</Text>
               </View>
-            ))}
-            <View style={styles.materialTotal}>
-              <Text style={styles.materialTotalLabel}>Total</Text>
-              <Text style={styles.materialTotalValue}>${materialsTotal.toFixed(2)}</Text>
-            </View>
-          </View>
-        )}
+              ))}
+              <View style={styles.materialTotal}>
+                <Text style={styles.materialTotalLabel}>Total</Text>
+                <Text style={styles.materialTotalValue}>${materialsTotal.toFixed(2)}</Text>
+              </View>
+            </>
+          )}
+        </View>
 
         {/* Photos */}
         <View style={styles.section}>
@@ -912,7 +1014,11 @@ export default function JobDetailScreen() {
         <View style={styles.completeOverlay}>
           <SafeAreaView edges={['top', 'bottom']} style={styles.completeSheet}>
             <View style={styles.completeHeader}>
-              <Text style={styles.completeTitle}>Customer sign-off</Text>
+              <View style={{ flex: 1 }}>
+                {companyLogoUrl ? <Image source={{ uri: companyLogoUrl }} style={styles.signoffLogo} resizeMode="contain" /> : null}
+                {!companyLogoUrl && companyName ? <Text style={styles.signoffCompany}>{companyName}</Text> : null}
+                <Text style={styles.completeTitle}>Customer sign-off</Text>
+              </View>
               <TouchableOpacity onPress={() => !completing && setShowComplete(false)} disabled={completing}>
                 <Text style={styles.completeClose}>Cancel</Text>
               </TouchableOpacity>
@@ -1154,6 +1260,10 @@ const styles = StyleSheet.create({
   visitText: { flex: 1, fontSize: 14, color: '#374151' },
   minibadge: { borderRadius: 100, paddingHorizontal: 7, paddingVertical: 2 },
   minibadgeText: { fontSize: 11, fontWeight: '600' },
+  materialAddBox: { backgroundColor: colors.brandBg, borderWidth: 1, borderColor: colors.brandBorder, borderRadius: radius.md, padding: 12, marginBottom: 10 },
+  materialInputsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  materialSmallInput: { flex: 0.8 },
+  materialActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   materialRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#f9fafb', gap: 8 },
   materialDesc: { flex: 1, fontSize: 14, color: '#374151' },
   materialQty: { fontSize: 13, color: '#6b7280', minWidth: 40, textAlign: 'right' },
@@ -1186,6 +1296,8 @@ const styles = StyleSheet.create({
   completeOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   completeSheet: { backgroundColor: '#f9fafb', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 16, height: '82%' },
   completeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, paddingBottom: 4 },
+  signoffLogo: { width: 150, height: 38, marginBottom: 4 },
+  signoffCompany: { fontSize: 12, fontWeight: '800', color: colors.brandDark, marginBottom: 3 },
   completeTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
   completeClose: { fontSize: 15, color: '#6b7280', fontWeight: '600' },
   completeHint: { fontSize: 13, color: '#6b7280', lineHeight: 18, marginBottom: 12 },

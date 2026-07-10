@@ -8,6 +8,7 @@ import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
+import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
 
@@ -73,7 +74,7 @@ export default function QuoteDetailScreen() {
   const [accepting, setAccepting] = useState(false)
   const [converting, setConverting] = useState(false)
   const [showAddItem, setShowAddItem] = useState(false)
-  const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' })
+  const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit: 'ea', unit_price: '', price_list_item_id: null as string | null })
   const [addingItem, setAddingItem] = useState(false)
   const [editingItem, setEditingItem] = useState<LineItem | null>(null)
   const [editForm, setEditForm] = useState({ description: '', quantity: '1', unit_price: '' })
@@ -90,6 +91,14 @@ export default function QuoteDetailScreen() {
     [id]
   )
   const quote = quotes?.[0]
+
+  const { data: priceItems } = useQuery<PriceListLookupItem>(
+    `SELECT id, name, unit, sell_price, cost_price, category
+     FROM price_list_items
+     WHERE company_id = ? AND is_active = 1
+     ORDER BY name ASC`,
+    [quote?.company_id ?? '']
+  )
 
   const { data: sections } = useQuery<Section>(
     `SELECT id, title, sort_order FROM quote_sections WHERE quote_id = ? ORDER BY sort_order ASC`,
@@ -295,16 +304,17 @@ export default function QuoteDetailScreen() {
     const { error } = await supabase.from('quote_line_items').insert({
       quote_id: id,
       company_id: quote?.company_id,
+      price_list_item_id: newItem.price_list_item_id,
       description: newItem.description.trim(),
       quantity: qty,
       unit_price: price,
       line_total: qty * price,
-      unit: 'ea',
+      unit: newItem.unit || 'ea',
       sort_order: (lineItems?.length ?? 0) + ++_uid,
     })
     setAddingItem(false)
     if (error) { Alert.alert('Error', error.message); return }
-    setNewItem({ description: '', quantity: '1', unit_price: '' })
+    setNewItem({ description: '', quantity: '1', unit: 'ea', unit_price: '', price_list_item_id: null })
     setShowAddItem(false)
     refreshItems?.()
   }
@@ -471,9 +481,24 @@ export default function QuoteDetailScreen() {
 
           {showAddItem && isDraft && (
             <View style={s.addItemBox}>
-              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#6b7280" autoFocus />
+              <PriceListDescriptionInput
+                value={newItem.description}
+                items={priceItems ?? []}
+                onChangeText={v => setNewItem(p => ({ ...p, description: v, price_list_item_id: null }))}
+                onPick={item => setNewItem(p => ({
+                  ...p,
+                  description: item.name,
+                  unit: item.unit || 'ea',
+                  unit_price: String(Number(item.sell_price) || 0),
+                  price_list_item_id: item.id,
+                }))}
+                inputStyle={[s.input, { marginBottom: 0 }]}
+                containerStyle={{ marginBottom: 8 }}
+                autoFocus
+              />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                 <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" />
                 <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>

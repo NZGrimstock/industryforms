@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   // Fetch company
   const { data: company } = await service
     .from('companies')
-    .select('name, email, phone')
+    .select('name, email, phone, logo_url')
     .eq('id', companyId)
     .single()
 
@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
     portalUrl,
     companyPhone: company.phone,
     companyEmail: company.email,
+    logoUrl: company.logo_url,
   })
 
   const { error: emailError } = await sendEmail({

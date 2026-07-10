@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-08. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-10. Catch-up doc for a fresh session. Read this first.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -79,6 +79,18 @@ credential setup. Run `cd tradiee-mobile && npx eas build --platform ios
   (1/3/6 months, 1/2/5 years, all time), visible period labels, drill-down
   rows, status drill links, and print/PDF-friendly output via a Print button.
   Verified with `npx tsc --noEmit` and scoped ESLint on touched web files.
+- Mobile line-item parity pass (Codex, 2026-07-10): jobs now show an
+  always-visible Materials entry box on mobile, matching quote-style line
+  item entry with Description autocomplete against active price-list items,
+  Qty, Unit, Unit price, and direct insert into `job_materials`. Mobile new
+  quotes and quote detail line-item Description inputs now share the same
+  price-list lookup. Customer-visible branding audit found and fixed missing
+  company logos in review-request emails, booking request/confirmation emails,
+  quote/invoice reminder emails, booking/win-back/service reminder snippets,
+  customer portal magic-link emails, ETA fallback emails, job-sheet PDFs, and
+  the mobile customer sign-off sheet. Reality checked with
+  `cd tradiee-mobile && npx tsc --noEmit` and
+  `cd tradiee-app && npx tsc --noEmit` after edits.
 
 **Sprint E (automations + growth reporting) shipped 2026-07-06.** New
 `automation_events` table (migration `20260704090000_automation_events.sql`)

@@ -8,10 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { geocodeAddress } from '@/lib/geocode'
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null }
-type LineItem = { id: string; description: string; quantity: string; unit_price: string; sectionId: string | null }
+type LineItem = { id: string; description: string; quantity: string; unit: string; unit_price: string; price_list_item_id: string | null; sectionId: string | null }
 type QuoteSection = { id: string; title: string }
 type Site = { id: string; label: string | null; address: string }
 
@@ -42,7 +43,8 @@ export default function NewQuoteScreen() {
   const [showAddSection, setShowAddSection] = useState(false)
   const [newSectionTitle, setNewSectionTitle] = useState('')
   const [showAddItem, setShowAddItem] = useState(false)
-  const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit_price: '' })
+  const [newItem, setNewItem] = useState({ description: '', quantity: '1', unit: 'ea', unit_price: '', price_list_item_id: null as string | null })
+  const [priceItems, setPriceItems] = useState<PriceListLookupItem[]>([])
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [gstRate, setGstRate] = useState(0.15)
@@ -64,9 +66,11 @@ export default function NewQuoteScreen() {
             supabase.from('companies').select('default_gst_rate, quote_prefix').eq('id', prof.company_id).single(),
             supabase.from('customers').select('id, name, phone, email').eq('company_id', prof.company_id).eq('is_active', true).order('name').limit(300),
             supabase.from('quotes').select('id', { count: 'exact', head: true }).eq('company_id', prof.company_id),
-          ]).then(([coRes, custRes, countRes]) => {
+            supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, category').eq('company_id', prof.company_id).eq('is_active', true).order('name').limit(500),
+          ]).then(([coRes, custRes, countRes, priceRes]) => {
             if (coRes.data) setGstRate(Number(coRes.data.default_gst_rate) || 0.15)
             setCustomers(custRes.data ?? [])
+            setPriceItems(priceRes.data ?? [])
             const prefix = coRes.data?.quote_prefix ?? 'Q-'
             setQuoteNumber(`${prefix}${String((countRes.count ?? 0) + 1).padStart(4, '0')}`)
           })
@@ -111,7 +115,7 @@ export default function NewQuoteScreen() {
     if (!newItem.description.trim() || !newItem.unit_price) return
     // New items land in the most recent section (or unsectioned if none yet)
     setLineItems(prev => [...prev, { id: uid(), ...newItem, sectionId: sections.length ? sections[sections.length - 1].id : null }])
-    setNewItem({ description: '', quantity: '1', unit_price: '' })
+    setNewItem({ description: '', quantity: '1', unit: 'ea', unit_price: '', price_list_item_id: null })
     setShowAddItem(false)
   }
 
@@ -204,11 +208,12 @@ export default function NewQuoteScreen() {
             quote_id: quote.id,
             company_id: companyId,
             section_id: item.sectionId ? sectionIdMap.get(item.sectionId) ?? null : null,
+            price_list_item_id: item.price_list_item_id,
             description: item.description.trim(),
             quantity: parseFloat(item.quantity) || 1,
             unit_price: parseFloat(item.unit_price) || 0,
             line_total: (parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0),
-            unit: 'ea',
+            unit: item.unit || 'ea',
             sort_order: idx,
           }))
         )
@@ -322,9 +327,24 @@ export default function NewQuoteScreen() {
 
           {showAddItem && (
             <View style={s.addItemBox}>
-              <TextInput style={[s.input, { marginBottom: 8 }]} value={newItem.description} onChangeText={v => setNewItem(p => ({ ...p, description: v }))} placeholder="Description" placeholderTextColor="#6b7280" autoFocus />
+              <PriceListDescriptionInput
+                value={newItem.description}
+                items={priceItems}
+                onChangeText={v => setNewItem(p => ({ ...p, description: v, price_list_item_id: null }))}
+                onPick={item => setNewItem(p => ({
+                  ...p,
+                  description: item.name,
+                  unit: item.unit || 'ea',
+                  unit_price: String(Number(item.sell_price) || 0),
+                  price_list_item_id: item.id,
+                }))}
+                inputStyle={[s.input, { marginBottom: 0 }]}
+                containerStyle={{ marginBottom: 8 }}
+                autoFocus
+              />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                 <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" />
                 <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -485,7 +505,7 @@ function LineItemRow({ item, onRemove }: { item: LineItem; onRemove: () => void 
     <View style={s.lineRow}>
       <View style={{ flex: 1 }}>
         <Text style={s.lineDesc}>{item.description}</Text>
-        <Text style={s.lineSub}>{item.quantity} × ${parseFloat(item.unit_price || '0').toFixed(2)}</Text>
+        <Text style={s.lineSub}>{item.quantity} {item.unit || 'ea'} × ${parseFloat(item.unit_price || '0').toFixed(2)}</Text>
       </View>
       <Text style={s.lineTotal}>${((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}</Text>
       <TouchableOpacity onPress={onRemove} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove ${item.description}`} accessibilityRole="button">

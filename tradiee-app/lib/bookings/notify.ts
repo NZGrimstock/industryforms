@@ -21,7 +21,7 @@ type BookingContact = {
 
 async function loadCompanyContext(service: SupabaseClient, companyId: string) {
   const [{ data: company }, { data: settings }] = await Promise.all([
-    service.from('companies').select('name, phone, country').eq('id', companyId).single(),
+    service.from('companies').select('name, phone, country, logo_url').eq('id', companyId).single(),
     service.from('booking_settings').select('timezone, confirmation_channel').eq('company_id', companyId).maybeSingle(),
   ])
   return { company, settings }
@@ -48,6 +48,7 @@ export async function sendBookingConfirmationEmail(
     timezone: settings?.timezone ?? 'Pacific/Auckland',
     siteAddress: booking.site_address,
     companyPhone: company.phone,
+    logoUrl: company.logo_url,
   }) : null
 
   const smsTo = wantsSms(settings?.confirmation_channel) ? toE164(booking.customer_phone, company.country) : null
@@ -75,6 +76,7 @@ export async function sendBookingRequestedEmail(
     startsAt: booking.starts_at,
     timezone: settings?.timezone ?? 'Pacific/Auckland',
     companyPhone: company.phone,
+    logoUrl: company.logo_url,
   })
 
   await notify({

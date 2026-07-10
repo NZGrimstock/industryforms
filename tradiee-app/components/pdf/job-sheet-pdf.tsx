@@ -13,6 +13,7 @@ const s = StyleSheet.create({
   // Header
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, paddingBottom: 14, borderBottomWidth: 2, borderBottomColor: ORANGE },
   headerLeft:   { flex: 1 },
+  logo:         { maxWidth: 120, maxHeight: 36, marginBottom: 5, objectFit: 'contain' },
   companyName:  { fontSize: 18, fontFamily: 'Helvetica-Bold', color: ORANGE },
   companyMeta:  { fontSize: 7.5, color: GREY, marginTop: 1.5 },
   headerRight:  { alignItems: 'flex-end' },
@@ -144,6 +145,7 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
         {/* ── Header ── */}
         <View style={s.header}>
           <View style={s.headerLeft}>
+            {company.logo_url ? <Image style={s.logo} src={company.logo_url} /> : null}
             {company.name ? <Text style={s.companyName}>{company.name}</Text> : null}
             {company.address ? <Text style={s.companyMeta}>{company.address}</Text> : null}
             {company.phone   ? <Text style={s.companyMeta}>{company.phone}</Text> : null}
