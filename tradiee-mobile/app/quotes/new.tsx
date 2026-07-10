@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type RefObject } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { geocodeAddress } from '@/lib/geocode'
+import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 
 type Customer = { id: string; name: string; phone: string | null; email: string | null }
 type LineItem = { id: string; description: string; quantity: string; unit: string; unit_price: string; price_list_item_id: string | null; sectionId: string | null }
@@ -26,6 +27,12 @@ export default function NewQuoteScreen() {
   // (Mobile Overhaul brief finding #4 — convert used to drop the enquiry data).
   const params = useLocalSearchParams<{ name?: string; email?: string; phone?: string; address?: string; notes?: string }>()
   const scrollRef = useRef<ScrollView>(null)
+  const titleRef = useRef<TextInput>(null)
+  const messageRef = useRef<TextInput>(null)
+  const sectionTitleRef = useRef<TextInput>(null)
+  const itemQtyRef = useRef<TextInput>(null)
+  const itemUnitRef = useRef<TextInput>(null)
+  const itemPriceRef = useRef<TextInput>(null)
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -56,6 +63,10 @@ export default function NewQuoteScreen() {
   const [newCustLastName, setNewCustLastName] = useState('')
   const [creatingCust, setCreatingCust] = useState(false)
   const newCustValid = !!(newCust.name.trim() && newCust.email.trim() && newCust.phone.trim() && newCust.billing_address.trim())
+
+  const focusField = (ref: RefObject<TextInput | null>) => {
+    setTimeout(() => scrollFieldAboveKeyboard(scrollRef, ref, 12), 50)
+  }
 
   // Kept as separate first/last inputs but joined into the single `name`
   // column everything else in the app (invoices, portal, PDFs) reads.
@@ -260,17 +271,17 @@ export default function NewQuoteScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <Stack.Screen options={{ title: 'New Quote', headerTintColor: '#f97316' }} />
       <ScrollView
         ref={scrollRef}
         style={s.container}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 260 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={s.field}>
           <Text style={s.label}>Title *</Text>
-          <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="e.g. Kitchen renovation quote" placeholderTextColor="#6b7280" autoFocus />
+          <TextInput ref={titleRef} style={s.input} value={title} onChangeText={setTitle} placeholder="e.g. Kitchen renovation quote" placeholderTextColor="#6b7280" autoFocus onFocus={() => focusField(titleRef)} />
         </View>
 
         <View style={s.field}>
@@ -310,7 +321,7 @@ export default function NewQuoteScreen() {
 
         <View style={s.field}>
           <Text style={s.label}>Message to customer</Text>
-          <TextInput style={[s.input, { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' }]} value={message} onChangeText={setMessage} placeholder="Included in the quote email…" placeholderTextColor="#6b7280" multiline />
+          <TextInput ref={messageRef} style={[s.input, { minHeight: 80, paddingTop: 12, textAlignVertical: 'top' }]} value={message} onChangeText={setMessage} placeholder="Included in the quote email…" placeholderTextColor="#6b7280" multiline onFocus={() => focusField(messageRef)} />
         </View>
 
         {/* Line items */}
@@ -329,7 +340,7 @@ export default function NewQuoteScreen() {
 
           {showAddSection && (
             <View style={s.addItemBox}>
-              <TextInput style={[s.input, { marginBottom: 8 }]} value={newSectionTitle} onChangeText={setNewSectionTitle} placeholder="Section title, e.g. Materials" placeholderTextColor="#6b7280" autoFocus />
+              <TextInput ref={sectionTitleRef} style={[s.input, { marginBottom: 8 }]} value={newSectionTitle} onChangeText={setNewSectionTitle} placeholder="Section title, e.g. Materials" placeholderTextColor="#6b7280" autoFocus onFocus={() => focusField(sectionTitleRef)} />
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={[s.btn, { flex: 1, paddingVertical: 11 }]} onPress={addSection}>
                   <Text style={s.btnText}>Add section</Text>
@@ -360,9 +371,9 @@ export default function NewQuoteScreen() {
                 autoFocus
               />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" />
-                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput ref={itemQtyRef} style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" onFocus={() => focusField(itemQtyRef)} />
+                <TextInput ref={itemUnitRef} style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" onFocus={() => focusField(itemUnitRef)} />
+                <TextInput ref={itemPriceRef} style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" onFocus={() => focusField(itemPriceRef)} />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={[s.btn, { flex: 1, paddingVertical: 11 }]} onPress={addItem}>

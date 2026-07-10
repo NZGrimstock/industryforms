@@ -15,7 +15,7 @@ export default async function LogbookPage({ searchParams }: { searchParams: Prom
   const fromDate = sp.from ?? new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const toDate = sp.to ?? today
 
-  const [teamRes, logsRes] = await Promise.all([
+  const [teamRes, logsRes, jobsRes] = await Promise.all([
     supabase.from('profiles')
       .select('id, full_name, vehicle_registration')
       .eq('company_id', profile.company_id)
@@ -28,6 +28,12 @@ export default async function LogbookPage({ searchParams }: { searchParams: Prom
       .lte('started_at', `${toDate}T23:59:59`)
       .eq(sp.profileId ? 'profile_id' : 'company_id', sp.profileId ?? profile.company_id)
       .order('started_at', { ascending: false }),
+    supabase.from('jobs')
+      .select('id, job_number, title')
+      .eq('company_id', profile.company_id)
+      .not('status', 'in', '(completed,cancelled)')
+      .order('created_at', { ascending: false })
+      .limit(200),
   ])
 
   return (
@@ -36,6 +42,7 @@ export default async function LogbookPage({ searchParams }: { searchParams: Prom
       <LogbookClient
         logs={(logsRes.data ?? []).map(l => ({ ...l, jobs: Array.isArray(l.jobs) ? (l.jobs[0] ?? null) : l.jobs }))}
         team={teamRes.data ?? []}
+        jobs={jobsRes.data ?? []}
         fromDate={fromDate}
         toDate={toDate}
         selectedProfileId={sp.profileId ?? ''}

@@ -16,24 +16,27 @@ import {
   requestPermissions,
   TRIP_FOLLOWUP_KEY,
   AUTO_CHECKIN_NOTICE_KEY,
+  TRADING_HOURS_KEY,
+  DEFAULT_TRADING_HOURS,
+  loadTradingHours,
+  syncTrackingToSchedule,
   type AutoCheckinNotice,
   type TripFollowup,
+  type TradingHours,
 } from '@/lib/location/tracking'
 import { useTimezone } from '@/lib/profile-context'
 import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
-const TRADING_HOURS_KEY = 'TRADIEE_TRADING_HOURS'
-type TradingHours = { enabled: boolean; startHour: number; endHour: number; days: number[] }
-const DEFAULT_TRADING_HOURS: TradingHours = { enabled: false, startHour: 7, endHour: 18, days: [1, 2, 3, 4, 5] }
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const HALF_HOUR_OPTIONS = Array.from({ length: 48 }, (_, i) => i * 30)
 
-function isInTradingHours(hours: TradingHours): boolean {
-  if (!hours.enabled) return false
-  const now = new Date()
-  const day = now.getDay()
-  const hour = now.getHours()
-  return hours.days.includes(day) && hour >= hours.startHour && hour < hours.endHour
+function formatHalfHour(mins: number) {
+  const hh = Math.floor(mins / 60)
+  const mm = mins % 60
+  const period = hh < 12 ? 'AM' : 'PM'
+  const h12 = hh % 12 === 0 ? 12 : hh % 12
+  return `${h12}:${mm.toString().padStart(2, '0')} ${period}`
 }
 
 type TimeEntry = {
@@ -74,6 +77,7 @@ export default function TimesheetsScreen() {
   const [showTradingHours, setShowTradingHours] = useState(false)
   const [tradingHours, setTradingHours] = useState<TradingHours>(DEFAULT_TRADING_HOURS)
   const [savingTradingHours, setSavingTradingHours] = useState(false)
+  const [pickerFor, setPickerFor] = useState<'start' | 'end' | null>(null)
   const [showAllocModal, setShowAllocModal] = useState(false)
   const [allocLog, setAllocLog] = useState<TravelLog | null>(null)
   const [allocJob, setAllocJob] = useState<Job | null>(null)
@@ -100,9 +104,7 @@ export default function TimesheetsScreen() {
 
   useEffect(() => {
     isTracking().then(setTracking)
-    AsyncStorage.getItem(TRADING_HOURS_KEY).then(raw => {
-      if (raw) setTradingHours(JSON.parse(raw))
-    })
+    loadTradingHours().then(setTradingHours)
   }, [])
 
   useFocusEffect(useCallback(() => {
@@ -113,18 +115,7 @@ export default function TimesheetsScreen() {
     AsyncStorage.getItem(AUTO_CHECKIN_NOTICE_KEY).then(raw => {
       setAutoCheckinNotice(raw ? JSON.parse(raw) : null)
     })
-    AsyncStorage.getItem(TRADING_HOURS_KEY).then(async raw => {
-      const hours: TradingHours = raw ? JSON.parse(raw) : DEFAULT_TRADING_HOURS
-      if (!hours.enabled) return
-      const shouldTrack = isInTradingHours(hours)
-      const currently = await isTracking()
-      if (shouldTrack && !currently) {
-        const ok = await requestPermissions()
-        if (ok) { await startTracking(); setTracking(true) }
-      } else if (!shouldTrack && currently) {
-        await stopTracking(); setTracking(false)
-      }
-    })
+    syncTrackingToSchedule().then(setTracking)
   }, []))
 
   const fetchAll = useCallback(async () => {
@@ -201,6 +192,7 @@ export default function TimesheetsScreen() {
     setSavingTradingHours(true)
     await AsyncStorage.setItem(TRADING_HOURS_KEY, JSON.stringify(hours))
     setTradingHours(hours)
+    await syncTrackingToSchedule().then(setTracking)
     setSavingTradingHours(false)
     setShowTradingHours(false)
   }
@@ -585,26 +577,16 @@ export default function TimesheetsScreen() {
               <>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Start hour</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(tradingHours.startHour)}
-                      onChangeText={v => { const n = parseInt(v); if (!isNaN(n) && n >= 0 && n <= 23) setTradingHours(h => ({ ...h, startHour: n })) }}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
-                    <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{tradingHours.startHour}:00</Text>
+                    <Text style={styles.fieldLabel}>Start time</Text>
+                    <TouchableOpacity style={styles.input} onPress={() => setPickerFor('start')}>
+                      <Text style={{ fontSize: 15, color: '#111827' }}>{formatHalfHour(tradingHours.startMin)}</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>End hour</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={String(tradingHours.endHour)}
-                      onChangeText={v => { const n = parseInt(v); if (!isNaN(n) && n >= 0 && n <= 23) setTradingHours(h => ({ ...h, endHour: n })) }}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                    />
-                    <Text style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{tradingHours.endHour}:00</Text>
+                    <Text style={styles.fieldLabel}>End time</Text>
+                    <TouchableOpacity style={styles.input} onPress={() => setPickerFor('end')}>
+                      <Text style={{ fontSize: 15, color: '#111827' }}>{formatHalfHour(tradingHours.endMin)}</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 <View>
@@ -643,6 +625,34 @@ export default function TimesheetsScreen() {
           </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Start/end time picker — 30-min increments */}
+      <Modal visible={pickerFor !== null} transparent animationType="fade" onRequestClose={() => setPickerFor(null)}>
+        <TouchableOpacity style={styles.allocOverlay} activeOpacity={1} onPress={() => setPickerFor(null)}>
+          <View style={styles.allocSheet} onStartShouldSetResponder={() => true}>
+            <Text style={styles.allocTitle}>{pickerFor === 'start' ? 'Start time' : 'End time'}</Text>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {HALF_HOUR_OPTIONS.map(mins => {
+                const active = pickerFor === 'start' ? tradingHours.startMin === mins : tradingHours.endMin === mins
+                return (
+                  <TouchableOpacity
+                    key={mins}
+                    style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}
+                    onPress={() => {
+                      setTradingHours(h => pickerFor === 'start' ? { ...h, startMin: mins } : { ...h, endMin: mins })
+                      setPickerFor(null)
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: active ? '700' : '400', color: active ? '#f97316' : '#111827' }}>
+                      {formatHalfHour(mins)}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Log time modal */}

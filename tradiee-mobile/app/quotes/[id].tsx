@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type RefObject } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity,
   Alert, TextInput, KeyboardAvoidingView, Platform,
@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
+import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 
 const STATUS_COLOR: Record<string, string> = {
   draft:    '#6b7280',
@@ -69,6 +70,9 @@ export default function QuoteDetailScreen() {
   const fmtDate = (iso: string | null) => iso ? formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
   const { id } = useLocalSearchParams<{ id: string }>()
   const scrollRef = useRef<ScrollView>(null)
+  const itemQtyRef = useRef<TextInput>(null)
+  const itemUnitRef = useRef<TextInput>(null)
+  const itemPriceRef = useRef<TextInput>(null)
   const [sending, setSending] = useState(false)
   const [texting, setTexting] = useState(false)
   const [declining, setDeclining] = useState(false)
@@ -80,6 +84,10 @@ export default function QuoteDetailScreen() {
   const [editingItem, setEditingItem] = useState<LineItem | null>(null)
   const [editForm, setEditForm] = useState({ description: '', quantity: '1', unit_price: '' })
   const [savingEdit, setSavingEdit] = useState(false)
+
+  const focusField = (ref: RefObject<TextInput | null>) => {
+    setTimeout(() => scrollFieldAboveKeyboard(scrollRef, ref, 12), 50)
+  }
 
   const { data: quotes, isLoading, refresh: refreshQuote } = useQuery<Quote>(
     `SELECT q.id, q.quote_number, q.title, q.status, q.subtotal, q.gst_amount, q.total,
@@ -360,8 +368,8 @@ export default function QuoteDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen options={{ title: quote.quote_number, headerTintColor: '#f97316' }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, paddingBottom: 260 }} keyboardShouldPersistTaps="handled">
 
         {/* Info card */}
         <View style={s.card}>
@@ -501,9 +509,9 @@ export default function QuoteDetailScreen() {
                 autoFocus
               />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
-                <TextInput style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" />
-                <TextInput style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+                <TextInput ref={itemQtyRef} style={[s.input, { flex: 1 }]} value={newItem.quantity} onChangeText={v => setNewItem(p => ({ ...p, quantity: v }))} placeholder="Qty" keyboardType="decimal-pad" placeholderTextColor="#6b7280" onFocus={() => focusField(itemQtyRef)} />
+                <TextInput ref={itemUnitRef} style={[s.input, { flex: 1 }]} value={newItem.unit} onChangeText={v => setNewItem(p => ({ ...p, unit: v }))} placeholder="Unit" placeholderTextColor="#6b7280" onFocus={() => focusField(itemUnitRef)} />
+                <TextInput ref={itemPriceRef} style={[s.input, { flex: 2 }]} value={newItem.unit_price} onChangeText={v => setNewItem(p => ({ ...p, unit_price: v }))} placeholder="Unit price ($)" keyboardType="decimal-pad" placeholderTextColor="#6b7280" onFocus={() => focusField(itemPriceRef)} />
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <TouchableOpacity style={[s.miniBtn, s.miniBtnOrange, addingItem && { opacity: 0.5 }]} onPress={addLineItem} disabled={addingItem}>

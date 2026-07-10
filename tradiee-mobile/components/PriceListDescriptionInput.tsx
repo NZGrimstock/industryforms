@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   ScrollView,
   StyleProp,
@@ -68,7 +67,7 @@ export function PriceListDescriptionInput({
     if (!scrollViewRef) return
     // Re-scroll once the dropdown has a measured height, so as much of it as
     // possible ends up visible above the keyboard — not just the input itself.
-    scrollFieldAboveKeyboard(scrollViewRef, inputRef, showMatches ? dropdownHeight + 16 : belowExtraHeight)
+    scrollFieldAboveKeyboard(scrollViewRef, inputRef, 12)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMatches, dropdownHeight])
 
@@ -84,7 +83,7 @@ export function PriceListDescriptionInput({
         autoFocus={autoFocus}
         onFocus={() => {
           setFocused(true)
-          if (scrollViewRef) setTimeout(() => scrollFieldAboveKeyboard(scrollViewRef, inputRef, belowExtraHeight), 50)
+          if (scrollViewRef) setTimeout(() => scrollFieldAboveKeyboard(scrollViewRef, inputRef, 12), 50)
         }}
         onBlur={() => setTimeout(() => setFocused(false), 120)}
       />

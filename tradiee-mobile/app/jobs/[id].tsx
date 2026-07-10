@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type RefObject } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Alert, ActivityIndicator, Modal, Image, Linking, Platform, KeyboardAvoidingView,
@@ -99,6 +99,7 @@ export default function JobDetailScreen() {
   const [savingNote, setSavingNote] = useState(false)
   const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
   const [savingMaterial, setSavingMaterial] = useState(false)
+  const [optimisticMaterials, setOptimisticMaterials] = useState<Material[]>([])
   const [showStatusPicker, setShowStatusPicker] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -124,6 +125,13 @@ export default function JobDetailScreen() {
   const [formsY, setFormsY] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const noteInputRef = useRef<TextInput>(null)
+  const materialQtyRef = useRef<TextInput>(null)
+  const materialUnitRef = useRef<TextInput>(null)
+  const materialPriceRef = useRef<TextInput>(null)
+
+  const focusField = (ref: RefObject<TextInput | null>) => {
+    setTimeout(() => scrollFieldAboveKeyboard(scrollRef, ref, 12), 50)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -285,6 +293,11 @@ export default function JobDetailScreen() {
     [id]
   )
 
+  useEffect(() => {
+    if (!materials?.length) return
+    setOptimisticMaterials(prev => prev.filter(pending => !materials.some(m => m.id === pending.id)))
+  }, [materials])
+
   const { data: priceItems } = useQuery<PriceListLookupItem>(
     `SELECT id, name, unit, sell_price, cost_price, category
      FROM price_list_items
@@ -431,7 +444,7 @@ export default function JobDetailScreen() {
     const unitPrice = parseFloat(materialLine.unit_price) || 0
     setSavingMaterial(true)
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('job_materials').insert({
+    const payload = {
       job_id: id,
       company_id: companyId,
       added_by: user?.id ?? null,
@@ -441,9 +454,24 @@ export default function JobDetailScreen() {
       unit: materialLine.unit || 'ea',
       unit_cost: unitCost,
       unit_price: unitPrice,
-    })
+    }
+    const { data, error } = await supabase
+      .from('job_materials')
+      .insert(payload)
+      .select('id, description, quantity, unit, unit_price')
+      .single()
     setSavingMaterial(false)
     if (error) { Alert.alert('Could not add material', error.message); return }
+    setOptimisticMaterials(prev => [
+      ...prev,
+      data ?? {
+        id: `pending-${Date.now()}`,
+        description: payload.description,
+        quantity: payload.quantity,
+        unit: payload.unit,
+        unit_price: payload.unit_price,
+      },
+    ])
     setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
     refreshMaterials?.()
     hapticSuccess()
@@ -623,6 +651,13 @@ export default function JobDetailScreen() {
     }
   }
 
+  const displayedMaterials = useMemo(() => {
+    const synced = materials ?? []
+    const syncedIds = new Set(synced.map(m => m.id))
+    return [...synced, ...optimisticMaterials.filter(m => !syncedIds.has(m.id))]
+  }, [materials, optimisticMaterials])
+  const displayedMaterialsTotal = displayedMaterials.reduce((sum, m) => sum + m.quantity * m.unit_price, 0)
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -643,13 +678,12 @@ export default function JobDetailScreen() {
   const current = resolveStatus(statuses, job.status)
   const doneStatus = statuses.find(s => s.is_terminal && s.key !== 'cancelled') ?? statuses.find(s => s.key === 'completed')
   const isDone = doneStatus ? job.status === doneStatus.key : false
-  const materialsTotal = (materials ?? []).reduce((sum, m) => sum + m.quantity * m.unit_price, 0)
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen options={{ title: job.job_number, headerTintColor: '#f97316' }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 260 }} keyboardShouldPersistTaps="handled">
 
         {/* Header card */}
         <View style={styles.headerCard}>
@@ -827,27 +861,33 @@ export default function JobDetailScreen() {
             />
             <View style={styles.materialInputsRow}>
               <TextInput
+                ref={materialQtyRef}
                 style={[styles.input, styles.materialSmallInput]}
                 value={materialLine.quantity}
                 onChangeText={value => setMaterialLine(line => ({ ...line, quantity: value }))}
                 placeholder="Qty"
                 placeholderTextColor="#6b7280"
                 keyboardType="decimal-pad"
+                onFocus={() => focusField(materialQtyRef)}
               />
               <TextInput
+                ref={materialUnitRef}
                 style={[styles.input, styles.materialSmallInput]}
                 value={materialLine.unit}
                 onChangeText={value => setMaterialLine(line => ({ ...line, unit: value }))}
                 placeholder="Unit"
                 placeholderTextColor="#6b7280"
+                onFocus={() => focusField(materialUnitRef)}
               />
               <TextInput
+                ref={materialPriceRef}
                 style={[styles.input, { flex: 1.4 }]}
                 value={materialLine.unit_price}
                 onChangeText={value => setMaterialLine(line => ({ ...line, unit_price: value }))}
                 placeholder="Unit price"
                 placeholderTextColor="#6b7280"
                 keyboardType="decimal-pad"
+                onFocus={() => focusField(materialPriceRef)}
               />
             </View>
             <View style={styles.materialActions}>
@@ -863,11 +903,11 @@ export default function JobDetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          {(materials ?? []).length === 0 ? (
+          {displayedMaterials.length === 0 ? (
             <Text style={styles.emptyText}>No materials yet</Text>
           ) : (
             <>
-              {materials!.map(m => (
+              {displayedMaterials.map(m => (
               <View key={m.id} style={styles.materialRow}>
                 <Text style={styles.materialDesc} numberOfLines={1}>{m.description}</Text>
                 <Text style={styles.materialQty}>{m.quantity}{m.unit ? ` ${m.unit}` : ''}</Text>
@@ -876,7 +916,7 @@ export default function JobDetailScreen() {
               ))}
               <View style={styles.materialTotal}>
                 <Text style={styles.materialTotalLabel}>Total</Text>
-                <Text style={styles.materialTotalValue}>${materialsTotal.toFixed(2)}</Text>
+                <Text style={styles.materialTotalValue}>${displayedMaterialsTotal.toFixed(2)}</Text>
               </View>
             </>
           )}
@@ -966,7 +1006,7 @@ export default function JobDetailScreen() {
                 value={noteText}
                 onChangeText={setNoteText}
                 autoFocus
-                onFocus={() => setTimeout(() => scrollFieldAboveKeyboard(scrollRef, noteInputRef, 140), 50)}
+                onFocus={() => focusField(noteInputRef)}
               />
               <View style={styles.addNoteActions}>
                 <TouchableOpacity onPress={() => setShowAddNote(false)}>

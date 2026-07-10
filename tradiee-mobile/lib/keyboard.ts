@@ -1,6 +1,5 @@
-import { findNodeHandle } from 'react-native'
-import type { ScrollView, TextInput } from 'react-native'
 import type { RefObject } from 'react'
+import { findNodeHandle, type ScrollView, type TextInput } from 'react-native'
 
 // Scrolls a focused field (plus room for anything rendered below it, e.g. an
 // autocomplete dropdown) up above the keyboard. RN's ScrollView doesn't do
@@ -8,9 +7,28 @@ import type { RefObject } from 'react'
 export function scrollFieldAboveKeyboard(
   scrollViewRef: RefObject<ScrollView | null>,
   inputRef: RefObject<TextInput | null>,
-  extraOffset = 80,
+  extraOffset = 12,
 ) {
-  const node = findNodeHandle(inputRef.current)
-  if (node == null || !scrollViewRef.current) return
-  scrollViewRef.current.scrollResponderScrollNativeHandleToKeyboard(node, extraOffset, true)
+  const input = inputRef.current
+  const scrollView = scrollViewRef.current
+  if (!input || !scrollView) return
+
+  const scrollNode = findNodeHandle(scrollView)
+  const inputNode = findNodeHandle(input)
+  if (scrollNode != null) {
+    input.measureLayout(
+      scrollNode,
+      (_x, y) => scrollView.scrollTo({ y: Math.max(0, y - extraOffset), animated: true }),
+      () => {
+        if (inputNode != null) {
+          scrollView.scrollResponderScrollNativeHandleToKeyboard(inputNode, 120, true)
+        }
+      },
+    )
+    return
+  }
+
+  if (inputNode != null) {
+    scrollView.scrollResponderScrollNativeHandleToKeyboard(inputNode, 120, true)
+  }
 }

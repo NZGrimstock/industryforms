@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
@@ -34,6 +34,8 @@ type TeamMember = {
   full_name: string
   vehicle_registration: string | null
 }
+
+type JobOption = { id: string; job_number: string; title: string }
 
 function formatDuration(start: string, end: string | null) {
   if (!end) return 'In progress'
@@ -92,13 +94,14 @@ function downloadCSV(logs: Log[], team: TeamMember[], timezone: string) {
 interface Props {
   logs: Log[]
   team: TeamMember[]
+  jobs: JobOption[]
   fromDate: string
   toDate: string
   selectedProfileId: string
   companyId: string
 }
 
-export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId, companyId }: Props) {
+export function LogbookClient({ logs, team, jobs, fromDate, toDate, selectedProfileId, companyId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const timezone = useTimezone()
@@ -110,12 +113,36 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
     new Set(logs.filter(l => l.verified_at).map(l => l.id))
   )
   const [verifying, setVerifying] = useState<string | null>(null)
+  const [localLogs, setLocalLogs] = useState(logs)
+  const [allocatingId, setAllocatingId] = useState<string | null>(null)
+  const [draftPurpose, setDraftPurpose] = useState<'work' | 'personal' | 'ignore'>('work')
+  const [draftJobId, setDraftJobId] = useState('')
+  const [allocSavingId, setAllocSavingId] = useState<string | null>(null)
+
+  useEffect(() => setLocalLogs(logs), [logs])
 
   async function verifyTrip(logId: string) {
     setVerifying(logId)
     const { error } = await supabase.from('travel_logs').update({ verified_at: new Date().toISOString() }).eq('id', logId)
     setVerifying(null)
     if (!error) setVerifiedIds(prev => new Set([...prev, logId]))
+  }
+
+  function startAllocating(logId: string) {
+    setAllocatingId(logId)
+    setDraftPurpose('work')
+    setDraftJobId('')
+  }
+
+  async function allocate(logId: string, purpose: 'work' | 'personal' | 'ignore', jobId: string | null) {
+    setAllocSavingId(logId)
+    const { error } = await supabase.from('travel_logs').update({ purpose, job_id: jobId }).eq('id', logId)
+    setAllocSavingId(null)
+    if (error) { alert(error.message); return }
+    const job = jobId ? jobs.find(j => j.id === jobId) ?? null : null
+    setLocalLogs(prev => prev.map(l => l.id === logId ? { ...l, purpose, job_id: jobId, jobs: job } : l))
+    setAllocatingId(null)
+    router.refresh()
   }
 
   function applyFilters() {
@@ -130,18 +157,18 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
   type DayGroup = { date: string; logs: Log[] }
   const byDay = useMemo((): DayGroup[] => {
     const map = new Map<string, Log[]>()
-    for (const l of logs) {
+    for (const l of localLogs) {
       const d = l.started_at.slice(0, 10)
       if (!map.has(d)) map.set(d, [])
       map.get(d)!.push(l)
     }
     return Array.from(map.entries()).map(([date, logs]) => ({ date, logs }))
-  }, [logs])
+  }, [localLogs])
 
   // Summary stats
-  const totalKm = logs.reduce((s, l) => s + (l.distance_km ?? 0), 0)
-  const workKm = logs.filter(l => l.purpose === 'work').reduce((s, l) => s + (l.distance_km ?? 0), 0)
-  const totalTrips = logs.length
+  const totalKm = localLogs.reduce((s, l) => s + (l.distance_km ?? 0), 0)
+  const workKm = localLogs.filter(l => l.purpose === 'work').reduce((s, l) => s + (l.distance_km ?? 0), 0)
+  const totalTrips = localLogs.length
   const avgKm = totalTrips > 0 ? totalKm / totalTrips : 0
 
   const purposeColor: Record<string, string> = {
@@ -176,7 +203,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
               </select>
             </div>
             <Button onClick={applyFilters}>Apply</Button>
-            <Button variant="outline" onClick={() => downloadCSV(logs, team, timezone)}>
+            <Button variant="outline" onClick={() => downloadCSV(localLogs, team, timezone)}>
               <Download className="h-4 w-4" /> Export CSV
             </Button>
           </div>
@@ -272,6 +299,48 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
                             {movingMins !== null && ` · ${Math.floor(movingMins / 60)}h ${movingMins % 60}m`}
                           </p>
                           {l.notes && <p className="text-xs text-gray-400 mt-0.5">{l.notes}</p>}
+                          {!l.purpose && (
+                            allocatingId === l.id ? (
+                              <div className="flex flex-wrap items-center gap-2 mt-2 p-2 rounded-lg bg-orange-50 border border-orange-100">
+                                <select
+                                  value={draftPurpose}
+                                  onChange={e => setDraftPurpose(e.target.value as 'work' | 'personal' | 'ignore')}
+                                  className="rounded border border-gray-300 px-2 py-1 text-xs"
+                                >
+                                  <option value="work">Work</option>
+                                  <option value="personal">Personal</option>
+                                  <option value="ignore">Ignore</option>
+                                </select>
+                                {draftPurpose === 'work' && (
+                                  <select
+                                    value={draftJobId}
+                                    onChange={e => setDraftJobId(e.target.value)}
+                                    className="rounded border border-gray-300 px-2 py-1 text-xs max-w-[220px]"
+                                  >
+                                    <option value="">Select job…</option>
+                                    {jobs.map(j => <option key={j.id} value={j.id}>{j.job_number} — {j.title}</option>)}
+                                  </select>
+                                )}
+                                <button
+                                  onClick={() => allocate(l.id, draftPurpose, draftPurpose === 'work' ? (draftJobId || null) : null)}
+                                  disabled={(draftPurpose === 'work' && !draftJobId) || allocSavingId === l.id}
+                                  className="text-xs font-semibold text-white bg-[var(--accent,#f97316)] rounded px-2 py-1 disabled:opacity-50"
+                                >
+                                  {allocSavingId === l.id ? 'Saving…' : 'Save'}
+                                </button>
+                                <button onClick={() => setAllocatingId(null)} className="text-xs text-gray-500 hover:text-gray-700">
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => startAllocating(l.id)}
+                                className="text-xs font-medium text-orange-500 hover:text-orange-700 mt-1"
+                              >
+                                Allocate trip →
+                              </button>
+                            )
+                          )}
                         </div>
                         <div className="flex items-center gap-3 text-right shrink-0">
                           <div>
@@ -307,7 +376,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
         <div>
           <p className="text-xs text-gray-400 mb-4">
             Vehicle logbook — filtered trips only. Export to CSV for accounting/tax purposes.
-            Work trips shown below; use the GPS tab to reclassify unallocated trips on the mobile app.
+            Work trips shown below; use the GPS tab to reclassify unallocated trips.
           </p>
           <Card>
             <div className="overflow-x-auto">
@@ -326,7 +395,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.filter(l => l.purpose === 'work' || !l.purpose).map((l, i) => {
+                  {localLogs.filter(l => l.purpose === 'work' || !l.purpose).map((l, i) => {
                     const member = l.profile_id ? teamById[l.profile_id] : null
                     return (
                       <tr key={l.id} className={i > 0 ? 'border-t border-gray-50' : ''}>
@@ -346,16 +415,16 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
                       </tr>
                     )
                   })}
-                  {logs.filter(l => l.purpose === 'work' || !l.purpose).length === 0 && (
+                  {localLogs.filter(l => l.purpose === 'work' || !l.purpose).length === 0 && (
                     <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-sm">No trips in this date range</td></tr>
                   )}
                 </tbody>
-                {logs.filter(l => l.purpose === 'work').length > 0 && (
+                {localLogs.filter(l => l.purpose === 'work').length > 0 && (
                   <tfoot className="border-t border-gray-200">
                     <tr>
                       <td colSpan={5} className="px-4 py-2 text-xs font-semibold text-gray-500 text-right">Total work km:</td>
                       <td className="px-4 py-2 text-right font-bold text-gray-900">
-                        {logs.filter(l => l.purpose === 'work').reduce((s, l) => s + (l.distance_km ?? 0), 0).toFixed(2)} km
+                        {localLogs.filter(l => l.purpose === 'work').reduce((s, l) => s + (l.distance_km ?? 0), 0).toFixed(2)} km
                       </td>
                       <td colSpan={3} />
                     </tr>
@@ -365,7 +434,7 @@ export function LogbookClient({ logs, team, fromDate, toDate, selectedProfileId,
             </div>
           </Card>
           <div className="mt-3 flex justify-end">
-            <Button variant="outline" onClick={() => downloadCSV(logs.filter(l => l.purpose === 'work' || !l.purpose), team, timezone)}>
+            <Button variant="outline" onClick={() => downloadCSV(localLogs.filter(l => l.purpose === 'work' || !l.purpose), team, timezone)}>
               <Download className="h-4 w-4" /> Export logbook CSV
             </Button>
           </div>

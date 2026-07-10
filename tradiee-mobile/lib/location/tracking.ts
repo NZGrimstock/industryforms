@@ -11,6 +11,31 @@ const STOP_DURATION_MS = 5 * 60 * 1000  // 5 min stationary → end trip (avoids
 const GEOFENCE_RADIUS_KM = 0.15
 const GEOFENCE_COOLDOWN_MS = 2 * 60 * 60 * 1000
 
+// ── Trading-hours schedule ──────────────────────────────────────────────────
+// Shared between the UI (timesheets.tsx) and the location task below, so the
+// task can stop itself the moment the window ends instead of only stopping
+// the next time the app happens to be opened.
+export const TRADING_HOURS_KEY = 'TRADIEE_TRADING_HOURS'
+export type TradingHours = { enabled: boolean; startMin: number; endMin: number; days: number[] }
+export const DEFAULT_TRADING_HOURS: TradingHours = { enabled: false, startMin: 7 * 60, endMin: 18 * 60, days: [1, 2, 3, 4, 5] }
+
+export function isInTradingHours(hours: TradingHours, now = new Date()): boolean {
+  if (!hours.enabled) return false
+  const minutesNow = now.getHours() * 60 + now.getMinutes()
+  return hours.days.includes(now.getDay()) && minutesNow >= hours.startMin && minutesNow < hours.endMin
+}
+
+export async function loadTradingHours(): Promise<TradingHours> {
+  const raw = await AsyncStorage.getItem(TRADING_HOURS_KEY)
+  if (!raw) return DEFAULT_TRADING_HOURS
+  const parsed = JSON.parse(raw)
+  // Back-compat: schedules saved before the 30-min picker stored whole-hour startHour/endHour.
+  if (typeof parsed.startHour === 'number') {
+    return { enabled: parsed.enabled, startMin: parsed.startHour * 60, endMin: parsed.endHour * 60, days: parsed.days }
+  }
+  return parsed
+}
+
 const STORAGE_KEY     = 'TRADIEE_ACTIVE_TRIP'
 const SESSION_KEY     = 'TRADIEE_SESSION'          // mirrored by supabase.ts for BG task access
 const ACTIVE_JOB_KEY  = 'TRADIEE_ACTIVE_JOB'
@@ -375,7 +400,23 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   const loc = locations[locations.length - 1]
   const { latitude: lat, longitude: lng, speed } = loc.coords
   const speedMs = speed ?? 0
-  const now = new Date().toISOString()
+  const nowDate = new Date()
+  const now = nowDate.toISOString()
+
+  // Schedule enforcement lives here (not just in the UI) so tracking stops
+  // itself the moment the window ends, even if the app is never reopened —
+  // this is the actual battery-drain fix, since starting the OS-level
+  // location watch is what costs battery, not merely having the app open.
+  const hours = await loadTradingHours()
+  if (hours.enabled && !isInTradingHours(hours, nowDate)) {
+    const state = await getState()
+    if (state) {
+      await endTrip(state, lat, lng)
+      await setState(null)
+    }
+    await Location.stopLocationUpdatesAsync(LOCATION_TASK)
+    return
+  }
 
   await maybeAutoArrive(lat, lng)
 
@@ -449,4 +490,27 @@ export async function stopTracking() {
 
 export async function isTracking(): Promise<boolean> {
   return Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
+}
+
+// Called whenever the app comes to the foreground (any tab, not just
+// Timesheets) so a schedule can start tracking without the user manually
+// flipping the switch. Can't reliably wake the app from fully closed to do
+// this on a timer — iOS throttles background fetch heavily and Android only
+// guarantees ~15 min granularity — so this is best-effort: the schedule takes
+// effect as soon as the app is next opened during the window, and the
+// location task above (which already fires continuously while tracking is on)
+// is what guarantees the auto-stop at the end of the window without needing
+// the app reopened.
+export async function syncTrackingToSchedule(): Promise<boolean> {
+  const hours = await loadTradingHours()
+  if (!hours.enabled) return isTracking()
+  const shouldTrack = isInTradingHours(hours)
+  const currently = await isTracking()
+  if (shouldTrack && !currently) {
+    const ok = await requestPermissions()
+    if (ok) await startTracking()
+  } else if (!shouldTrack && currently) {
+    await stopTracking()
+  }
+  return isTracking()
 }

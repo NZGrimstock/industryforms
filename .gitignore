@@ -45,3 +45,13 @@ tradiee-*-history.bundle
 
 # build outputs
 *.apk
+
+# Local Android SDK copies (accidentally committed 2026-07-10, ~77k files)
+.android-sdk/
+.android-sdk2/
+.android-sdk3/
+.android-sdk4/
+
+# Local caches — never belong in git
+.npm-cache/
+.tmp/

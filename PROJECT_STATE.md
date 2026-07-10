@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-10. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-11. Catch-up doc for a fresh session. Read this first.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -24,7 +24,47 @@ the older applied set; the 2026-07-07 local migrations listed below still need
 deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 — already validated + deployed via the PowerSync Dashboard.
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(Jun 25, 145 MB). Mobile Projects view was added on 2026-07-08; iOS EAS
+(built 2026-07-11 07:55 NZT, 148,771,781 bytes, SHA256
+`d157c61addb9cd147c4b5dfc115e96c832d2c28aafdafed4dd76c5fc5f4b9f12`). This
+build carries every mobile fix through the 2026-07-11 auto-track/schedule
+round below (see `git log` for current commit hashes — the commits that
+originally shipped this were rewritten, see the history-cleanup note
+directly below, so hashes cited in earlier session notes no longer exist).
+Build log: `tradiee-mobile/release-build-schedule-fix2.log` (`BUILD
+SUCCESSFUL`, 14m56s). The first rebuild attempt
+(`release-build-schedule-fix.log`) failed with a stale `.cxx` CMake cache
+error (`Access is denied` on a leftover `c:/users/codexsandboxonline/...`
+path baked into `android/app/.cxx` and six `node_modules/*/android/.cxx`
+dirs from a previous machine/sandbox) — same class of issue as before;
+fixed by deleting all `.cxx` dirs under `android/app` and the affected
+`node_modules` packages (`@journeyapps/react-native-quick-sqlite`,
+`expo-modules-core`, `expo-updates`, `react-native-gesture-handler`,
+`react-native-reanimated`, `react-native-screens`, `react-native-worklets`)
+and rebuilding clean. If a build ever fails again with an "Access is
+denied" error mentioning a path that isn't this machine's, that's the
+signature — delete `.cxx` dirs, don't debug the code.
+
+**⚠ Git history was rewritten once, locally only, 2026-07-11 (Claude).**
+A commit meant to untrack `.android-sdk/` (~77k files, added by an earlier
+broad `git add` on 2026-07-10) still left those blobs — some over
+GitHub's 100MB hard limit — reachable in history, so every push attempt
+was rejected (`GH001: Large files detected`). The same earlier commit had
+also swept in `.tmp/` and `.npm-cache/` (untracked local cache dirs,
+also not gitignored at the time). Since none of the 4 affected commits
+had ever reached `origin` (confirmed via `git log origin/main..HEAD`
+before touching anything), it was safe to rewrite: `git reset --soft`
+back to origin's tip, drop the SDK/tmp/npm-cache paths from the index,
+add `.npm-cache/` and `.tmp/` to `.gitignore` alongside `.android-sdk*`,
+and recommit clean. A safety-net branch `backup-pre-sdk-cleanup` was left
+pointing at the old (unpushed, blob-heavy) tip in case anything here
+needs to be recovered — safe to delete once the push below is confirmed
+and nothing is missing. **If you ever see a push rejected with
+`GH001: Large files detected` again, check `git log --stat` on the
+rejected commits for accidental broad `git add`/`git add -A` sweeps of
+`.android-sdk*`, `.tmp/`, `.npm-cache/`, or similar local-only dirs before
+assuming it's a real vendored dependency that needs Git LFS.**
+
+Mobile Projects view was added on 2026-07-08; iOS EAS
 production build was attempted non-interactively and blocked at Apple/EAS
 credential setup. Run `cd tradiee-mobile && npx eas build --platform ios
 --profile production` interactively after Apple credentials are available.
@@ -91,6 +131,116 @@ credential setup. Run `cd tradiee-mobile && npx eas build --platform ios
   the mobile customer sign-off sheet. Reality checked with
   `cd tradiee-mobile && npx tsc --noEmit` and
   `cd tradiee-app && npx tsc --noEmit` after edits.
+- Mobile add-item/keyboard fix (Codex, 2026-07-10/11): job Materials now add
+  optimistically after Supabase insert so the line does not disappear while
+  PowerSync catches up; focused mobile fields scroll to the top of the screen;
+  quote/job material entry screens use Android `KeyboardAvoidingView`
+  `height` behavior plus extra bottom padding so the keyboard no longer
+  covers Qty/Unit/Unit price/Add controls. Touched files:
+  `tradiee-mobile/app/jobs/[id].tsx`,
+  `tradiee-mobile/app/quotes/new.tsx`,
+  `tradiee-mobile/app/quotes/[id].tsx`,
+  `tradiee-mobile/components/PriceListDescriptionInput.tsx`, and
+  `tradiee-mobile/lib/keyboard.ts`. Reality checked with
+  `cd tradiee-mobile && npx tsc --noEmit`, then rebuilt local release APK at
+  `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
+  (2026-07-10 21:29 NZT, SHA256
+  `284c1736dbb9c51ec18cf3ed8024bcaf55a8c4e89def976b9bdd200909784a04`).
+
+**Web perf + mobile keyboard/materials fixes (Claude, 2026-07-10):** Note the
+attribution overlap with the Codex mobile entry above — both sessions worked
+the same mobile add-item/keyboard problem; the descriptions below are what
+actually landed in git. Commits `707c725` and `1c3f22f` are real, unchanged
+hashes (pushed, on origin). The third piece of work described here (mobile
+optimistic materials round 2) originally shipped as commit `1d92557`, which
+was later rewritten during the 2026-07-11 git-history cleanup above — see
+`git log` for its current hash, the content is unchanged.
+
+- **Web query-waterfall fix (`1c3f22f`) — live on Vercel, verified with
+  `npx tsc --noEmit`.** This is the fix for "opening jobs/quotes tabs lags
+  badly" and "adding a material takes up to 10 seconds". Root cause was NOT
+  the database or the D: drive (production is Vercel+Supabase) — it was
+  sequential `await supabase...` calls in Server Components, each paying full
+  round-trip latency. Collapsed the independent queries into a single
+  `Promise.all` wave on `jobs/[id]/page.tsx` (worst offender: ~10 sequential
+  round trips, one awaited inline in the JSX), plus `jobs/page.tsx`,
+  `quotes/[id]/page.tsx`, `quotes/[id]/edit/page.tsx`, `quotes/new/page.tsx`,
+  `enquiries/page.tsx`, `enquiries/[id]/page.tsx`, `projects/page.tsx`,
+  `purchase-orders/new/page.tsx`, `suppliers/[id]/page.tsx`. Separately,
+  `jobs/[id]/materials.tsx` (WEB) called `router.refresh()` after every
+  add/remove — re-running the whole page waterfall for one row (the real
+  "10 seconds to add an item" cause). Now updates optimistically from the
+  insert's `.select().single()` response; `router.refresh()` runs in the
+  background only to keep job-costing figures elsewhere in sync.
+
+- **Mobile keyboard + first-launch + name-split (`707c725`):** added a shared
+  `scrollFieldAboveKeyboard` helper (`tradiee-mobile/lib/keyboard.ts`) and
+  wired `KeyboardAvoidingView` + `keyboardShouldPersistTaps="handled"` into
+  the two form screens that were missing them entirely (`jobs/[id].tsx`,
+  `quotes/[id].tsx`) plus `quotes/new`, `jobs/new`, `todos`, `timesheets`,
+  `profile`. `app/index.tsx` now checks `getSession()` before redirecting so a
+  fresh install lands on `/login`, not the jobs tab. Customer name entry
+  (mobile + web) split into First/Last, joined into the existing single
+  `name` column on save. PO supplier emails now carry the company logo.
+
+- **Mobile optimistic materials, round 2:** `jobs/[id].tsx`
+  `addMaterial()` now appends the inserted row to a local
+  `optimisticMaterials` state and renders `displayedMaterials` (synced ∪
+  optimistic, deduped by id) — so a newly-added material shows immediately
+  instead of vanishing while PowerSync's local SQLite catches up. This is the
+  correct fix for "tap Add item → loads a second → goes back to blank": the
+  earlier `refreshMaterials?.()`-only version re-queried local SQLite that
+  didn't have the row yet. Also tuned the description-field scroll and the
+  quote/job KeyboardAvoidingView offsets.
+
+- **Both follow-ups from the above are now resolved (Claude, 2026-07-11):**
+  1. `.android-sdk` through `.android-sdk4` (~77k build-tool binaries across
+     all four copies), plus `.tmp/` and `.npm-cache/` (found during the
+     history cleanup above), untracked from git and added to `.gitignore`.
+     Files remain on disk for local builds; the repo just no longer carries
+     them.
+  2. A fresh release APK build was kicked off (see next entry below) so the
+     stale-APK problem doesn't recur — check that entry for the current
+     APK's build time/SHA256 before assuming any mobile fix is testable.
+
+**Auto-track schedule fixes + web trip allocation (Claude, 2026-07-11):**
+- **Answering "can auto-track turn off/on on a schedule so it doesn't drain
+  battery in the background":** the schedule feature already existed
+  (Timesheets → gear icon → "Auto-track schedule"), but it only self-checked
+  when the Timesheets screen was opened/focused — meaning once tracking
+  started, nothing made it stop again if the app was never reopened after
+  the window closed. Fixed the actual battery risk: the location background
+  task in `tradiee-mobile/lib/location/tracking.ts` (which already fires
+  every 30s/50m while tracking is on, regardless of which screen is open)
+  now self-checks the schedule on every firing and calls
+  `Location.stopLocationUpdatesAsync` the moment the window ends, with no
+  app interaction required. **Honest limitation, not fixed and not fixable
+  without real trade-offs:** auto-*start* still requires the app to be
+  opened during the window — iOS throttles background fetch too heavily and
+  Android is only ~15-min-granular at best, so a true zero-interaction
+  auto-start wasn't worth the added complexity/battery-permission friction
+  for what would still be an unreliable result. This is documented in a
+  code comment on the new `syncTrackingToSchedule()` export in tracking.ts.
+- **Fixed the "end hour stuck at 1" bug.** Root cause: the old field was a
+  raw `TextInput` validated on every keystroke (0-23 range); clearing it to
+  type a fresh number produced a transient empty string that failed
+  validation, so the controlled input silently reverted to the last valid
+  single digit and could never be cleared further. Replaced both Start/End
+  hour `TextInput`s with a tap-to-open dropdown of 30-min increments (00:00
+  through 23:30), eliminating the free-text edit entirely. Schedule storage
+  moved from whole-hour ints to `startMin`/`endMin` (minutes since midnight)
+  with back-compat loading for schedules saved under the old shape.
+- **Added trip allocation on web** (`tradiee-app/app/(dashboard)/logbook/`):
+  previously only the mobile app could allocate an unallocated GPS trip to
+  work/personal/ignore + a job — the web logbook could only display/verify/
+  export, and its own copy told admins to "use the mobile app" for this.
+  Web logbook's GPS Trip Log tab now has the same allocate flow inline on
+  each unallocated trip card, optimistic-updated then reconciled via
+  `router.refresh()`.
+- Verified with `npx tsc --noEmit` in both `tradiee-mobile` and `tradiee-app`.
+- **Fresh APK built and confirmed** — see the "Latest APK" line at the top
+  of this file (2026-07-11 07:55 NZT build, `BUILD SUCCESSFUL`). Carries
+  this commit plus the previous round's mobile fixes.
 
 **Sprint E (automations + growth reporting) shipped 2026-07-06.** New
 `automation_events` table (migration `20260704090000_automation_events.sql`)
