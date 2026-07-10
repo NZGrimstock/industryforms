@@ -242,6 +242,19 @@ was later rewritten during the 2026-07-11 git-history cleanup above — see
   of this file (2026-07-11 07:55 NZT build, `BUILD SUCCESSFUL`). Carries
   this commit plus the previous round's mobile fixes.
 
+**Job Map "Not on map" fix (Claude, 2026-07-11), commit `ec99cc5`, pushed:**
+User reported Job Map showing "0 on map · 2 not located" for jobs with a
+real site address. Every site-creation path (web `customer-form.tsx`,
+mobile `customers/new.tsx`, `customers/[id].tsx`, `jobs/new.tsx`) already
+geocodes the address once on save via `lib/geocode.ts` — but that function
+silently returns `null` on a network error, rate limit, or unmatched
+address, and there was no way to retry afterward short of re-editing the
+whole site to trigger another save. Added a "Locate" button on unlocated
+`job-map.tsx` cards that re-runs `geocodeAddress()` against the already-
+stored address and writes `lat`/`lng` straight onto the `customer_sites`
+row. **Not yet rebuilt into an APK** — bundle this with the next mobile
+build rather than doing a build for this alone.
+
 **Sprint E (automations + growth reporting) shipped 2026-07-06.** New
 `automation_events` table (migration `20260704090000_automation_events.sql`)
 logs every automated send — `channel` (email/sms), `status`
