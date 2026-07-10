@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { data: po } = await service
     .from('purchase_orders')
-    .select('company_id, po_number, total, notes, expected_date, suppliers(name, email), companies(name, email, phone), purchase_order_items(description, quantity, unit, unit_cost, line_total, sort_order)')
+    .select('company_id, po_number, total, notes, expected_date, suppliers(name, email), companies(name, email, phone, logo_url), purchase_order_items(description, quantity, unit, unit_cost, line_total, sort_order)')
     .eq('id', poId)
     .single()
   if (!po || po.company_id !== callerProfile?.company_id) {
@@ -28,13 +28,14 @@ export async function POST(req: NextRequest) {
 
   const supplier = po.suppliers as unknown as { name: string; email: string | null } | null
   if (!supplier?.email) return NextResponse.json({ error: 'Supplier has no email address' }, { status: 400 })
-  const company = po.companies as unknown as { name: string; email: string | null; phone: string | null } | null
+  const company = po.companies as unknown as { name: string; email: string | null; phone: string | null; logo_url: string | null } | null
 
   const items = [...((po.purchase_order_items ?? []) as Array<{ description: string; quantity: number; unit: string; unit_cost: number; line_total: number; sort_order: number }>)].sort((a, b) => a.sort_order - b.sort_order)
   const rows = items.map(l => `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${l.description}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${l.quantity} ${l.unit}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${formatCurrency(l.unit_cost)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:right">${formatCurrency(l.line_total)}</td></tr>`).join('')
 
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;color:#111">
+      ${company?.logo_url ? `<img src="${company.logo_url}" alt="${company.name}" style="max-height:40px;max-width:220px;display:block;margin-bottom:12px" />` : ''}
       <h2 style="margin-bottom:4px">Purchase Order ${po.po_number}</h2>
       <p style="color:#666;margin-top:0">From ${company?.name ?? ''}${po.expected_date ? ` · Expected delivery: ${po.expected_date}` : ''}</p>
       <p>Hi ${supplier.name},</p>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput,
-  ActivityIndicator, Alert, Modal, RefreshControl,
+  ActivityIndicator, Alert, Modal, RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -156,6 +156,7 @@ export default function TodosScreen() {
               <Text style={s.modalClose}>Cancel</Text>
             </TouchableOpacity>
           </View>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ padding: 16, gap: 14 }}>
             <TextInput
               style={[s.input, { minHeight: 64, textAlignVertical: 'top', paddingTop: 12 }]}
@@ -195,6 +196,7 @@ export default function TodosScreen() {
               {adding ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Add To-do</Text>}
             </TouchableOpacity>
           </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

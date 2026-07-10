@@ -69,6 +69,16 @@ export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [showEdit, setShowEdit] = useState(false)
   const [form, setForm] = useState({ name: '', type: '', email: '', phone: '', billing_address: '', contact_person: '', notes: '', pricing_group_id: '' })
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+
+  // Kept as separate first/last inputs but joined into the single `name`
+  // column everything else in the app (invoices, portal, PDFs) reads.
+  function updateName(first: string, last: string) {
+    setFirstName(first)
+    setLastName(last)
+    setForm(f => ({ ...f, name: `${first} ${last}`.trim() }))
+  }
   const [saving, setSaving] = useState(false)
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([])
   // Site add/edit modal
@@ -78,7 +88,7 @@ export default function CustomerDetailScreen() {
   const [siteCoords, setSiteCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
   const [savingSite, setSavingSite] = useState(false)
 
-  const { data: customers, isLoading } = useQuery<Customer>(
+  const { data: customers, isLoading, refresh: refreshCustomer } = useQuery<Customer>(
     `SELECT id, name, type, email, phone, billing_address, contact_person
      FROM customers WHERE id = ?`,
     [id]
@@ -97,6 +107,8 @@ export default function CustomerDetailScreen() {
       notes: '',
       pricing_group_id: '',
     })
+    setFirstName(customer.name?.split(' ')[0] ?? '')
+    setLastName(customer.name?.split(' ').slice(1).join(' ') ?? '')
     setShowEdit(true)
     // notes / pricing_group_id aren't in the PowerSync schema — fetch from supabase
     const { data } = await supabase.from('customers').select('notes, pricing_group_id, company_id').eq('id', id).single()
@@ -122,6 +134,7 @@ export default function CustomerDetailScreen() {
     setSaving(false)
     if (error) { Alert.alert('Error', error.message); return }
     setShowEdit(false)
+    refreshCustomer?.()
   }
 
   function openAddSite() {
@@ -159,6 +172,7 @@ export default function CustomerDetailScreen() {
     setSavingSite(false)
     if (error) { Alert.alert('Error', error.message); return }
     setShowSite(false)
+    refreshSites?.()
   }
 
   function deleteSite(site: Site) {
@@ -168,13 +182,14 @@ export default function CustomerDetailScreen() {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
           const { error } = await supabase.from('customer_sites').delete().eq('id', site.id)
-          if (error) Alert.alert('Error', error.message)
+          if (error) { Alert.alert('Error', error.message); return }
+          refreshSites?.()
         },
       },
     ])
   }
 
-  const { data: sites } = useQuery<Site>(
+  const { data: sites, refresh: refreshSites } = useQuery<Site>(
     `SELECT id, label, address, access_notes
      FROM customer_sites WHERE customer_id = ?
      ORDER BY rowid ASC`,
@@ -331,7 +346,10 @@ export default function CustomerDetailScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }} keyboardShouldPersistTaps="handled">
-            <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(f => ({ ...f, name: v }))} placeholder="Name *" placeholderTextColor="#6b7280" />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput style={[styles.input, { flex: 1 }]} value={firstName} onChangeText={v => updateName(v, lastName)} placeholder="First name *" placeholderTextColor="#6b7280" />
+              <TextInput style={[styles.input, { flex: 1 }]} value={lastName} onChangeText={v => updateName(firstName, v)} placeholder="Last name" placeholderTextColor="#6b7280" />
+            </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {(['residential', 'commercial'] as const).map(t => (
                 <TouchableOpacity

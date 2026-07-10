@@ -31,8 +31,18 @@ export default function NewJobScreen() {
   const [saving, setSaving] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [newCust, setNewCust] = useState({ name: '', phone: '', email: '', billing_address: '' })
+  const [newCustFirstName, setNewCustFirstName] = useState('')
+  const [newCustLastName, setNewCustLastName] = useState('')
   const [newCustCoords, setNewCustCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
   const [creatingCust, setCreatingCust] = useState(false)
+
+  // Kept as separate first/last inputs but joined into the single `name`
+  // column everything else in the app (invoices, portal, PDFs) reads.
+  function updateNewCustName(first: string, last: string) {
+    setNewCustFirstName(first)
+    setNewCustLastName(last)
+    setNewCust(p => ({ ...p, name: `${first} ${last}`.trim() }))
+  }
   // Job site: pick one of the customer's sites, or type a new address (geocoded via autocomplete)
   const [sites, setSites] = useState<Site[]>([])
   const [siteId, setSiteId] = useState<string | null>(null)
@@ -68,6 +78,8 @@ export default function NewJobScreen() {
       email: params.email ?? '',
       billing_address: params.address ?? '',
     })
+    setNewCustFirstName(params.name?.split(' ')[0] ?? '')
+    setNewCustLastName(params.name?.split(' ').slice(1).join(' ') ?? '')
     setShowNewCustomer(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.name])
@@ -124,7 +136,7 @@ export default function NewJobScreen() {
     setShowNewCustomer(false)
     setShowPicker(false)
     setCustomerSearch('')
-    setNewCust({ name: '', phone: '', email: '', billing_address: '' })
+    setNewCust({ name: '', phone: '', email: '', billing_address: '' }); setNewCustFirstName(''); setNewCustLastName('')
     setNewCustCoords({ lat: null, lng: null })
   }
 
@@ -180,7 +192,7 @@ export default function NewJobScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'New Job', headerTintColor: '#f97316' }} />
-      <ScrollView style={s.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView style={s.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
 
         <View style={s.field}>
           <Text style={s.label}>Job title *</Text>
@@ -275,22 +287,30 @@ export default function NewJobScreen() {
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>{showNewCustomer ? 'New Customer' : 'Select Customer'}</Text>
             <TouchableOpacity onPress={() => {
-              if (showNewCustomer) { setShowNewCustomer(false); setNewCust({ name: '', phone: '', email: '', billing_address: '' }) }
+              if (showNewCustomer) { setShowNewCustomer(false); setNewCust({ name: '', phone: '', email: '', billing_address: '' }); setNewCustFirstName(''); setNewCustLastName('') }
               else { setShowPicker(false); setCustomerSearch('') }
             }}>
               <Text style={s.modalClose}>{showNewCustomer ? '← Back' : 'Done'}</Text>
             </TouchableOpacity>
           </View>
 
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {showNewCustomer ? (
-            <View style={{ padding: 16, gap: 12 }}>
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
               <TextInput
                 style={s.input}
-                value={newCust.name}
-                onChangeText={v => setNewCust(p => ({ ...p, name: v }))}
-                placeholder="Full name *"
+                value={newCustFirstName}
+                onChangeText={v => updateNewCustName(v, newCustLastName)}
+                placeholder="First name *"
                 placeholderTextColor="#6b7280"
                 autoFocus
+              />
+              <TextInput
+                style={s.input}
+                value={newCustLastName}
+                onChangeText={v => updateNewCustName(newCustFirstName, v)}
+                placeholder="Last name"
+                placeholderTextColor="#6b7280"
               />
               <TextInput
                 style={s.input}
@@ -327,7 +347,7 @@ export default function NewJobScreen() {
                   : <Text style={s.btnText}>Create customer</Text>
                 }
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           ) : (
             <>
               <View style={s.searchBox}>
@@ -345,6 +365,7 @@ export default function NewJobScreen() {
                 data={filteredCustomers}
                 keyExtractor={c => c.id}
                 contentContainerStyle={{ padding: 12 }}
+                keyboardShouldPersistTaps="handled"
                 ListHeaderComponent={
                   <TouchableOpacity
                     style={[s.custRow, { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff7ed', marginBottom: 8 }]}
@@ -376,6 +397,7 @@ export default function NewJobScreen() {
               />
             </>
           )}
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </KeyboardAvoidingView>

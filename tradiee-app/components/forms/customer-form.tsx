@@ -38,9 +38,19 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
     pricing_group_id: customer?.pricing_group_id ?? '',
     notes: customer?.notes ?? '',
   })
+  const [firstName, setFirstName] = useState(() => customer?.name?.split(' ')[0] ?? '')
+  const [lastName, setLastName] = useState(() => customer?.name?.split(' ').slice(1).join(' ') ?? '')
   const [addAsJobSite, setAddAsJobSite] = useState(true)
 
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
+
+  // Kept as separate first/last inputs but joined into the single `name`
+  // column everything else in the app (invoices, portal, PDFs) reads.
+  function updateName(first: string, last: string) {
+    setFirstName(first)
+    setLastName(last)
+    set('name', `${first} ${last}`.trim())
+  }
 
   async function doSave() {
     if (!form.email.trim() || !form.phone.trim() || !form.billing_address.trim()) {
@@ -122,7 +132,10 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
 
   function applyVoice(data: Record<string, string>) {
     if (data.type && ['residential', 'commercial'].includes(data.type)) set('type', data.type)
-    if (data.name) set('name', data.name)
+    if (data.name) {
+      const [first, ...rest] = data.name.trim().split(' ')
+      updateName(first ?? '', rest.join(' '))
+    }
     if (data.contact_person) set('contact_person', data.contact_person)
     if (data.email) set('email', data.email)
     if (data.phone) set('phone', data.phone)
@@ -142,9 +155,15 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
           <Select value={form.type} onChange={e => set('type', e.target.value)}
             options={[{ value: 'residential', label: 'Residential' }, { value: 'commercial', label: 'Commercial' }]} />
         </div>
-        <div>
-          <Label>Name <span className="text-red-400">*</span></Label>
-          <Input value={form.name} onChange={e => set('name', e.target.value)} onBlur={checkDuplicate} required />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>First name <span className="text-red-400">*</span></Label>
+            <Input value={firstName} onChange={e => updateName(e.target.value, lastName)} onBlur={checkDuplicate} required />
+          </div>
+          <div>
+            <Label>Last name</Label>
+            <Input value={lastName} onChange={e => updateName(firstName, e.target.value)} onBlur={checkDuplicate} />
+          </div>
         </div>
         <div>
           <Label>Contact person</Label>

@@ -73,7 +73,7 @@ export default function InvoiceDetailScreen() {
   const [editForm, setEditForm] = useState({ due_date: '', notes: '' })
   const [savingEdit, setSavingEdit] = useState(false)
 
-  const { data: invoices, isLoading } = useQuery<Invoice>(
+  const { data: invoices, isLoading, refresh: refreshInvoice } = useQuery<Invoice>(
     `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.gst_amount, i.total,
             i.amount_paid, i.due_date, i.invoice_date, i.notes, i.paid_at,
             j.title AS job_title,
@@ -138,6 +138,7 @@ export default function InvoiceDetailScreen() {
       })
     }
     setShowPayment(false)
+    refreshInvoice?.()
   }
 
   function openEdit() {
@@ -155,6 +156,7 @@ export default function InvoiceDetailScreen() {
     setSavingEdit(false)
     if (error) { Alert.alert('Error', error.message); return }
     setShowEdit(false)
+    refreshInvoice?.()
   }
 
   if (isLoading) {

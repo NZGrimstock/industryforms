@@ -37,6 +37,16 @@ export default function EnquiriesScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', phone: '', email: '', notes: '', source: '' })
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+
+  // Kept as separate first/last inputs but joined into the single
+  // `customer_name` column everything else in the app reads.
+  function updateName(first: string, last: string) {
+    setFirstName(first)
+    setLastName(last)
+    setForm(p => ({ ...p, name: `${first} ${last}`.trim() }))
+  }
   const [adding, setAdding] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -80,6 +90,8 @@ export default function EnquiriesScreen() {
     if (error) { Alert.alert('Error', error.message); return }
     if (data) setEnquiries(prev => [data as Enquiry, ...prev])
     setForm({ name: '', phone: '', email: '', notes: '', source: '' })
+    setFirstName('')
+    setLastName('')
     setShowAdd(false)
   }
 
@@ -184,7 +196,8 @@ export default function EnquiriesScreen() {
           </View>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
-              <TextInput style={s.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))} placeholder="Customer name *" placeholderTextColor="#6b7280" autoFocus />
+              <TextInput style={s.input} value={firstName} onChangeText={v => updateName(v, lastName)} placeholder="First name *" placeholderTextColor="#6b7280" autoFocus />
+              <TextInput style={s.input} value={lastName} onChangeText={v => updateName(firstName, v)} placeholder="Last name" placeholderTextColor="#6b7280" />
               <TextInput style={s.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))} placeholder="Phone" placeholderTextColor="#6b7280" keyboardType="phone-pad" />
               <TextInput style={s.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))} placeholder="Email" placeholderTextColor="#6b7280" keyboardType="email-address" autoCapitalize="none" />
               <TextInput style={[s.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm(p => ({ ...p, notes: v }))} placeholder="What are they looking for?" placeholderTextColor="#6b7280" multiline />

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity,
-  Alert, TextInput,
+  Alert, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
@@ -68,6 +68,7 @@ export default function QuoteDetailScreen() {
   const timezone = useTimezone()
   const fmtDate = (iso: string | null) => iso ? formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
   const { id } = useLocalSearchParams<{ id: string }>()
+  const scrollRef = useRef<ScrollView>(null)
   const [sending, setSending] = useState(false)
   const [texting, setTexting] = useState(false)
   const [declining, setDeclining] = useState(false)
@@ -80,7 +81,7 @@ export default function QuoteDetailScreen() {
   const [editForm, setEditForm] = useState({ description: '', quantity: '1', unit_price: '' })
   const [savingEdit, setSavingEdit] = useState(false)
 
-  const { data: quotes, isLoading } = useQuery<Quote>(
+  const { data: quotes, isLoading, refresh: refreshQuote } = useQuery<Quote>(
     `SELECT q.id, q.quote_number, q.title, q.status, q.subtotal, q.gst_amount, q.total,
             q.expires_at, q.customer_message, q.notes,
             q.customer_id, q.company_id,
@@ -171,7 +172,8 @@ export default function QuoteDetailScreen() {
               .update({ status: 'declined', declined_at: new Date().toISOString() })
               .eq('id', id!)
             setDeclining(false)
-            if (error) Alert.alert('Error', error.message)
+            if (error) { Alert.alert('Error', error.message); return }
+            refreshQuote?.()
           },
         },
       ]
@@ -358,7 +360,8 @@ export default function QuoteDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen options={{ title: quote.quote_number, headerTintColor: '#f97316' }} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
 
         {/* Info card */}
         <View style={s.card}>
@@ -471,7 +474,7 @@ export default function QuoteDetailScreen() {
         {/* Line items */}
         <View style={s.card}>
           <View style={s.sectionHead}>
-            <Text style={s.sectionTitle}>Line Items</Text>
+            <Text style={s.sectionTitle}>Materials</Text>
             {isDraft && (
               <TouchableOpacity onPress={() => setShowAddItem(v => !v)}>
                 <Text style={s.addLink}>+ Add</Text>
@@ -494,6 +497,7 @@ export default function QuoteDetailScreen() {
                 }))}
                 inputStyle={[s.input, { marginBottom: 0 }]}
                 containerStyle={{ marginBottom: 8 }}
+                scrollViewRef={scrollRef}
                 autoFocus
               />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -513,7 +517,7 @@ export default function QuoteDetailScreen() {
           )}
 
           {(lineItems ?? []).length === 0 && !showAddItem ? (
-            <Text style={s.empty}>No line items</Text>
+            <Text style={s.empty}>No materials</Text>
           ) : (
             <>
               {unsectioned.map(item => (
@@ -557,6 +561,7 @@ export default function QuoteDetailScreen() {
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Edit line item modal */}
       {editingItem && (

@@ -19,9 +19,19 @@ export default function NewCustomerScreen() {
     notes: '',
   })
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [addAsSite, setAddAsSite] = useState(true)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Kept as separate first/last inputs but joined into the single `name`
+  // column everything else in the app (invoices, portal, PDFs) reads.
+  function updateName(first: string, last: string) {
+    setFirstName(first)
+    setLastName(last)
+    setForm(f => ({ ...f, name: `${first} ${last}`.trim() }))
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -89,14 +99,25 @@ export default function NewCustomerScreen() {
         </View>
 
         <View style={s.field}>
-          <Text style={s.label}>Name *</Text>
+          <Text style={s.label}>First name *</Text>
           <TextInput
             style={s.input}
-            value={form.name}
-            onChangeText={v => setForm(f => ({ ...f, name: v }))}
-            placeholder="Customer or company name"
+            value={firstName}
+            onChangeText={v => updateName(v, lastName)}
+            placeholder="First name"
             placeholderTextColor="#6b7280"
             autoFocus
+          />
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>Last name</Text>
+          <TextInput
+            style={s.input}
+            value={lastName}
+            onChangeText={v => updateName(firstName, v)}
+            placeholder="Last name"
+            placeholderTextColor="#6b7280"
           />
         </View>
 

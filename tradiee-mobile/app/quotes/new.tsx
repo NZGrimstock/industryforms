@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
@@ -25,6 +25,7 @@ export default function NewQuoteScreen() {
   // Carried over when arriving from Inbox → enquiry → "Convert to quote"
   // (Mobile Overhaul brief finding #4 — convert used to drop the enquiry data).
   const params = useLocalSearchParams<{ name?: string; email?: string; phone?: string; address?: string; notes?: string }>()
+  const scrollRef = useRef<ScrollView>(null)
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -51,8 +52,18 @@ export default function NewQuoteScreen() {
   const [saving, setSaving] = useState(false)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [newCust, setNewCust] = useState({ name: '', email: '', phone: '', billing_address: '' })
+  const [newCustFirstName, setNewCustFirstName] = useState('')
+  const [newCustLastName, setNewCustLastName] = useState('')
   const [creatingCust, setCreatingCust] = useState(false)
   const newCustValid = !!(newCust.name.trim() && newCust.email.trim() && newCust.phone.trim() && newCust.billing_address.trim())
+
+  // Kept as separate first/last inputs but joined into the single `name`
+  // column everything else in the app (invoices, portal, PDFs) reads.
+  function updateNewCustName(first: string, last: string) {
+    setNewCustFirstName(first)
+    setNewCustLastName(last)
+    setNewCust(p => ({ ...p, name: `${first} ${last}`.trim() }))
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -87,6 +98,8 @@ export default function NewQuoteScreen() {
       phone: params.phone ?? '',
       billing_address: params.address ?? '',
     })
+    setNewCustFirstName(params.name?.split(' ')[0] ?? '')
+    setNewCustLastName(params.name?.split(' ').slice(1).join(' ') ?? '')
     setShowPicker(true)
     setShowNewCustomer(true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +172,8 @@ export default function NewQuoteScreen() {
       setCustomers(prev => [data, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
       selectCustomer(data)
       setNewCust({ name: '', email: '', phone: '', billing_address: '' })
+      setNewCustFirstName('')
+      setNewCustLastName('')
       setShowNewCustomer(false)
     }
     setCreatingCust(false)
@@ -248,6 +263,7 @@ export default function NewQuoteScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: 'New Quote', headerTintColor: '#f97316' }} />
       <ScrollView
+        ref={scrollRef}
         style={s.container}
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
@@ -300,7 +316,7 @@ export default function NewQuoteScreen() {
         {/* Line items */}
         <View style={s.section}>
           <View style={s.sectionHead}>
-            <Text style={s.sectionTitle}>Line items</Text>
+            <Text style={s.sectionTitle}>Materials</Text>
             <View style={{ flexDirection: 'row', gap: 16 }}>
               <TouchableOpacity onPress={() => setShowAddSection(v => !v)} hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
                 <Text style={s.addLink}>+ Section</Text>
@@ -340,6 +356,7 @@ export default function NewQuoteScreen() {
                 }))}
                 inputStyle={[s.input, { marginBottom: 0 }]}
                 containerStyle={{ marginBottom: 8 }}
+                scrollViewRef={scrollRef}
                 autoFocus
               />
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -359,7 +376,7 @@ export default function NewQuoteScreen() {
           )}
 
           {lineItems.length === 0 && sections.length === 0 && !showAddItem ? (
-            <Text style={s.empty}>No line items — tap "+ Add item" above</Text>
+            <Text style={s.empty}>No materials — tap "+ Add item" above</Text>
           ) : (
             <>
               {lineItems.filter(i => !i.sectionId).map(item => (
@@ -420,6 +437,7 @@ export default function NewQuoteScreen() {
               <Text style={s.modalClose}>Done</Text>
             </TouchableOpacity>
           </View>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {!showNewCustomer ? (
             <>
               <View style={s.searchBox}>
@@ -430,6 +448,7 @@ export default function NewQuoteScreen() {
                 data={filteredCustomers}
                 keyExtractor={c => c.id}
                 contentContainerStyle={{ padding: 12 }}
+                keyboardShouldPersistTaps="handled"
                 ListHeaderComponent={
                   <TouchableOpacity
                     style={[s.custRow, { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff7ed', borderRadius: 12, marginBottom: 8 }]}
@@ -449,13 +468,15 @@ export default function NewQuoteScreen() {
               />
             </>
           ) : (
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
+            <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
               <TouchableOpacity onPress={() => setShowNewCustomer(false)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 20 }}>
                 <Feather name="chevron-left" size={16} color="#f97316" />
                 <Text style={{ color: '#f97316', fontWeight: '600' }}>Back to search</Text>
               </TouchableOpacity>
-              <Text style={s.label}>Name *</Text>
-              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.name} onChangeText={v => setNewCust(p => ({ ...p, name: v }))} placeholder="Customer name" placeholderTextColor="#6b7280" autoFocus />
+              <Text style={s.label}>First name *</Text>
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCustFirstName} onChangeText={v => updateNewCustName(v, newCustLastName)} placeholder="First name" placeholderTextColor="#6b7280" autoFocus />
+              <Text style={s.label}>Last name</Text>
+              <TextInput style={[s.input, { marginBottom: 14 }]} value={newCustLastName} onChangeText={v => updateNewCustName(newCustFirstName, v)} placeholder="Last name" placeholderTextColor="#6b7280" />
               <Text style={s.label}>Email *</Text>
               <TextInput style={[s.input, { marginBottom: 14 }]} value={newCust.email} onChangeText={v => setNewCust(p => ({ ...p, email: v }))} placeholder="customer@email.com" placeholderTextColor="#6b7280" keyboardType="email-address" autoCapitalize="none" />
               <Text style={s.label}>Phone *</Text>
@@ -471,6 +492,7 @@ export default function NewQuoteScreen() {
               </TouchableOpacity>
             </ScrollView>
           )}
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, Alert, ActivityIndicator, Modal, ScrollView, Switch, RefreshControl,
+  KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, Stack, router } from 'expo-router'
@@ -510,7 +511,8 @@ export default function TimesheetsScreen() {
             <Text style={styles.modalTitle}>Start job timer</Text>
             <TouchableOpacity onPress={() => setShowStartTimer(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 20 }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
             {tripFollowup && (
               <View style={{ backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                 <Feather name="navigation" size={16} color="#f97316" />
@@ -554,6 +556,7 @@ export default function TimesheetsScreen() {
               </TouchableOpacity>
             )}
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 
@@ -564,7 +567,8 @@ export default function TimesheetsScreen() {
             <Text style={styles.modalTitle}>Auto-track schedule</Text>
             <TouchableOpacity onPress={() => setShowTradingHours(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
               Set trading hours to automatically start and stop GPS tracking. The app must be opened within the window for the schedule to take effect.
             </Text>
@@ -637,6 +641,7 @@ export default function TimesheetsScreen() {
               <Text style={styles.logBtnText}>{savingTradingHours ? 'Saving…' : 'Save schedule'}</Text>
             </TouchableOpacity>
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 
@@ -647,7 +652,8 @@ export default function TimesheetsScreen() {
             <Text style={styles.modalTitle}>Log Time</Text>
             <TouchableOpacity onPress={() => setShowLogModal(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ padding: 20 }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
             <Text style={styles.fieldLabel}>Job</Text>
             <TextInput style={styles.input} placeholder="Search jobs…" placeholderTextColor="#6b7280" value={jobSearch} onChangeText={setJobSearch} autoCorrect={false} />
             {selectedJob && (
@@ -670,6 +676,7 @@ export default function TimesheetsScreen() {
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save entry'}</Text>
             </TouchableOpacity>
           </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 

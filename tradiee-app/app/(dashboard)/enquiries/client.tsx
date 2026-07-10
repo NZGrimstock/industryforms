@@ -35,6 +35,16 @@ export function EnquiryActions({ companyId, profileId, team, mode, initialOpen =
     follow_up_at: '',
   })
   const [dupCustomer, setDupCustomer] = useState<{ id: string; name: string } | null>(null)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+
+  // Kept as separate first/last inputs but joined into the single
+  // `customer_name` column everything else reads.
+  function updateName(first: string, last: string) {
+    setFirstName(first)
+    setLastName(last)
+    setForm(f => ({ ...f, customer_name: `${first} ${last}`.trim() }))
+  }
 
   async function checkDuplicate() {
     if (!form.customer_name.trim()) { setDupCustomer(null); return }
@@ -66,6 +76,8 @@ export function EnquiryActions({ companyId, profileId, team, mode, initialOpen =
     if (!error) {
       setOpen(false)
       setForm({ customer_name: '', customer_email: '', customer_phone: '', address: '', description: '', source: 'other', assigned_to: '', follow_up_at: '' })
+      setFirstName('')
+      setLastName('')
       setDupCustomer(null)
       router.refresh()
     }
@@ -90,26 +102,38 @@ export function EnquiryActions({ companyId, profileId, team, mode, initialOpen =
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
-                <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
-                  value={form.customer_name}
-                  onChange={e => { setForm(f => ({ ...f, customer_name: e.target.value })); setDupCustomer(null) }}
-                  onBlur={checkDuplicate}
-                  placeholder="e.g. John Smith"
-                  autoFocus
-                />
-                {dupCustomer && (
-                  <p className="mt-1.5 text-xs text-amber-700">
-                    Matches existing customer{' '}
-                    <a href={`/customers/${dupCustomer.id}`} target="_blank" className="font-medium underline hover:text-amber-800">
-                      {dupCustomer.name}
-                    </a>
-                    {' '}— this enquiry won&apos;t create a duplicate; link it when you convert.
-                  </p>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">First name *</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                    value={firstName}
+                    onChange={e => { updateName(e.target.value, lastName); setDupCustomer(null) }}
+                    onBlur={checkDuplicate}
+                    placeholder="John"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Last name</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                    value={lastName}
+                    onChange={e => { updateName(firstName, e.target.value); setDupCustomer(null) }}
+                    onBlur={checkDuplicate}
+                    placeholder="Smith"
+                  />
+                </div>
               </div>
+              {dupCustomer && (
+                <p className="-mt-2 text-xs text-amber-700">
+                  Matches existing customer{' '}
+                  <a href={`/customers/${dupCustomer.id}`} target="_blank" className="font-medium underline hover:text-amber-800">
+                    {dupCustomer.name}
+                  </a>
+                  {' '}— this enquiry won&apos;t create a duplicate; link it when you convert.
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>

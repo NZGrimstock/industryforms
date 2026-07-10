@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import {
+  ScrollView,
   StyleProp,
   StyleSheet,
   Text,
@@ -9,6 +11,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native'
+import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 
 export type PriceListLookupItem = {
   id: string
@@ -28,6 +31,13 @@ type Props = {
   inputStyle?: StyleProp<TextStyle>
   containerStyle?: StyleProp<ViewStyle>
   autoFocus?: boolean
+  // Parent screen's ScrollView — lets us scroll this field (and its dropdown)
+  // above the keyboard on focus, since RN doesn't do this automatically.
+  scrollViewRef?: RefObject<ScrollView | null>
+  // Height of sibling content below this field (qty/unit/price row, Add
+  // button) that should also stay clear of the keyboard when not showing
+  // the dropdown. Defaults to a reasonable guess for the standard add-item box.
+  belowExtraHeight?: number
 }
 
 export function PriceListDescriptionInput({
@@ -39,8 +49,12 @@ export function PriceListDescriptionInput({
   inputStyle,
   containerStyle,
   autoFocus,
+  scrollViewRef,
+  belowExtraHeight = 170,
 }: Props) {
   const [focused, setFocused] = useState(false)
+  const [dropdownHeight, setDropdownHeight] = useState(0)
+  const inputRef = useRef<TextInput>(null)
   const matches = useMemo(() => {
     const q = value.trim().toLowerCase()
     if (!q) return []
@@ -50,20 +64,32 @@ export function PriceListDescriptionInput({
   }, [items, value])
   const showMatches = focused && matches.length > 0
 
+  useEffect(() => {
+    if (!scrollViewRef) return
+    // Re-scroll once the dropdown has a measured height, so as much of it as
+    // possible ends up visible above the keyboard — not just the input itself.
+    scrollFieldAboveKeyboard(scrollViewRef, inputRef, showMatches ? dropdownHeight + 16 : belowExtraHeight)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMatches, dropdownHeight])
+
   return (
     <View style={containerStyle}>
       <TextInput
+        ref={inputRef}
         style={inputStyle}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor="#6b7280"
         autoFocus={autoFocus}
-        onFocus={() => setFocused(true)}
+        onFocus={() => {
+          setFocused(true)
+          if (scrollViewRef) setTimeout(() => scrollFieldAboveKeyboard(scrollViewRef, inputRef, belowExtraHeight), 50)
+        }}
         onBlur={() => setTimeout(() => setFocused(false), 120)}
       />
       {showMatches && (
-        <View style={styles.dropdown}>
+        <View style={styles.dropdown} onLayout={e => setDropdownHeight(e.nativeEvent.layout.height)}>
           {matches.map(item => (
             <TouchableOpacity
               key={item.id}
@@ -71,6 +97,7 @@ export function PriceListDescriptionInput({
               onPress={() => {
                 onPick(item)
                 setFocused(false)
+                inputRef.current?.blur()
               }}
               activeOpacity={0.7}
             >

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Alert, ActivityIndicator, Modal, Image, Linking, Platform,
+  TextInput, Alert, ActivityIndicator, Modal, Image, Linking, Platform, KeyboardAvoidingView,
 } from 'react-native'
 import { useLocalSearchParams, router, Stack, useFocusEffect } from 'expo-router'
 import { useQuery } from '@powersync/react'
@@ -16,6 +16,7 @@ import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz, formatDateTime as formatDateTimeTz } from '@/lib/datetime'
 import { colors, radius, shadow } from '@/lib/theme'
 import { tap as hapticTap, success as hapticSuccess } from '@/lib/haptics'
+import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 
 // Self-contained HTML signature pad — draws to a canvas and posts a PNG data URL
 // (or 'EMPTY' if untouched) back to React Native.
@@ -122,6 +123,7 @@ export default function JobDetailScreen() {
   const [invoicing, setInvoicing] = useState(false)
   const [formsY, setFormsY] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
+  const noteInputRef = useRef<TextInput>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -232,7 +234,7 @@ export default function JobDetailScreen() {
     hapticTap()
   }
 
-  const { data: jobs, isLoading } = useQuery<Job>(
+  const { data: jobs, isLoading, refresh: refreshJob } = useQuery<Job>(
     `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at, j.customer_id,
             c.name AS customer_name, c.phone AS customer_phone,
             c.billing_address AS customer_billing_address,
@@ -270,13 +272,13 @@ export default function JobDetailScreen() {
     Linking.openURL(url).catch(() => Alert.alert('Could not open maps', jobAddress ?? ''))
   }
 
-  const { data: notes } = useQuery<Note>(
+  const { data: notes, refresh: refreshNotes } = useQuery<Note>(
     `SELECT id, body, author_id, created_at FROM job_notes
      WHERE job_id = ? ORDER BY created_at DESC`,
     [id]
   )
 
-  const { data: materials } = useQuery<Material>(
+  const { data: materials, refresh: refreshMaterials } = useQuery<Material>(
     `SELECT id, description, quantity, unit, unit_price
      FROM job_materials WHERE job_id = ?
      ORDER BY rowid ASC`,
@@ -298,7 +300,7 @@ export default function JobDetailScreen() {
     [id]
   )
 
-  const { data: photos } = useQuery<Photo>(
+  const { data: photos, refresh: refreshPhotos } = useQuery<Photo>(
     `SELECT id, storage_path, caption, taken_at FROM job_photos
      WHERE job_id = ? ORDER BY taken_at ASC`,
     [id]
@@ -310,7 +312,7 @@ export default function JobDetailScreen() {
     [companyId ?? '']
   )
 
-  const { data: formSubmissions } = useQuery<FormSubmission>(
+  const { data: formSubmissions, refresh: refreshFormSubmissions } = useQuery<FormSubmission>(
     `SELECT id, template_id, template_name, answers, submitted_at FROM form_submissions
      WHERE job_id = ?`,
     [id]
@@ -344,6 +346,7 @@ export default function JobDetailScreen() {
         ? await supabase.from('form_submissions').update(payload).eq('id', existing.id)
         : await supabase.from('form_submissions').insert(payload)
       if (error) throw new Error(error.message)
+      refreshFormSubmissions?.()
       hapticSuccess()
       setFillTemplate(null)
     } catch (e: any) {
@@ -405,6 +408,7 @@ export default function JobDetailScreen() {
         job_id: id, uploaded_by: session.user.id, company_id: profile?.company_id,
         storage_path: key, taken_at: new Date().toISOString(),
       })
+      refreshPhotos?.()
     } catch (e: any) {
       Alert.alert('Upload failed', e.message ?? 'Unknown error')
     } finally {
@@ -441,6 +445,7 @@ export default function JobDetailScreen() {
     setSavingMaterial(false)
     if (error) { Alert.alert('Could not add material', error.message); return }
     setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    refreshMaterials?.()
     hapticSuccess()
   }
 
@@ -457,6 +462,7 @@ export default function JobDetailScreen() {
     if (error) { Alert.alert('Error', error.message); return }
     setNoteText('')
     setShowAddNote(false)
+    refreshNotes?.()
   }
 
   async function updateStatus(newStatus: string) {
@@ -465,6 +471,7 @@ export default function JobDetailScreen() {
     const { error } = await supabase.from('jobs').update({ status: newStatus }).eq('id', id)
     setUpdatingStatus(false)
     if (error) Alert.alert('Error', error.message)
+    else refreshJob?.()
   }
 
   // Complete the job: optionally upload a customer signature, then set the job to
@@ -489,6 +496,7 @@ export default function JobDetailScreen() {
         if (error) throw new Error(error.message)
       }
       if (activeJob) await stopJob()
+      refreshJob?.()
       setShowComplete(false)
       hapticSuccess()
       Alert.alert('Job completed', signature && signature !== 'EMPTY' ? 'Customer sign-off saved.' : 'Status set to complete.')
@@ -540,6 +548,7 @@ export default function JobDetailScreen() {
         if (error) throw new Error(error.message)
       }
       if (activeJob) await stopJob()
+      refreshJob?.()
 
       // Create draft invoice via API
       const { data: { session } } = await supabase.auth.getSession()
@@ -639,7 +648,8 @@ export default function JobDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <Stack.Screen options={{ title: job.job_number, headerTintColor: '#f97316' }} />
-      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
 
         {/* Header card */}
         <View style={styles.headerCard}>
@@ -794,43 +804,7 @@ export default function JobDetailScreen() {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Forms — the app's namesake, finally on the job screen */}
-        <View style={styles.section} onLayout={e => setFormsY(e.nativeEvent.layout.y)}>
-          <Text style={styles.sectionTitle}>Forms</Text>
-          {(formTemplates ?? []).length === 0 && <Text style={styles.emptyText}>No form templates yet</Text>}
-          {(formTemplates ?? []).map(t => {
-            const sub = submissionFor(t.id)
-            return (
-              <TouchableOpacity key={t.id} style={styles.formRow} onPress={() => openForm(t)} activeOpacity={0.6}>
-                <Text style={styles.formRowIcon}>📋</Text>
-                <Text style={styles.formRowLabel} numberOfLines={1}>{t.name}</Text>
-                <View style={[styles.formStatus, sub ? styles.formStatusDone : styles.formStatusTodo]}>
-                  <Text style={[styles.formStatusText, { color: sub ? '#15803d' : colors.brandDark }]}>{sub ? 'Submitted' : 'To do'}</Text>
-                </View>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-
-        {/* Visits */}
-        {(visits ?? []).length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Visits</Text>
-            {visits!.map(v => (
-              <View key={v.id} style={styles.visitRow}>
-                <View style={[styles.dot, { backgroundColor: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]} />
-                <Text style={styles.visitText}>{formatDateTime(v.scheduled_start)}</Text>
-                <View style={[styles.minibadge, { backgroundColor: (VISIT_STATUS_COLOR[v.status] ?? '#9ca3af') + '20' }]}>
-                  <Text style={[styles.minibadgeText, { color: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]}>
-                    {v.status.replace('_', ' ')}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Materials */}
+        {/* Materials / line items — directly above Forms */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Materials</Text>
           <View style={styles.materialAddBox}>
@@ -849,6 +823,7 @@ export default function JobDetailScreen() {
               inputStyle={[styles.input, { marginBottom: 0 }]}
               containerStyle={{ marginBottom: 8 }}
               placeholder="Description"
+              scrollViewRef={scrollRef}
             />
             <View style={styles.materialInputsRow}>
               <TextInput
@@ -907,6 +882,42 @@ export default function JobDetailScreen() {
           )}
         </View>
 
+        {/* Forms — the app's namesake, finally on the job screen */}
+        <View style={styles.section} onLayout={e => setFormsY(e.nativeEvent.layout.y)}>
+          <Text style={styles.sectionTitle}>Forms</Text>
+          {(formTemplates ?? []).length === 0 && <Text style={styles.emptyText}>No form templates yet</Text>}
+          {(formTemplates ?? []).map(t => {
+            const sub = submissionFor(t.id)
+            return (
+              <TouchableOpacity key={t.id} style={styles.formRow} onPress={() => openForm(t)} activeOpacity={0.6}>
+                <Text style={styles.formRowIcon}>📋</Text>
+                <Text style={styles.formRowLabel} numberOfLines={1}>{t.name}</Text>
+                <View style={[styles.formStatus, sub ? styles.formStatusDone : styles.formStatusTodo]}>
+                  <Text style={[styles.formStatusText, { color: sub ? '#15803d' : colors.brandDark }]}>{sub ? 'Submitted' : 'To do'}</Text>
+                </View>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        {/* Visits */}
+        {(visits ?? []).length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Visits</Text>
+            {visits!.map(v => (
+              <View key={v.id} style={styles.visitRow}>
+                <View style={[styles.dot, { backgroundColor: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]} />
+                <Text style={styles.visitText}>{formatDateTime(v.scheduled_start)}</Text>
+                <View style={[styles.minibadge, { backgroundColor: (VISIT_STATUS_COLOR[v.status] ?? '#9ca3af') + '20' }]}>
+                  <Text style={[styles.minibadgeText, { color: VISIT_STATUS_COLOR[v.status] ?? '#9ca3af' }]}>
+                    {v.status.replace('_', ' ')}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Photos */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -947,6 +958,7 @@ export default function JobDetailScreen() {
           {showAddNote && (
             <View style={styles.addNoteBox}>
               <TextInput
+                ref={noteInputRef}
                 style={styles.noteInput}
                 multiline
                 placeholder="Write a note…"
@@ -954,6 +966,7 @@ export default function JobDetailScreen() {
                 value={noteText}
                 onChangeText={setNoteText}
                 autoFocus
+                onFocus={() => setTimeout(() => scrollFieldAboveKeyboard(scrollRef, noteInputRef, 140), 50)}
               />
               <View style={styles.addNoteActions}>
                 <TouchableOpacity onPress={() => setShowAddNote(false)}>
@@ -983,6 +996,7 @@ export default function JobDetailScreen() {
           ))}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Fixed bottom timer button */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
