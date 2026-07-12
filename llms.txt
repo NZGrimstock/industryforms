@@ -13,10 +13,10 @@ Industry Forms is built specifically for NZ and AU trade businesses (plumbers, e
 
 ## Pages
 
-- [Home](https://industryforms.app/): product overview, pricing, FAQ.
-- [Blog](https://industryforms.app/blog.html): trade-specific guides on quoting, invoicing, scheduling, and compliance.
-- [Privacy](https://industryforms.app/privacy.html)
-- [Terms](https://industryforms.app/terms.html)
+- [Home](https://www.industryforms.app/): product overview, pricing, FAQ.
+- [Blog](https://www.industryforms.app/blog.html): trade-specific guides on quoting, invoicing, scheduling, and compliance.
+- [Privacy](https://www.industryforms.app/privacy.html)
+- [Terms](https://www.industryforms.app/terms.html)
 
 ## Contact
 

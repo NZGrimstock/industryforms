@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://industryforms.app/sitemap.xml
+Sitemap: https://www.industryforms.app/sitemap.xml
