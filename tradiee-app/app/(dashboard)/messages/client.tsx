@@ -23,7 +23,7 @@ const SOURCE_LABEL: Record<ConversationSummary['source'], string> = {
   sms: 'SMS', email: 'Email', booking: 'Booking', enquiry: 'Enquiry', web_lead: 'Web lead',
 }
 
-type SmsThreadData = { type: 'sms'; customer: { id: string; name: string; phone: string | null; email: string | null } | null; messages: { id: string; direction: 'inbound' | 'outbound'; body: string; created_at: string }[] }
+type SmsThreadData = { type: 'sms'; customer: { id: string; name: string; phone: string | null; email: string | null } | null; messages: { id: string; direction: 'inbound' | 'outbound'; body: string; created_at: string; delivery_status: string | null }[] }
 type UnmatchedThreadData = { type: 'sms-unmatched'; message: { id: string; direction: string; body: string; created_at: string; from_number: string | null; to_number: string | null } }
 type EnquiryThreadData = { type: 'enquiry'; enquiry: { id: string; customer_name: string; customer_email: string | null; customer_phone: string | null; address: string | null; description: string | null; source: string; status: string; notes: string | null; follow_up_at: string | null; created_at: string } }
 type ThreadData = SmsThreadData | UnmatchedThreadData | EnquiryThreadData

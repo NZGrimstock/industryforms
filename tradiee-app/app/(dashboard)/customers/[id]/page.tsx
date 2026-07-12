@@ -29,7 +29,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     supabase.from('jobs').select('id, job_number, title, status, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
     supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, due_date').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
     supabase.from('communications').select('id, channel, direction, subject, summary, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(20),
-    supabase.from('customer_messages').select('id, direction, body, created_at').eq('customer_id', id).order('created_at', { ascending: true }).limit(200),
+    supabase.from('customer_messages').select('id, direction, body, created_at, delivery_status').eq('customer_id', id).order('created_at', { ascending: true }).limit(200),
     supabase.from('customer_groups').select('id, name').eq('company_id', profile!.company_id).order('name'),
   ])
 
@@ -139,7 +139,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               <SmsThread
                 customerId={id}
                 customerPhone={customer.phone ?? null}
-                initial={(messagesRes.data ?? []) as { id: string; direction: 'inbound' | 'outbound'; body: string; created_at: string }[]}
+                initial={(messagesRes.data ?? []) as { id: string; direction: 'inbound' | 'outbound'; body: string; created_at: string; delivery_status: string | null }[]}
                 twilioLive={smsConfigured()}
               />
             </CardContent>

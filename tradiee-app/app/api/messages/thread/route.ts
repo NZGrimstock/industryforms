@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'sms') {
     const [{ data: messages }, { data: customer }] = await Promise.all([
-      supabase.from('customer_messages').select('id, direction, body, created_at, read_at, status')
+      supabase.from('customer_messages').select('id, direction, body, created_at, read_at, status, delivery_status')
         .eq('customer_id', id).order('created_at', { ascending: true }),
       supabase.from('customers').select('id, name, phone, email').eq('id', id).single(),
     ])

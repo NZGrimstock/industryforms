@@ -77,13 +77,20 @@ export async function sendSms(
     billing = { billable: check.billable, stripeCustomerId: check.stripeCustomerId }
   }
 
+  const statusCallback = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/sms/status`
+    : undefined
+
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
     method: 'POST',
     headers: {
       Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'),
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({ From: FROM, To: dest, Body: body }),
+    body: new URLSearchParams({
+      From: FROM, To: dest, Body: body,
+      ...(statusCallback ? { StatusCallback: statusCallback } : {}),
+    }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) return { error: data.message ?? `SMS failed (${res.status})` }

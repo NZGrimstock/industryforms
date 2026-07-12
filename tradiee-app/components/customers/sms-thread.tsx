@@ -11,6 +11,15 @@ interface Message {
   direction: 'inbound' | 'outbound'
   body: string
   created_at: string
+  delivery_status: string | null
+}
+
+// Twilio MessageStatus values, in the order a message normally moves through.
+// undelivered/failed carry an error; everything before delivered is transient.
+const DELIVERY_LABEL: Record<string, string> = {
+  failed: 'Failed',
+  undelivered: 'Undelivered',
+  delivered: 'Delivered',
 }
 
 // Threaded SMS view shown on the customer detail page. Inbound rows arrive
@@ -33,7 +42,7 @@ export function SmsThread({ customerId, customerPhone, initial, twilioLive = tru
   async function refresh() {
     const { data } = await supabase
       .from('customer_messages')
-      .select('id, direction, body, created_at')
+      .select('id, direction, body, created_at, delivery_status')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: true })
     if (data) setMessages(data as Message[])
@@ -82,7 +91,14 @@ export function SmsThread({ customerId, customerPhone, initial, twilioLive = tru
                 : 'bg-gray-100 text-gray-800 rounded-bl-sm'
             }`}>
               {m.body}
-              <p className="text-[10px] opacity-70 mt-1">{formatDateTime(m.created_at, timezone, { dateStyle: 'short', timeStyle: 'short' })}</p>
+              <p className="text-[10px] opacity-70 mt-1 flex items-center gap-1.5">
+                {formatDateTime(m.created_at, timezone, { dateStyle: 'short', timeStyle: 'short' })}
+                {m.direction === 'outbound' && m.delivery_status && DELIVERY_LABEL[m.delivery_status] && (
+                  <span className={m.delivery_status === 'delivered' ? '' : 'text-red-100 font-medium'}>
+                    · {DELIVERY_LABEL[m.delivery_status]}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         ))}
