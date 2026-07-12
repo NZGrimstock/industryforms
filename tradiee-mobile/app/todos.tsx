@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 
 type Todo = {
@@ -94,7 +94,7 @@ export default function TodosScreen() {
           headerTintColor: '#f97316',
           headerRight: () => (
             <TouchableOpacity onPress={() => setShowAdd(true)} style={{ marginRight: 16 }}>
-              <Feather name="plus" size={24} color="#f97316" />
+              <Icon name="plus" size={24} color="#f97316" />
             </TouchableOpacity>
           ),
         }}
@@ -110,7 +110,7 @@ export default function TodosScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
           ListEmptyComponent={
             <View style={s.empty}>
-              <Feather name="check-circle" size={40} color="#d1d5db" />
+              <Icon name="check-circle" size={40} color="#d1d5db" />
               <Text style={s.emptyText}>All clear — nothing pending!</Text>
               <TouchableOpacity onPress={() => setShowAdd(true)} style={s.addPromptBtn}>
                 <Text style={s.addPromptText}>+ Add a to-do</Text>
@@ -123,7 +123,7 @@ export default function TodosScreen() {
                 onPress={() => complete(item.id)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Feather name="square" size={22} color="#d1d5db" />
+                <Icon name="square" size={22} color="#d1d5db" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 1 }}

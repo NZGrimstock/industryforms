@@ -1,16 +1,27 @@
 import { useCallback, useEffect, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Tabs, router } from 'expo-router'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
+import { AUTO_CHECKIN_NOTICE_KEY, type AutoCheckinNotice } from '@/lib/location/tracking'
 
-type FeatherName = React.ComponentProps<typeof Feather>['name']
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
-type ActiveJob = { jobId: string; timesheetId: string; startedAt: string }
+type ActiveJob = { jobId: string; timesheetId: string; startedAt: string; source?: string }
 
-const BOTTOM_TABS: { name: string; label: string; icon: FeatherName }[] = [
+async function readStoredJson<T>(key: string): Promise<T | null> {
+  const raw = await AsyncStorage.getItem(key)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    await AsyncStorage.removeItem(key)
+    return null
+  }
+}
+
+const BOTTOM_TABS: { name: string; label: string; icon: IconName }[] = [
   { name: 'home',     label: 'Home',     icon: 'home' },
   { name: 'jobs',     label: 'Jobs',     icon: 'briefcase' },
   { name: 'inbox',    label: 'Inbox',    icon: 'mail' },
@@ -28,8 +39,7 @@ function ActiveTimerBadge() {
 
   useEffect(() => {
     async function check() {
-      const raw = await AsyncStorage.getItem(ACTIVE_JOB_KEY)
-      setActiveJob(raw ? JSON.parse(raw) : null)
+      setActiveJob(await readStoredJson<ActiveJob>(ACTIVE_JOB_KEY))
     }
     check()
     const poll = setInterval(check, 8000)
@@ -61,6 +71,94 @@ function ActiveTimerBadge() {
   )
 }
 
+function AutoTimerNotice() {
+  const [notice, setNotice] = useState<AutoCheckinNotice | null>(null)
+  const [stopping, setStopping] = useState(false)
+
+  useEffect(() => {
+    async function check() {
+      setNotice(await readStoredJson<AutoCheckinNotice>(AUTO_CHECKIN_NOTICE_KEY))
+    }
+    check()
+    const poll = setInterval(check, 4000)
+    return () => clearInterval(poll)
+  }, [])
+
+  async function close() {
+    await AsyncStorage.removeItem(AUTO_CHECKIN_NOTICE_KEY)
+    setNotice(null)
+  }
+
+  async function viewJob() {
+    if (!notice) return
+    const jobId = notice.jobId
+    await close()
+    router.push(`/jobs/${jobId}`)
+  }
+
+  async function stopThisInstance() {
+    if (!notice) return
+    setStopping(true)
+    try {
+      const active = await readStoredJson<ActiveJob>(ACTIVE_JOB_KEY)
+      const shouldClearActive = active?.timesheetId === notice.timesheetId
+
+      const { error: deleteError } = await supabase
+        .from('timesheets')
+        .delete()
+        .eq('id', notice.timesheetId)
+
+      if (deleteError) {
+        const { error: updateError } = await supabase
+          .from('timesheets')
+          .update({
+            ended_at: notice.checkedInAt,
+            is_billable: false,
+            notes: 'Auto-started by GPS geo-fence, then declined by worker.',
+          })
+          .eq('id', notice.timesheetId)
+        if (updateError) throw updateError
+      }
+
+      if (shouldClearActive) await AsyncStorage.removeItem(ACTIVE_JOB_KEY)
+      await close()
+    } catch (error) {
+      Alert.alert('Could not stop timer', error instanceof Error ? error.message : 'Please try again.')
+    } finally {
+      setStopping(false)
+    }
+  }
+
+  if (!notice) return null
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={close}>
+      <View style={noticeStyles.overlay}>
+        <View style={noticeStyles.card}>
+          <TouchableOpacity style={noticeStyles.close} onPress={close} accessibilityLabel="Close auto timer notice">
+            <Icon name="x" size={18} color="#6b7280" />
+          </TouchableOpacity>
+          <View style={noticeStyles.iconWrap}>
+            <Icon name="map-pin" size={22} color="#15803d" />
+          </View>
+          <Text style={noticeStyles.title}>Job time tracking started</Text>
+          <Text style={noticeStyles.jobNumber}>{notice.jobNumber}</Text>
+          <Text style={noticeStyles.jobTitle} numberOfLines={2}>{notice.jobTitle}</Text>
+          <Text style={noticeStyles.sub}>Auto tracking started this job timer because you arrived on site.</Text>
+          <View style={noticeStyles.actions}>
+            <TouchableOpacity style={noticeStyles.secondaryBtn} onPress={stopThisInstance} disabled={stopping}>
+              {stopping ? <ActivityIndicator color="#c2410c" /> : <Text style={noticeStyles.secondaryText}>Don't track this time</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={noticeStyles.primaryBtn} onPress={viewJob} disabled={stopping}>
+              <Text style={noticeStyles.primaryText}>View job</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 const timerStyles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
@@ -74,6 +172,62 @@ const timerStyles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
   label: { fontSize: 12, fontWeight: '700', color: '#15803d' },
+})
+
+const noticeStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 24, 39, 0.32)',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 72,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  close: { position: 'absolute', top: 12, right: 12, padding: 6, zIndex: 2 },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  title: { fontSize: 17, fontWeight: '800', color: '#111827', marginBottom: 8 },
+  jobNumber: { fontSize: 12, fontWeight: '800', color: '#15803d', letterSpacing: 0.5, textTransform: 'uppercase' },
+  jobTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginTop: 3 },
+  sub: { fontSize: 13, color: '#6b7280', lineHeight: 18, marginTop: 10 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  secondaryBtn: {
+    flex: 1.2,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  secondaryText: { color: '#c2410c', fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  primaryBtn: {
+    flex: 0.8,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: '#f97316',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  primaryText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
 })
 
 export default function TabLayout() {
@@ -121,6 +275,7 @@ export default function TabLayout() {
   const HeaderRight = useCallback(() => <ActiveTimerBadge />, [])
 
   return (
+    <>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -143,7 +298,7 @@ export default function TabLayout() {
             title: tab.label,
             tabBarIcon: ({ color }) => (
               <View>
-                <Feather name={tab.icon} size={22} color={color} />
+                <Icon name={tab.icon} size={22} color={color} />
                 {tab.name === 'more' && pendingCount > 0 && (
                   <View style={styles.navBadge} />
                 )}
@@ -159,6 +314,8 @@ export default function TabLayout() {
       {/* Routable (from More → Quotes) but not a bottom-tab button — see nav change in overhaul brief §6. */}
       <Tabs.Screen name="quotes" options={{ href: null }} />
     </Tabs>
+    <AutoTimerNotice />
+    </>
   )
 }
 

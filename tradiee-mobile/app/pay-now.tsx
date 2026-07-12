@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Stack, useLocalSearchParams, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { requestNeededAndroidPermissions, useStripeTerminal, type Reader } from '@stripe/stripe-terminal-react-native'
 import { supabase } from '@/lib/supabase'
 import { fetchTerminalPaymentIntent, STRIPE_TERMINAL_LOCATION_ID } from '@/lib/tap-to-pay'
@@ -243,7 +243,7 @@ export default function PayNowScreen() {
         <Stack.Screen options={{ title: 'Tap to Pay', headerTintColor: '#f97316' }} />
         <View style={s.centred}>
           <View style={s.successCircle}>
-            <Feather name="check" size={48} color="#22c55e" />
+            <Icon name="check" size={48} color="#22c55e" />
           </View>
           <Text style={s.successTitle}>Payment Received</Text>
           <Text style={s.successSub}>
@@ -267,7 +267,7 @@ export default function PayNowScreen() {
         <Stack.Screen options={{ title: 'Tap to Pay', headerTintColor: '#f97316' }} />
         <View style={s.centred}>
           <View style={s.errorCircle}>
-            <Feather name="x" size={40} color="#ef4444" />
+            <Icon name="x" size={40} color="#ef4444" />
           </View>
           <Text style={s.errorTitle}>Payment Failed</Text>
           <Text style={s.errorMsg}>{errorMsg}</Text>
@@ -285,7 +285,7 @@ export default function PayNowScreen() {
       stage === 'connecting' ? 'Connecting reader…' :
       stage === 'collecting' ? 'Tap card or device to pay' :
       'Confirming payment…'
-    const icon: React.ComponentProps<typeof Feather>['name'] =
+    const icon: IconName =
       stage === 'connecting' ? 'wifi' :
       stage === 'collecting' ? 'credit-card' :
       'loader'
@@ -296,7 +296,7 @@ export default function PayNowScreen() {
         <View style={s.centred}>
           {stage === 'collecting' ? (
             <View style={s.tapCircle}>
-              <Feather name="credit-card" size={52} color="#f97316" />
+              <Icon name="credit-card" size={52} color="#f97316" />
             </View>
           ) : (
             <ActivityIndicator size="large" color="#f97316" style={{ marginBottom: 24 }} />
@@ -326,7 +326,7 @@ export default function PayNowScreen() {
         <View style={{ flex: 1, padding: 20 }}>
 
           <TouchableOpacity style={s.backRow} onPress={() => setStage('select')}>
-            <Feather name="chevron-left" size={18} color="#f97316" />
+            <Icon name="chevron-left" size={18} color="#f97316" />
             <Text style={s.backText}>All invoices</Text>
           </TouchableOpacity>
 
@@ -358,7 +358,7 @@ export default function PayNowScreen() {
           </View>
 
           <TouchableOpacity style={s.payBtn} onPress={startPayment} activeOpacity={0.85}>
-            <Feather name="credit-card" size={20} color="#fff" />
+            <Icon name="credit-card" size={20} color="#fff" />
             <Text style={s.payBtnText}>Collect Payment</Text>
           </TouchableOpacity>
 
@@ -386,7 +386,7 @@ export default function PayNowScreen() {
           }
           ListEmptyComponent={
             <View style={s.empty}>
-              <Feather name="check-circle" size={40} color="#d1d5db" />
+              <Icon name="check-circle" size={40} color="#d1d5db" />
               <Text style={s.emptyText}>No outstanding invoices</Text>
             </View>
           }

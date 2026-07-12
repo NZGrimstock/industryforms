@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, Modal, TextInput, Platform, KeyboardAvoidingView,
+  ActivityIndicator, Alert, Modal, TextInput, Platform, KeyboardAvoidingView, Linking,
 } from 'react-native'
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
+import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 
 const STATUS_COLOR: Record<string, string> = {
   draft:          '#6b7280',
@@ -43,6 +44,13 @@ type Invoice = {
   paid_at: string | null
   job_title: string | null
   customer_name: string | null
+  discount_type: 'amount' | 'percent' | null
+  discount_value: number | null
+  discount_amount: number | null
+  is_recurring: number
+  recurrence_rule: string | null
+  recurrence_next: string | null
+  recurrence_end: string | null
 }
 
 type LineItem = {
@@ -59,6 +67,19 @@ function formatAmount(amount: number) {
   return '$' + (amount ?? 0).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+// $ value of a discount applied to `base`, clamped to [0, base]. Mirrors
+// tradiee-app/lib/pricing.ts discountAmount() — kept minimal since mobile
+// only supports a single document-level discount, no per-line discounts.
+function discountAmount(base: number, type: 'amount' | 'percent' | null, value: number): number {
+  if (!type || !value || base <= 0) return 0
+  const raw = type === 'percent' ? (base * value) / 100 : value
+  return round2(Math.min(Math.max(raw, 0), base))
+}
+
 export default function InvoiceDetailScreen() {
   const timezone = useTimezone()
   const formatDate = (iso: string | null) => {
@@ -70,12 +91,44 @@ export default function InvoiceDetailScreen() {
   const [showPayment, setShowPayment] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', method: 'cash', notes: '' })
   const [showEdit, setShowEdit] = useState(false)
-  const [editForm, setEditForm] = useState({ due_date: '', notes: '' })
+  const [editForm, setEditForm] = useState({
+    due_date: '', notes: '',
+    discount_value: '0', discount_type: 'amount' as 'amount' | 'percent',
+    is_recurring: false, recurrence_rule: 'monthly', recurrence_next: '', recurrence_end: '',
+  })
   const [savingEdit, setSavingEdit] = useState(false)
+  const [loadingPdf, setLoadingPdf] = useState(false)
+  const [emailing, setEmailing] = useState(false)
+  const [companyId, setCompanyId] = useState<string | null>(null)
+  const [gstRate, setGstRate] = useState(0.15)
+  const [newLine, setNewLine] = useState({ price_list_item_id: null as string | null, description: '', quantity: '1', unit: 'each', unit_price: '' })
+  const [savingLine, setSavingLine] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('company_id').eq('id', user.id).single().then(({ data: profile }) => {
+        if (!profile?.company_id) return
+        setCompanyId(profile.company_id)
+        supabase.from('companies').select('default_gst_rate').eq('id', profile.company_id).single()
+          .then(({ data: co }) => { if (co?.default_gst_rate != null) setGstRate(Number(co.default_gst_rate)) })
+      })
+    })
+  }, [])
+
+  const { data: priceItems } = useQuery<PriceListLookupItem>(
+    `SELECT id, name, unit, sell_price, cost_price, category
+     FROM price_list_items
+     WHERE company_id = ? AND is_active = 1
+     ORDER BY name ASC`,
+    [companyId ?? '']
+  )
 
   const { data: invoices, isLoading, refresh: refreshInvoice } = useQuery<Invoice>(
     `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.gst_amount, i.total,
             i.amount_paid, i.due_date, i.invoice_date, i.notes, i.paid_at,
+            i.discount_type, i.discount_value, i.discount_amount,
+            i.is_recurring, i.recurrence_rule, i.recurrence_next, i.recurrence_end,
             j.title AS job_title,
             c.name AS customer_name
      FROM invoices i
@@ -86,13 +139,76 @@ export default function InvoiceDetailScreen() {
   )
   const invoice = invoices?.[0]
 
-  const { data: lineItems } = useQuery<LineItem>(
+  const { data: lineItems, refresh: refreshLineItems } = useQuery<LineItem>(
     `SELECT id, description, quantity, unit, unit_price, line_total, sort_order
      FROM invoice_line_items
      WHERE invoice_id = ?
      ORDER BY sort_order ASC`,
     [id]
   )
+
+  // Recompute subtotal/gst/total from current line items + the invoice's
+  // document-level discount. Mirrors tradiee-app's recompute() but flattened
+  // to a single gstRate (mobile doesn't support per-line tax rates).
+  async function recompute(discType: 'amount' | 'percent' | null, discValue: number) {
+    const { data: lines } = await supabase.from('invoice_line_items').select('line_total').eq('invoice_id', id)
+    const subtotal = round2((lines ?? []).reduce((s, l) => s + Number(l.line_total ?? 0), 0))
+    const discount = discountAmount(subtotal, discType, discValue)
+    const taxable = round2(subtotal - discount)
+    const gst = round2(taxable * gstRate)
+    const total = round2(taxable + gst)
+    await supabase.from('invoices').update({ subtotal, discount_amount: discount, gst_amount: gst, total }).eq('id', id)
+  }
+
+  function pickPriceItem(item: PriceListLookupItem) {
+    setNewLine({
+      price_list_item_id: item.id,
+      description: item.name,
+      quantity: '1',
+      unit: item.unit ?? 'each',
+      unit_price: String(item.sell_price ?? item.cost_price ?? 0),
+    })
+  }
+
+  async function addLine() {
+    if (!invoice || !newLine.description.trim()) return
+    const qty = parseFloat(newLine.quantity) || 1
+    const price = parseFloat(newLine.unit_price) || 0
+    setSavingLine(true)
+    const { error } = await supabase.from('invoice_line_items').insert({
+      invoice_id: id,
+      price_list_item_id: newLine.price_list_item_id,
+      type: 'misc',
+      description: newLine.description.trim(),
+      quantity: qty,
+      unit: newLine.unit || 'each',
+      unit_price: price,
+      tax_rate: gstRate,
+      line_total: round2(qty * price),
+      sort_order: 99,
+    })
+    if (error) { setSavingLine(false); Alert.alert('Error', error.message); return }
+    await recompute(invoice.discount_type, invoice.discount_value ?? 0)
+    setSavingLine(false)
+    setNewLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'each', unit_price: '' })
+    refreshLineItems?.()
+    refreshInvoice?.()
+  }
+
+  function confirmDeleteLine(item: LineItem) {
+    Alert.alert('Remove this line?', item.description, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          const { error } = await supabase.from('invoice_line_items').delete().eq('id', item.id)
+          if (error) { Alert.alert('Error', error.message); return }
+          if (invoice) await recompute(invoice.discount_type, invoice.discount_value ?? 0)
+          refreshLineItems?.()
+          refreshInvoice?.()
+        },
+      },
+    ])
+  }
 
   function openPayment() {
     if (!invoice) return
@@ -141,20 +257,81 @@ export default function InvoiceDetailScreen() {
     refreshInvoice?.()
   }
 
+  async function viewPdf() {
+    if (!invoice) return
+    setLoadingPdf(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not signed in')
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/pdf`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Could not generate PDF')
+      await Linking.openURL(json.url)
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not open PDF')
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+
+  async function emailInvoice() {
+    if (!invoice) return
+    setEmailing(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not signed in')
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/email/invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Could not send email')
+      Alert.alert('Sent', 'Invoice emailed to the customer.')
+      refreshInvoice?.()
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not send email')
+    } finally {
+      setEmailing(false)
+    }
+  }
+
   function openEdit() {
     if (!invoice) return
-    setEditForm({ due_date: invoice.due_date?.slice(0, 10) ?? '', notes: invoice.notes ?? '' })
+    setEditForm({
+      due_date: invoice.due_date?.slice(0, 10) ?? '',
+      notes: invoice.notes ?? '',
+      discount_value: String(invoice.discount_value ?? 0),
+      discount_type: invoice.discount_type ?? 'amount',
+      is_recurring: !!invoice.is_recurring,
+      recurrence_rule: invoice.recurrence_rule ?? 'monthly',
+      recurrence_next: invoice.recurrence_next?.slice(0, 10) ?? '',
+      recurrence_end: invoice.recurrence_end?.slice(0, 10) ?? '',
+    })
     setShowEdit(true)
   }
 
   async function saveEdit() {
     setSavingEdit(true)
+    const discValue = parseFloat(editForm.discount_value) || 0
+    const discType: 'amount' | 'percent' | null = discValue > 0 ? editForm.discount_type : null
     const { error } = await supabase.from('invoices').update({
       due_date: editForm.due_date.trim() || null,
       notes: editForm.notes.trim() || null,
+      discount_type: discType,
+      discount_value: discValue,
+      is_recurring: editForm.is_recurring,
+      recurrence_rule: editForm.is_recurring ? editForm.recurrence_rule : null,
+      recurrence_next: editForm.is_recurring ? (editForm.recurrence_next.trim() || new Date().toISOString().slice(0, 10)) : null,
+      recurrence_end: editForm.is_recurring ? (editForm.recurrence_end.trim() || null) : null,
     }).eq('id', id)
+    if (error) { setSavingEdit(false); Alert.alert('Error', error.message); return }
+    await recompute(discType, discValue)
     setSavingEdit(false)
-    if (error) { Alert.alert('Error', error.message); return }
     setShowEdit(false)
     refreshInvoice?.()
   }
@@ -183,9 +360,17 @@ export default function InvoiceDetailScreen() {
       <Stack.Screen options={{
         title: invoice.invoice_number, headerTintColor: '#f97316',
         headerRight: () => (
-          <TouchableOpacity onPress={openEdit} hitSlop={10}>
-            <Feather name="edit-2" size={20} color="#f97316" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+            <TouchableOpacity onPress={emailInvoice} disabled={emailing} hitSlop={10} accessibilityLabel="Email invoice to customer">
+              {emailing ? <ActivityIndicator size="small" color="#f97316" /> : <Icon name="mail" size={20} color="#f97316" />}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={viewPdf} disabled={loadingPdf} hitSlop={10} accessibilityLabel="View invoice PDF">
+              {loadingPdf ? <ActivityIndicator size="small" color="#f97316" /> : <Icon name="file-text" size={20} color="#f97316" />}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openEdit} hitSlop={10} accessibilityLabel="Edit invoice">
+              <Icon name="edit-2" size={20} color="#f97316" />
+            </TouchableOpacity>
+          </View>
         ),
       }} />
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
@@ -233,41 +418,74 @@ export default function InvoiceDetailScreen() {
         </View>
 
         {/* Line items */}
-        {(lineItems ?? []).length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Line Items</Text>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Line Items</Text>
 
-            {(lineItems ?? []).map(item => (
-              <View key={item.id} style={styles.lineRow}>
-                <Text style={styles.lineDesc} numberOfLines={2}>{item.description}</Text>
-                <Text style={styles.lineQty}>{item.quantity} {item.unit}</Text>
-                <Text style={styles.lineTotal}>{formatAmount(item.line_total ?? 0)}</Text>
-              </View>
-            ))}
+          {(lineItems ?? []).length === 0 ? (
+            <Text style={{ fontSize: 13, color: '#9ca3af', paddingVertical: 6 }}>No line items yet</Text>
+          ) : (lineItems ?? []).map(item => (
+            <TouchableOpacity key={item.id} style={styles.lineRow} onLongPress={() => confirmDeleteLine(item)} activeOpacity={0.6}>
+              <Text style={styles.lineDesc} numberOfLines={2}>{item.description}</Text>
+              <Text style={styles.lineQty}>{item.quantity} {item.unit}</Text>
+              <Text style={styles.lineTotal}>{formatAmount(item.line_total ?? 0)}</Text>
+              <TouchableOpacity onPress={() => confirmDeleteLine(item)} hitSlop={8} accessibilityLabel={`Remove ${item.description}`}>
+                <Icon name="x" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
 
-            <View style={styles.totalsBox}>
+          {/* Add line */}
+          <View style={[styles.lineRow, { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingTop: 12 }]}>
+            <PriceListDescriptionInput
+              value={newLine.description}
+              items={priceItems ?? []}
+              onChangeText={v => setNewLine(f => ({ ...f, description: v, price_list_item_id: null }))}
+              onPick={pickPriceItem}
+              placeholder="Add a line item…"
+              inputStyle={styles.lineInput}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput style={[styles.lineInput, { flex: 1 }]} value={newLine.quantity} onChangeText={v => setNewLine(f => ({ ...f, quantity: v }))} placeholder="Qty" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" />
+              <TextInput style={[styles.lineInput, { flex: 1 }]} value={newLine.unit} onChangeText={v => setNewLine(f => ({ ...f, unit: v }))} placeholder="Unit" placeholderTextColor="#9ca3af" />
+              <TextInput style={[styles.lineInput, { flex: 1 }]} value={newLine.unit_price} onChangeText={v => setNewLine(f => ({ ...f, unit_price: v }))} placeholder="Price" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" />
+            </View>
+            <TouchableOpacity
+              style={[styles.saveBtn, { paddingVertical: 12 }, (!newLine.description.trim() || savingLine) && { opacity: 0.5 }]}
+              onPress={addLine}
+              disabled={!newLine.description.trim() || savingLine}
+            >
+              {savingLine ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Add line</Text>}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.totalsBox}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal</Text>
+              <Text style={styles.totalValue}>{formatAmount(invoice.subtotal ?? 0)}</Text>
+            </View>
+            {(invoice.discount_amount ?? 0) > 0 && (
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Subtotal</Text>
-                <Text style={styles.totalValue}>{formatAmount(invoice.subtotal ?? 0)}</Text>
+                <Text style={[styles.totalLabel, { color: '#16a34a' }]}>Discount</Text>
+                <Text style={[styles.totalValue, { color: '#16a34a' }]}>−{formatAmount(invoice.discount_amount ?? 0)}</Text>
               </View>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>GST</Text>
-                <Text style={styles.totalValue}>{formatAmount(invoice.gst_amount ?? 0)}</Text>
-              </View>
-              <View style={[styles.totalRow, styles.totalRowFinal]}>
-                <Text style={styles.totalLabelBold}>Total</Text>
-                <Text style={styles.totalValueBold}>{formatAmount(invoice.total ?? 0)}</Text>
-              </View>
+            )}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>GST</Text>
+              <Text style={styles.totalValue}>{formatAmount(invoice.gst_amount ?? 0)}</Text>
+            </View>
+            <View style={[styles.totalRow, styles.totalRowFinal]}>
+              <Text style={styles.totalLabelBold}>Total</Text>
+              <Text style={styles.totalValueBold}>{formatAmount(invoice.total ?? 0)}</Text>
             </View>
           </View>
-        )}
+        </View>
       </ScrollView>
 
       {/* Bottom actions */}
       <SafeAreaView edges={['bottom']} style={styles.bottomBar}>
         {isPaid ? (
           <View style={[styles.payBtn, styles.payBtnDisabled]}>
-            <Feather name="check-circle" size={18} color="#fff" />
+            <Icon name="check-circle" size={18} color="#fff" />
             <Text style={styles.payBtnText}>Paid</Text>
           </View>
         ) : (
@@ -277,7 +495,7 @@ export default function InvoiceDetailScreen() {
               onPress={() => router.push(`/pay-now?invoiceId=${id}` as never)}
               activeOpacity={0.85}
             >
-              <Feather name="credit-card" size={16} color="#fff" />
+              <Icon name="credit-card" size={16} color="#fff" />
               <Text style={styles.tapPayBtnText}>Tap to Pay</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -370,7 +588,63 @@ export default function InvoiceDetailScreen() {
               placeholderTextColor="#6b7280"
               multiline
             />
-            <Text style={{ fontSize: 12, color: '#6b7280' }}>Line items aren&apos;t editable from mobile yet — use the web app for that.</Text>
+            <Text style={[styles.metaLabel, { marginTop: 8 }]}>Discount</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                style={[styles.input, { flex: 1 }]}
+                value={editForm.discount_value}
+                onChangeText={v => setEditForm(f => ({ ...f, discount_value: v }))}
+                placeholder="0.00"
+                placeholderTextColor="#6b7280"
+                keyboardType="decimal-pad"
+              />
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {(['amount', 'percent'] as const).map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.methodChip, editForm.discount_type === t && styles.methodChipActive]}
+                    onPress={() => setEditForm(f => ({ ...f, discount_type: t }))}
+                    accessibilityRole="button"
+                    accessibilityLabel={t === 'amount' ? 'Dollar discount' : 'Percent discount'}
+                  >
+                    <Text style={[styles.methodChipText, editForm.discount_type === t && styles.methodChipTextActive]}>{t === 'amount' ? '$' : '%'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+              <Text style={[styles.metaLabel, { marginTop: 0 }]}>Repeat this invoice</Text>
+              <TouchableOpacity
+                onPress={() => setEditForm(f => ({ ...f, is_recurring: !f.is_recurring }))}
+                style={[styles.recurringToggle, editForm.is_recurring && styles.recurringToggleActive]}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: editForm.is_recurring }}
+              >
+                <View style={[styles.recurringThumb, editForm.is_recurring && styles.recurringThumbActive]} />
+              </TouchableOpacity>
+            </View>
+            {editForm.is_recurring && (
+              <>
+                <Text style={styles.metaLabel}>Every</Text>
+                <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                  {([['weekly', 'Week'], ['fortnightly', 'Fortnight'], ['monthly', 'Month'], ['quarterly', 'Quarter'], ['yearly', 'Year']] as const).map(([key, label]) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.methodChip, editForm.recurrence_rule === key && styles.methodChipActive]}
+                      onPress={() => setEditForm(f => ({ ...f, recurrence_rule: key }))}
+                    >
+                      <Text style={[styles.methodChipText, editForm.recurrence_rule === key && styles.methodChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.metaLabel}>Next issue (YYYY-MM-DD)</Text>
+                <TextInput style={styles.input} value={editForm.recurrence_next} onChangeText={v => setEditForm(f => ({ ...f, recurrence_next: v }))} placeholder="2026-08-01" placeholderTextColor="#6b7280" />
+                <Text style={styles.metaLabel}>End (optional, YYYY-MM-DD)</Text>
+                <TextInput style={styles.input} value={editForm.recurrence_end} onChangeText={v => setEditForm(f => ({ ...f, recurrence_end: v }))} placeholder="Leave blank for no end date" placeholderTextColor="#6b7280" />
+              </>
+            )}
+
             <TouchableOpacity style={[styles.saveBtn, savingEdit && { opacity: 0.5 }]} onPress={saveEdit} disabled={savingEdit} activeOpacity={0.85}>
               {savingEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
             </TouchableOpacity>
@@ -407,6 +681,11 @@ const styles = StyleSheet.create({
   lineDesc: { flex: 1, fontSize: 14, color: '#374151' },
   lineQty: { fontSize: 13, color: '#6b7280', minWidth: 56, textAlign: 'right' },
   lineTotal: { fontSize: 14, fontWeight: '600', color: '#111827', minWidth: 72, textAlign: 'right' },
+  lineInput: { backgroundColor: '#f9fafb', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#111827' },
+  recurringToggle: { width: 46, height: 28, borderRadius: 14, backgroundColor: '#e5e7eb', padding: 3, justifyContent: 'center' },
+  recurringToggleActive: { backgroundColor: '#f97316' },
+  recurringThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
+  recurringThumbActive: { alignSelf: 'flex-end' },
   totalsBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 10 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   totalRowFinal: { marginTop: 4, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8 },

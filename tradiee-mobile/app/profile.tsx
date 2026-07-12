@@ -4,7 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, Modal, SafeAreaView, FlatList,
 } from 'react-native'
 import { Stack, router } from 'expo-router'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { TIMEZONES, DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { useProfileRefresh } from '@/lib/profile-context'
@@ -93,7 +93,7 @@ export default function ProfileScreen() {
           <Text style={s.label}>Timezone</Text>
           <TouchableOpacity style={s.picker} onPress={() => setShowTzPicker(true)} activeOpacity={0.7}>
             <Text style={s.pickerVal}>{TIMEZONES.find(tz => tz.value === timezone)?.label ?? timezone}</Text>
-            <Feather name="chevron-down" size={16} color="#9ca3af" />
+            <Icon name="chevron-down" size={16} color="#9ca3af" />
           </TouchableOpacity>
           <Text style={s.hint}>Used for dates & times across web and mobile, on this account</Text>
         </View>
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>Select Timezone</Text>
             <TouchableOpacity onPress={() => setShowTzPicker(false)}>
-              <Feather name="x" size={22} color="#374151" />
+              <Icon name="x" size={22} color="#374151" />
             </TouchableOpacity>
           </View>
           <FlatList
@@ -142,7 +142,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={s.tzRowText}>{item.label}</Text>
-                {item.value === timezone && <Feather name="check" size={18} color="#f97316" />}
+                {item.value === timezone && <Icon name="check" size={18} color="#f97316" />}
               </TouchableOpacity>
             )}
           />

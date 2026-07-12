@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type RefObject } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
 } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { geocodeAddress } from '@/lib/geocode'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 
 type Customer = { id: string; name: string; phone: string | null }
 type Site = { id: string; label: string | null; address: string; lat: number | null; lng: number | null }
+type TeamMember = { id: string; full_name: string | null; email: string }
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
@@ -29,6 +31,8 @@ export default function NewJobScreen() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [assigneeId, setAssigneeId] = useState<string | null>(null)
   const [showNewCustomer, setShowNewCustomer] = useState(false)
   const [newCust, setNewCust] = useState({ name: '', phone: '', email: '', billing_address: '' })
   const [newCustFirstName, setNewCustFirstName] = useState('')
@@ -49,6 +53,16 @@ export default function NewJobScreen() {
   const [newSiteAddress, setNewSiteAddress] = useState('')
   const [newSiteCoords, setNewSiteCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null })
   const newCustValid = !!(newCust.name.trim() && newCust.phone.trim() && newCust.email.trim() && newCust.billing_address.trim())
+  const scrollRef = useRef<ScrollView>(null)
+  const titleRef = useRef<TextInput>(null)
+  const descriptionRef = useRef<TextInput>(null)
+  const firstNameRef = useRef<TextInput>(null)
+  const lastNameRef = useRef<TextInput>(null)
+  const phoneRef = useRef<TextInput>(null)
+  const emailRef = useRef<TextInput>(null)
+  const focusField = (ref: RefObject<TextInput | null>) => {
+    setTimeout(() => scrollFieldAboveKeyboard(scrollRef, ref, 12), 50)
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -58,13 +72,33 @@ export default function NewJobScreen() {
         .then(({ data: prof }) => {
           if (!prof) return
           setCompanyId(prof.company_id)
-          supabase.from('customers')
+          Promise.all([
+            supabase.from('customers')
             .select('id, name, phone')
             .eq('company_id', prof.company_id)
             .eq('is_active', true)
             .order('name')
-            .limit(300)
-            .then(({ data }) => setCustomers(data ?? []))
+              .limit(300),
+            supabase.from('profiles')
+              .select('id, full_name, email')
+              .eq('company_id', prof.company_id)
+              .eq('is_active', true)
+              .order('full_name'),
+            supabase.from('companies')
+              .select('default_job_assignee_id')
+              .eq('id', prof.company_id)
+              .single(),
+          ]).then(([customersRes, teamRes, companyRes]) => {
+            setCustomers(customersRes.data ?? [])
+            const team = (teamRes.data ?? []) as TeamMember[]
+            setTeamMembers(team)
+            const defaultAssignee = companyRes.data?.default_job_assignee_id as string | null | undefined
+            setAssigneeId(team.some(member => member.id === defaultAssignee)
+              ? defaultAssignee!
+              : team.length === 1
+                ? team[0].id
+                : null)
+          })
         })
     })
   }, [])
@@ -176,6 +210,7 @@ export default function NewJobScreen() {
         description: description.trim() || null,
         customer_id: customerId,
         site_id: jobSiteId,
+        assigned_to: assigneeId,
         status: 'unscheduled',
       }),
     })
@@ -190,19 +225,21 @@ export default function NewJobScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
       <Stack.Screen options={{ title: 'New Job', headerTintColor: '#f97316' }} />
-      <ScrollView style={s.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={s.container} contentContainerStyle={{ padding: 16, paddingBottom: 260 }} keyboardShouldPersistTaps="handled">
 
         <View style={s.field}>
           <Text style={s.label}>Job title *</Text>
           <TextInput
+            ref={titleRef}
             style={s.input}
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Replace hot water cylinder"
             placeholderTextColor="#6b7280"
             autoFocus
+            onFocus={() => focusField(titleRef)}
           />
         </View>
 
@@ -212,7 +249,7 @@ export default function NewJobScreen() {
             <Text style={customerId ? s.pickerVal : s.pickerPlaceholder}>
               {customerName || 'Select a customer…'}
             </Text>
-            <Feather name="chevron-down" size={16} color="#9ca3af" />
+            <Icon name="chevron-down" size={16} color="#9ca3af" />
           </TouchableOpacity>
           {customerId && (
             <TouchableOpacity onPress={() => { setCustomerId(null); setCustomerName('') }} style={{ marginTop: 6 }}>
@@ -232,7 +269,7 @@ export default function NewJobScreen() {
                 activeOpacity={0.7}
                 accessibilityLabel={`Job site: ${site.label ?? site.address}`}
               >
-                <Feather
+                <Icon
                   name={siteId === site.id ? 'check-circle' : 'circle'}
                   size={18}
                   color={siteId === site.id ? '#f97316' : '#9ca3af'}
@@ -255,9 +292,32 @@ export default function NewJobScreen() {
           </View>
         )}
 
+        {teamMembers.length > 1 && (
+          <View style={s.field}>
+            <Text style={s.label}>Assign job to</Text>
+            {teamMembers.map(member => (
+              <TouchableOpacity
+                key={member.id}
+                style={[s.siteRow, assigneeId === member.id && s.siteRowActive]}
+                onPress={() => setAssigneeId(assigneeId === member.id ? null : member.id)}
+                activeOpacity={0.7}
+                accessibilityLabel={`Assign job to ${member.full_name || member.email}`}
+              >
+                <Icon
+                  name={assigneeId === member.id ? 'check-circle' : 'circle'}
+                  size={18}
+                  color={assigneeId === member.id ? '#f97316' : '#9ca3af'}
+                />
+                <Text style={s.siteLabel}>{member.full_name || member.email}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         <View style={s.field}>
           <Text style={s.label}>Description</Text>
           <TextInput
+            ref={descriptionRef}
             style={[s.input, s.multiline]}
             value={description}
             onChangeText={setDescription}
@@ -266,6 +326,7 @@ export default function NewJobScreen() {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            onFocus={() => focusField(descriptionRef)}
           />
         </View>
 
@@ -294,33 +355,40 @@ export default function NewJobScreen() {
             </TouchableOpacity>
           </View>
 
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
           {showNewCustomer ? (
-            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 260, gap: 12 }} keyboardShouldPersistTaps="handled">
               <TextInput
+                ref={firstNameRef}
                 style={s.input}
                 value={newCustFirstName}
                 onChangeText={v => updateNewCustName(v, newCustLastName)}
                 placeholder="First name *"
                 placeholderTextColor="#6b7280"
                 autoFocus
+                onFocus={() => focusField(firstNameRef)}
               />
               <TextInput
+                ref={lastNameRef}
                 style={s.input}
                 value={newCustLastName}
                 onChangeText={v => updateNewCustName(newCustFirstName, v)}
                 placeholder="Last name"
                 placeholderTextColor="#6b7280"
+                onFocus={() => focusField(lastNameRef)}
               />
               <TextInput
+                ref={phoneRef}
                 style={s.input}
                 value={newCust.phone}
                 onChangeText={v => setNewCust(p => ({ ...p, phone: v }))}
                 placeholder="Phone number *"
                 placeholderTextColor="#6b7280"
                 keyboardType="phone-pad"
+                onFocus={() => focusField(phoneRef)}
               />
               <TextInput
+                ref={emailRef}
                 style={s.input}
                 value={newCust.email}
                 onChangeText={v => setNewCust(p => ({ ...p, email: v }))}
@@ -328,6 +396,7 @@ export default function NewJobScreen() {
                 placeholderTextColor="#6b7280"
                 keyboardType="email-address"
                 autoCapitalize="none"
+                onFocus={() => focusField(emailRef)}
               />
               <AddressAutocomplete
                 style={s.input}
@@ -351,7 +420,7 @@ export default function NewJobScreen() {
           ) : (
             <>
               <View style={s.searchBox}>
-                <Feather name="search" size={15} color="#9ca3af" />
+                <Icon name="search" size={15} color="#9ca3af" />
                 <TextInput
                   style={s.searchInput}
                   value={customerSearch}
@@ -372,7 +441,7 @@ export default function NewJobScreen() {
                     onPress={() => { setShowNewCustomer(true); setCustomerSearch('') }}
                     activeOpacity={0.7}
                   >
-                    <Feather name="plus-circle" size={16} color="#f97316" />
+                    <Icon name="plus-circle" size={16} color="#f97316" />
                     <Text style={[s.custName, { color: '#f97316' }]}>New customer</Text>
                   </TouchableOpacity>
                 }

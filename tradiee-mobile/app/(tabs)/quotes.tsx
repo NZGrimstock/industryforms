@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 
 const STATUS_COLOR: Record<string, string> = {
@@ -87,12 +87,12 @@ export default function QuotesScreen() {
       <View style={styles.header}>
         <Text style={styles.heading}>Quotes</Text>
         <TouchableOpacity onPress={() => router.push('/quotes/new')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Feather name="plus-circle" size={26} color="#f97316" />
+          <Icon name="plus-circle" size={26} color="#f97316" />
         </TouchableOpacity>
       </View>
 
       <View style={styles.searchBox}>
-        <Feather name="search" size={15} color="#9ca3af" />
+        <Icon name="search" size={15} color="#9ca3af" />
         <TextInput
           style={styles.searchInput}
           placeholder="Search quotes…"

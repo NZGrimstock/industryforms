@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 
 const bodySchema = z.object({
   fromLat: z.number().min(-90).max(90),
@@ -16,9 +16,9 @@ const bodySchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Accept either a web session cookie or the mobile app's Bearer token.
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })

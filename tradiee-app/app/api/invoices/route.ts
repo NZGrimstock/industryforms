@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       .from('job_materials')
       .select('description, quantity, unit, unit_price')
       .eq('job_id', job_id)
-      .order('rowid')
+      .order('created_at')
     lines = (materials ?? []).map(m => ({
       description: m.description,
       quantity: Number(m.quantity),

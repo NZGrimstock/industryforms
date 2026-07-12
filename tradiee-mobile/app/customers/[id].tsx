@@ -6,7 +6,7 @@ import {
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { geocodeAddress } from '@/lib/geocode'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
@@ -192,7 +192,7 @@ export default function CustomerDetailScreen() {
   const { data: sites, refresh: refreshSites } = useQuery<Site>(
     `SELECT id, label, address, access_notes
      FROM customer_sites WHERE customer_id = ?
-     ORDER BY rowid ASC`,
+     ORDER BY created_at ASC`,
     [id]
   )
 
@@ -226,7 +226,7 @@ export default function CustomerDetailScreen() {
         title: customer.name, headerTintColor: '#f97316',
         headerRight: () => (
           <TouchableOpacity onPress={openEdit} hitSlop={10}>
-            <Feather name="edit-2" size={20} color="#f97316" />
+            <Icon name="edit-2" size={20} color="#f97316" />
           </TouchableOpacity>
         ),
       }} />
@@ -279,7 +279,7 @@ export default function CustomerDetailScreen() {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Sites</Text>
             <TouchableOpacity style={styles.addSiteBtn} onPress={openAddSite} hitSlop={8} accessibilityLabel="Add site">
-              <Feather name="plus-circle" size={17} color="#f97316" />
+              <Icon name="plus-circle" size={17} color="#f97316" />
               <Text style={styles.addSiteText}>Add site</Text>
             </TouchableOpacity>
           </View>
@@ -295,10 +295,10 @@ export default function CustomerDetailScreen() {
                 )}
               </TouchableOpacity>
               <TouchableOpacity style={styles.siteIconBtn} onPress={() => openEditSite(site)} accessibilityLabel={`Edit site ${site.label ?? site.address}`}>
-                <Feather name="edit-2" size={17} color="#9ca3af" />
+                <Icon name="edit-2" size={17} color="#9ca3af" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.siteIconBtn} onPress={() => deleteSite(site)} accessibilityLabel={`Delete site ${site.label ?? site.address}`}>
-                <Feather name="trash-2" size={17} color="#ef4444" />
+                <Icon name="trash-2" size={17} color="#ef4444" />
               </TouchableOpacity>
             </View>
           ))}

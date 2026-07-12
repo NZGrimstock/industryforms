@@ -17,6 +17,9 @@ import { formatDate as formatDateTz, formatDateTime as formatDateTimeTz } from '
 import { colors, radius, shadow } from '@/lib/theme'
 import { tap as hapticTap, success as hapticSuccess } from '@/lib/haptics'
 import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
+import { Icon } from '@/lib/icons'
+import { TimeEntryEditModal, type EditableTimeEntry } from '@/components/timesheets/TimeEntryEditModal'
+import { ScheduleVisitModal } from '@/components/schedule/ScheduleVisitModal'
 
 // Self-contained HTML signature pad — draws to a canvas and posts a PNG data URL
 // (or 'EMPTY' if untouched) back to React Native.
@@ -84,6 +87,9 @@ type Note = { id: string; body: string; author_id: string | null; created_at: st
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number }
 type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string }
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
+type JobInvoice = { id: string; invoice_number: string; status: string; total: number; amount_paid: number; invoice_date: string | null }
+type TimeLogEntry = { id: string; job_id: string | null; started_at: string; ended_at: string | null; break_minutes: number; notes: string | null }
+type PickerJob = { id: string; job_number: string; title: string }
 type Photo = { id: string; storage_path: string; caption: string | null; taken_at: string }
 type FormField = { id: string; type: string; label: string; required: boolean; options?: string[] }
 type FormTemplate = { id: string; name: string; fields: string; is_active: number }
@@ -117,7 +123,8 @@ export default function JobDetailScreen() {
   const [fillAnswers, setFillAnswers] = useState<Record<string, string>>({})
   const [savingForm, setSavingForm] = useState(false)
   const [showInvoice, setShowInvoice] = useState(false)
-  const [invMode, setInvMode] = useState<'full' | 'deposit' | 'progress'>('full')
+  const [showScheduleVisit, setShowScheduleVisit] = useState(false)
+  const [invMode, setInvMode] = useState<'full' | 'actuals' | 'deposit' | 'progress'>('full')
   const [invPct, setInvPct] = useState('50')
   const [invAmount, setInvAmount] = useState('')
   const [invDepositUnit, setInvDepositUnit] = useState<'$' | '%'>('$')
@@ -153,7 +160,14 @@ export default function JobDetailScreen() {
 
   useFocusEffect(useCallback(() => {
     AsyncStorage.getItem(ACTIVE_JOB_KEY).then(raw => {
-      const aj: ActiveJob | null = raw ? JSON.parse(raw) : null
+      let aj: ActiveJob | null = null
+      if (raw) {
+        try {
+          aj = JSON.parse(raw)
+        } catch {
+          AsyncStorage.removeItem(ACTIVE_JOB_KEY)
+        }
+      }
       setActiveJob(aj?.jobId === id ? aj : null)
     })
   }, [id]))
@@ -289,7 +303,7 @@ export default function JobDetailScreen() {
   const { data: materials, refresh: refreshMaterials } = useQuery<Material>(
     `SELECT id, description, quantity, unit, unit_price
      FROM job_materials WHERE job_id = ?
-     ORDER BY rowid ASC`,
+     ORDER BY created_at ASC`,
     [id]
   )
 
@@ -297,6 +311,26 @@ export default function JobDetailScreen() {
     if (!materials?.length) return
     setOptimisticMaterials(prev => prev.filter(pending => !materials.some(m => m.id === pending.id)))
   }, [materials])
+
+  const { data: jobInvoices, refresh: refreshInvoices } = useQuery<JobInvoice>(
+    `SELECT id, invoice_number, status, total, amount_paid, invoice_date
+     FROM invoices WHERE job_id = ?
+     ORDER BY invoice_date ASC, created_at ASC`,
+    [id]
+  )
+
+  const { data: jobTimesheets, refresh: refreshTimesheets } = useQuery<TimeLogEntry>(
+    `SELECT id, job_id, started_at, ended_at, break_minutes, notes
+     FROM timesheets WHERE job_id = ?
+     ORDER BY started_at DESC`,
+    [id]
+  )
+  const [editingTimeEntry, setEditingTimeEntry] = useState<EditableTimeEntry | null>(null)
+
+  const { data: pickerJobs } = useQuery<PickerJob>(
+    `SELECT id, job_number, title FROM jobs WHERE company_id = ? ORDER BY job_number`,
+    [companyId ?? '']
+  )
 
   const { data: priceItems } = useQuery<PriceListLookupItem>(
     `SELECT id, name, unit, sell_price, cost_price, category
@@ -306,7 +340,7 @@ export default function JobDetailScreen() {
     [companyId ?? '']
   )
 
-  const { data: visits } = useQuery<Visit>(
+  const { data: visits, refresh: refreshVisits } = useQuery<Visit>(
     `SELECT id, scheduled_start, scheduled_end, status
      FROM job_visits WHERE job_id = ?
      ORDER BY scheduled_start ASC`,
@@ -411,9 +445,12 @@ export default function JobDetailScreen() {
       if (!signRes.ok) throw new Error((await signRes.json()).error ?? 'Could not get upload URL')
       const { url, key } = await signRes.json()
 
-      const resp = await fetch(asset.uri)
-      const blob = await resp.blob()
-      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob })
+      const fileBody = {
+        uri: asset.uri,
+        name: `job-photo.${ext}`,
+        type: contentType,
+      } as unknown as BodyInit
+      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: fileBody })
       if (!put.ok) throw new Error('Upload to storage failed')
 
       const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', session.user.id).single()
@@ -605,6 +642,8 @@ export default function JobDetailScreen() {
     const payload: Record<string, unknown> = { job_id: id, force }
     if (invMode === 'full') {
       payload.type = 'full'
+    } else if (invMode === 'actuals') {
+      payload.type = 'materials'
     } else if (invMode === 'progress') {
       const pct = parseFloat(invPct)
       if (!pct || pct <= 0 || pct > 100) { Alert.alert('Enter a percentage', 'Progress claims need a percentage between 1 and 100.'); return }
@@ -643,6 +682,7 @@ export default function JobDetailScreen() {
       if (!res.ok) throw new Error(inv.error ?? 'Could not create invoice')
       hapticSuccess()
       setShowInvoice(false)
+      refreshInvoices?.()
       router.push(`/invoices/${inv.id}`)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not create invoice')
@@ -657,6 +697,23 @@ export default function JobDetailScreen() {
     return [...synced, ...optimisticMaterials.filter(m => !syncedIds.has(m.id))]
   }, [materials, optimisticMaterials])
   const displayedMaterialsTotal = displayedMaterials.reduce((sum, m) => sum + m.quantity * m.unit_price, 0)
+
+  // Financials: what's been invoiced vs paid on this job. Void invoices don't count.
+  const liveInvoices = (jobInvoices ?? []).filter(i => i.status !== 'void')
+  const invoicedTotal = liveInvoices.reduce((s, i) => s + (i.total ?? 0), 0)
+  const paidTotal = liveInvoices.reduce((s, i) => s + (i.amount_paid ?? 0), 0)
+  const outstandingTotal = invoicedTotal - paidTotal
+
+  function formatTimeLogDuration(start: string, end: string | null, breakMin = 0) {
+    if (!end) return 'In progress'
+    const mins = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000) - breakMin)
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`
+  }
+  const totalLoggedHours = (jobTimesheets ?? []).reduce((sum, t) => {
+    if (!t.ended_at) return sum
+    const mins = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 60000 - (t.break_minutes ?? 0)
+    return sum + Math.max(0, mins) / 60
+  }, 0)
 
   if (isLoading) {
     return (
@@ -777,7 +834,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="On my way — send ETA to customer"
           >
-            <Text style={styles.qbtnIcon}>🚗</Text><Text style={[styles.qbtnLabel, { color: colors.brandDark }]}>On my way</Text>
+            <Icon name="car" size={19} color={colors.brandDark} /><Text style={[styles.qbtnLabel, { color: colors.brandDark }]}>On my way</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -787,7 +844,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Navigate to job site"
           >
-            <Text style={styles.qbtnIcon}>🧭</Text><Text style={styles.qbtnLabel}>Navigate</Text>
+            <Icon name="navigation" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Navigate</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -797,7 +854,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Call customer"
           >
-            <Text style={styles.qbtnIcon}>📞</Text><Text style={styles.qbtnLabel}>Call</Text>
+            <Icon name="phone" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Call</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -807,7 +864,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Message customer"
           >
-            <Text style={styles.qbtnIcon}>💬</Text><Text style={styles.qbtnLabel}>Message</Text>
+            <Icon name="message-square" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Message</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -816,7 +873,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add photo"
           >
-            <Text style={styles.qbtnIcon}>📷</Text><Text style={styles.qbtnLabel}>Photo</Text>
+            <Icon name="camera" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Photo</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -825,7 +882,7 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Jump to forms"
           >
-            <Text style={styles.qbtnIcon}>📋</Text><Text style={styles.qbtnLabel}>Forms</Text>
+            <Icon name="clipboard-list" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Forms</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.qbtn}
@@ -834,7 +891,16 @@ export default function JobDetailScreen() {
             accessibilityRole="button"
             accessibilityLabel="Invoice this job"
           >
-            <Text style={styles.qbtnIcon}>💰</Text><Text style={styles.qbtnLabel}>Invoice</Text>
+            <Icon name="dollar-sign" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Invoice</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.qbtn}
+            onPress={() => { hapticTap(); setShowScheduleVisit(true) }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Schedule a visit for this job"
+          >
+            <Icon name="calendar" size={19} color={colors.ink} /><Text style={styles.qbtnLabel}>Schedule</Text>
           </TouchableOpacity>
         </ScrollView>
 
@@ -922,6 +988,76 @@ export default function JobDetailScreen() {
           )}
         </View>
 
+        {/* Financials — invoices raised against this job, with balance owing */}
+        {liveInvoices.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Financials</Text>
+            {liveInvoices.map(inv => {
+              const owing = (inv.total ?? 0) - (inv.amount_paid ?? 0)
+              return (
+                <TouchableOpacity
+                  key={inv.id}
+                  style={styles.materialRow}
+                  onPress={() => router.push(`/invoices/${inv.id}`)}
+                  activeOpacity={0.6}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.materialDesc} numberOfLines={1}>{inv.invoice_number}</Text>
+                    <Text style={[styles.emptyText, { marginTop: 2 }]}>
+                      {inv.status.replace('_', ' ')}{owing > 0.01 ? ` · $${owing.toFixed(2)} owing` : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.materialPrice}>${(inv.total ?? 0).toFixed(2)}</Text>
+                </TouchableOpacity>
+              )
+            })}
+            <View style={styles.materialTotal}>
+              <Text style={styles.materialTotalLabel}>Invoiced</Text>
+              <Text style={styles.materialTotalValue}>${invoicedTotal.toFixed(2)}</Text>
+            </View>
+            <View style={styles.materialTotal}>
+              <Text style={styles.materialTotalLabel}>Paid</Text>
+              <Text style={[styles.materialTotalValue, { color: '#22c55e' }]}>${paidTotal.toFixed(2)}</Text>
+            </View>
+            {outstandingTotal > 0.01 && (
+              <View style={styles.materialTotal}>
+                <Text style={styles.materialTotalLabel}>Balance owing</Text>
+                <Text style={[styles.materialTotalValue, { color: '#ef4444' }]}>${outstandingTotal.toFixed(2)}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Time Logged — tap an entry to fix the job, times, or a missed stop */}
+        {(jobTimesheets ?? []).length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Time Logged</Text>
+            {jobTimesheets!.map(t => (
+              <TouchableOpacity
+                key={t.id}
+                style={styles.materialRow}
+                onPress={() => setEditingTimeEntry({
+                  id: t.id, job_id: t.job_id, job_number: job?.job_number ?? '', job_title: job?.title ?? '',
+                  started_at: t.started_at, ended_at: t.ended_at, break_minutes: t.break_minutes, notes: t.notes,
+                })}
+                activeOpacity={0.6}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.materialDesc} numberOfLines={1}>{formatDateTime(t.started_at)}</Text>
+                  {t.notes ? <Text style={[styles.emptyText, { marginTop: 2 }]} numberOfLines={1}>{t.notes}</Text> : null}
+                </View>
+                <Text style={[styles.materialPrice, !t.ended_at && { color: '#22c55e' }]}>
+                  {formatTimeLogDuration(t.started_at, t.ended_at, t.break_minutes)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <View style={styles.materialTotal}>
+              <Text style={styles.materialTotalLabel}>Total</Text>
+              <Text style={styles.materialTotalValue}>{totalLoggedHours.toFixed(1)}h</Text>
+            </View>
+          </View>
+        )}
+
         {/* Forms — the app's namesake, finally on the job screen */}
         <View style={styles.section} onLayout={e => setFormsY(e.nativeEvent.layout.y)}>
           <Text style={styles.sectionTitle}>Forms</Text>
@@ -930,7 +1066,7 @@ export default function JobDetailScreen() {
             const sub = submissionFor(t.id)
             return (
               <TouchableOpacity key={t.id} style={styles.formRow} onPress={() => openForm(t)} activeOpacity={0.6}>
-                <Text style={styles.formRowIcon}>📋</Text>
+                <Icon name="clipboard-list" size={16} color={colors.mut} />
                 <Text style={styles.formRowLabel} numberOfLines={1}>{t.name}</Text>
                 <View style={[styles.formStatus, sub ? styles.formStatusDone : styles.formStatusTodo]}>
                   <Text style={[styles.formStatusText, { color: sub ? '#15803d' : colors.brandDark }]}>{sub ? 'Submitted' : 'To do'}</Text>
@@ -1049,7 +1185,7 @@ export default function JobDetailScreen() {
           {togglingTimer
             ? <ActivityIndicator color="#fff" size="large" />
             : <>
-                <Text style={styles.bigTimerIcon}>{activeJob ? '⏹' : '▶'}</Text>
+                <Icon name={activeJob ? 'square' : 'play'} size={28} color="#fff" />
                 <View>
                   <Text style={styles.bigTimerLabel}>
                     {activeJob ? 'Stop Job Timer' : 'Start Job Timer'}
@@ -1119,7 +1255,7 @@ export default function JobDetailScreen() {
           <TouchableOpacity activeOpacity={1} style={styles.picker}>
             <Text style={styles.pickerTitle}>Invoice this job</Text>
             <View style={styles.invModeRow}>
-              {([['full', 'Full'], ['deposit', 'Deposit'], ['progress', 'Progress']] as const).map(([mode, label]) => (
+              {([['full', 'Full'], ['actuals', 'Actuals'], ['deposit', 'Deposit'], ['progress', 'Progress']] as const).map(([mode, label]) => (
                 <TouchableOpacity
                   key={mode}
                   style={[styles.invModeBtn, invMode === mode && styles.invModeBtnActive]}
@@ -1133,6 +1269,9 @@ export default function JobDetailScreen() {
             </View>
             {invMode === 'full' && (
               <Text style={styles.invHint}>Bills the full quoted amount — or the remaining balance if you've already invoiced a deposit or progress claim.</Text>
+            )}
+            {invMode === 'actuals' && (
+              <Text style={styles.invHint}>Bills exactly what's logged in Materials &amp; parts above — for jobs with no quote, or where you bill by actuals.</Text>
             )}
             {invMode === 'deposit' && (
               <>
@@ -1200,6 +1339,23 @@ export default function JobDetailScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <TimeEntryEditModal
+        entry={editingTimeEntry}
+        jobs={pickerJobs ?? []}
+        onClose={() => setEditingTimeEntry(null)}
+        onSaved={() => { setEditingTimeEntry(null); refreshTimesheets?.() }}
+      />
+
+      {job && (
+        <ScheduleVisitModal
+          visible={showScheduleVisit}
+          initialDate={new Date().toISOString().slice(0, 10)}
+          presetJob={{ id: job.id, job_number: job.job_number, title: job.title }}
+          onClose={() => setShowScheduleVisit(false)}
+          onSaved={() => { setShowScheduleVisit(false); refreshVisits?.(); refreshJob?.() }}
+        />
+      )}
 
       {/* Fill form modal */}
       <Modal visible={!!fillTemplate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => !savingForm && setFillTemplate(null)}>

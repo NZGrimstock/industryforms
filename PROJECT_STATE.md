@@ -1029,6 +1029,53 @@ next sprint scoped. Leading candidates:
   Still needs a real device drive/arrival smoke test because simulator/desktop
   builds cannot validate background GPS timing, OS battery policy, or
   site-radius behavior.
+  Update 2026-07-11: auto-started job timers now surface a global in-app popup
+  from the tab shell (`tradiee-mobile/app/(tabs)/_layout.tsx`) with the job
+  number/title, an X dismiss action, a View Job action, and a "Don't track this
+  time" action that removes or neutralises only that auto-created timesheet
+  instance while leaving GPS auto-tracking enabled. The existing job detail
+  screen still reads `TRADIEE_ACTIVE_JOB`, so the manual Stop Job Timer button
+  appears when an auto-started timer is running. Verified with mobile
+  `npx tsc --noEmit`.
+- ~~Vehicle logbook movement capture~~ — **fixed 2026-07-11 by Codex.**
+  Root cause: `tradiee-mobile/lib/location/tracking.ts` only processed the
+  last location in each Expo background batch and only started trips from a
+  reported GPS speed >= 15 km/h. Mobile OS background speed can be null/stale,
+  and batched points can contain the actual route before the final point, so
+  legitimate relocations could be missed. The task now processes every sample
+  in timestamp order, keeps a per-session last-location anchor, starts/updates
+  trips from distance deltas as well as speed, lowers the movement threshold,
+  improves update cadence/accuracy, clears stale anchors when tracking stops,
+  and uses the sample timestamp when closing a trip. Reality Checker found
+  and Codex fixed follow-up reliability gaps: failed Supabase/auth saves no
+  longer clear the active trip, stale/overlapping location batches are ignored
+  instead of double-counted, manual/scheduled stop uses a newer high-quality
+  end point or falls back to the trip's last movement point, and the Timesheets
+  stop toggle keeps tracking on with an alert if the active trip cannot be
+  saved. Verified with mobile `npx tsc --noEmit`; still needs a real device
+  drive/stop smoke test because desktop builds cannot validate OS background
+  GPS delivery.
+  Crash-fix follow-up 2026-07-11: after the APK crash report, Codex added
+  defensive parsing/removal for tracking/timer `AsyncStorage` values in the
+  tab shell, Home, Timesheets, Job detail, and tracking task, plus a safe
+  fallback icon component so a missing icon mapping cannot render `undefined`.
+  Rebuilt release APK successfully (`release-build-crashfix.log`, 12:20 NZT).
+- ~~Default job assignee + mobile creation/upload/icons fixes~~ — **done
+  2026-07-11 by Codex.** Added company-level
+  `default_job_assignee_id` (`20260710225010_default_job_assignee.sql`) and a
+  Settings selector. Web and mobile new-job creation now preselect the default,
+  prompt "Assign job to" when more than one active team member exists, and the
+  mobile `/api/jobs` path validates assignees against the caller's company
+  before inserting. Mobile new-job keyboard handling now scrolls focused fields
+  above the keyboard; job photo upload no longer constructs a Blob from
+  `ArrayBuffer`-backed data and instead PUTs the picked file body to the signed
+  storage URL; mobile icons now use `lucide-react-native`/`react-native-svg`
+  through `tradiee-mobile/lib/icons.tsx` instead of `@expo/vector-icons`.
+  Verified with mobile `npx tsc --noEmit`, web `npx tsc --noEmit`, web scoped
+  ESLint on changed files, and `npm run build` for the web app. Full web lint
+  still has unrelated pre-existing lint errors in terms/invoice/AI-assist code,
+  and Expo Doctor still reports existing app config/schema + quick-sqlite New
+  Architecture metadata issues.
 - ~~Customer portal login~~ — **code-complete 2026-07-07 by Codex.**
   Added `/portal/login` and `POST /api/portal/login` as a customer magic-link
   login: a customer enters their email, the API sends fresh

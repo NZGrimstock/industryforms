@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Stack, router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { getThread, markRead, markStatus, createCustomerFromUnmatched, sendSms, patchBooking } from '@/lib/notify'
 import { colors, radius, shadow } from '@/lib/theme'
@@ -253,7 +253,7 @@ export default function ThreadScreen() {
           headerShown: true,
           headerRight: () => (
             <TouchableOpacity onPress={close} accessibilityRole="button" accessibilityLabel="Close conversation">
-              <Feather name="check-circle" size={20} color={colors.brand} />
+              <Icon name="check-circle" size={20} color={colors.brand} />
             </TouchableOpacity>
           ),
         }} />
@@ -304,7 +304,7 @@ export default function ThreadScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Send reply"
               >
-                {sending ? <ActivityIndicator color="#fff" /> : <Feather name="send" size={18} color="#fff" />}
+                {sending ? <ActivityIndicator color="#fff" /> : <Icon name="send" size={18} color="#fff" />}
               </TouchableOpacity>
             </View>
           </>
@@ -314,10 +314,10 @@ export default function ThreadScreen() {
   )
 }
 
-function Row({ icon, text }: { icon: React.ComponentProps<typeof Feather>['name']; text: string }) {
+function Row({ icon, text }: { icon: IconName; text: string }) {
   return (
     <View style={s.row}>
-      <Feather name={icon} size={16} color={colors.mut} style={{ width: 20 }} />
+      <Icon name={icon} size={16} color={colors.mut} style={{ width: 20 }} />
       <Text style={s.rowText}>{text}</Text>
     </View>
   )

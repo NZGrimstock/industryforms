@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { router, Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 
 type Customer = {
@@ -72,7 +72,7 @@ export default function CustomersScreen() {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="New customer"
           >
-            <Feather name="plus-circle" size={26} color="#f97316" />
+            <Icon name="plus-circle" size={26} color="#f97316" />
           </TouchableOpacity>
         ),
       }} />
@@ -127,10 +127,16 @@ export default function CustomersScreen() {
                   <Text style={styles.contactPerson} numberOfLines={1}>{customer.contact_person}</Text>
                 )}
                 {customer.phone && (
-                  <Text style={styles.detail}>📞 {customer.phone}</Text>
+                  <View style={styles.detailRow}>
+                    <Icon name="phone" size={12} color="#6b7280" />
+                    <Text style={styles.detail}>{customer.phone}</Text>
+                  </View>
                 )}
                 {customer.email && (
-                  <Text style={styles.detail} numberOfLines={1}>✉️ {customer.email}</Text>
+                  <View style={styles.detailRow}>
+                    <Icon name="mail" size={12} color="#6b7280" />
+                    <Text style={styles.detail} numberOfLines={1}>{customer.email}</Text>
+                  </View>
                 )}
               </View>
             </TouchableOpacity>
@@ -158,7 +164,8 @@ const styles = StyleSheet.create({
   typeBadge: { borderRadius: 100, paddingHorizontal: 7, paddingVertical: 2 },
   typeText: { fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
   contactPerson: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
-  detail: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  detail: { fontSize: 12, color: '#6b7280', flexShrink: 1 },
   empty: { flex: 1, alignItems: 'center', paddingTop: 60 },
   emptyText: { color: '#6b7280', fontSize: 15 },
 })

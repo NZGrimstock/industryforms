@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { Stack } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import * as Notifications from 'expo-notifications'
 import { supabase } from '@/lib/supabase'
 
@@ -15,7 +15,7 @@ type ActivityItem = {
   title: string
   subtitle: string
   time: string
-  icon: React.ComponentProps<typeof Feather>['name']
+  icon: IconName
   color: string
 }
 
@@ -175,14 +175,14 @@ export default function NotificationsScreen() {
           }
           ListEmptyComponent={
             <View style={s.empty}>
-              <Feather name="bell" size={40} color="#d1d5db" />
+              <Icon name="bell" size={40} color="#d1d5db" />
               <Text style={s.emptyText}>No recent activity</Text>
             </View>
           }
           renderItem={({ item }) => (
             <View style={s.card}>
               <View style={[s.iconCircle, { backgroundColor: item.color + '20' }]}>
-                <Feather name={item.icon} size={18} color={item.color} />
+                <Icon name={item.icon} size={18} color={item.color} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.itemTitle}>{item.title}</Text>

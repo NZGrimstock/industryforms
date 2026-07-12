@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate } from '@/lib/datetime'
@@ -115,7 +115,7 @@ export default function EnquiriesScreen() {
           headerTintColor: '#f97316',
           headerRight: () => (
             <TouchableOpacity onPress={() => setShowAdd(true)} style={{ marginRight: 16 }}>
-              <Feather name="plus" size={24} color="#f97316" />
+              <Icon name="plus" size={24} color="#f97316" />
             </TouchableOpacity>
           ),
         }}

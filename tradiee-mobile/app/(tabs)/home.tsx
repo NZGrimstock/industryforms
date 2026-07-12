@@ -6,7 +6,7 @@ import {
 import { router, useFocusEffect } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { useTimezone } from '@/lib/profile-context'
 import { formatTime, formatDate } from '@/lib/datetime'
@@ -70,7 +70,14 @@ export default function HomeScreen() {
   const checkTimer = useCallback(async () => {
     const raw = await AsyncStorage.getItem(ACTIVE_JOB_KEY)
     if (!raw) { setActiveJob(null); return }
-    const aj: ActiveJob = JSON.parse(raw)
+    let aj: ActiveJob
+    try {
+      aj = JSON.parse(raw)
+    } catch {
+      await AsyncStorage.removeItem(ACTIVE_JOB_KEY)
+      setActiveJob(null)
+      return
+    }
     const mins = Math.round((Date.now() - new Date(aj.startedAt).getTime()) / 60000)
     setActiveJob({ ...aj, elapsed: `${Math.floor(mins / 60)}h ${mins % 60}m` })
   }, [])
@@ -220,7 +227,7 @@ export default function HomeScreen() {
               <Text style={s.timerLabel}>Job timer running</Text>
               <Text style={s.timerSub}>{activeJob.elapsed} elapsed — tap to stop</Text>
             </View>
-            <Feather name="chevron-right" size={18} color="#15803d" />
+            <Icon name="chevron-right" size={18} color="#15803d" />
           </TouchableOpacity>
         )}
 
@@ -257,11 +264,11 @@ export default function HomeScreen() {
         {/* Quick actions */}
         <View style={s.quickRow}>
           <TouchableOpacity style={s.quickBtn} onPress={() => router.push('/jobs/new')} activeOpacity={0.8}>
-            <Feather name="plus" size={17} color="#fff" />
+            <Icon name="plus" size={17} color="#fff" />
             <Text style={s.quickBtnText}>New Job</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.quickBtn, s.quickBtnGhost]} onPress={() => router.push('/quotes/new')} activeOpacity={0.8}>
-            <Feather name="plus" size={17} color="#f97316" />
+            <Icon name="plus" size={17} color="#f97316" />
             <Text style={[s.quickBtnText, { color: '#f97316' }]}>New Quote</Text>
           </TouchableOpacity>
         </View>
@@ -305,7 +312,7 @@ export default function HomeScreen() {
             {todos.map(t => (
               <View key={t.id} style={s.todoRow}>
                 <TouchableOpacity onPress={() => completeTodo(t.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Feather name="square" size={20} color="#d1d5db" />
+                  <Icon name="square" size={20} color="#d1d5db" />
                 </TouchableOpacity>
                 <Text style={s.todoTitle} numberOfLines={1}>{t.title}</Text>
                 <View style={[s.prioBadge, { backgroundColor: (PRIORITY_COLOR[t.priority] ?? '#9ca3af') + '20' }]}>

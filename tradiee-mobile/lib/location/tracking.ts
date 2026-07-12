@@ -5,9 +5,13 @@ import { createClient } from '@supabase/supabase-js'
 
 export const LOCATION_TASK = 'TRADIEE_LOCATION_TRACKING'
 
-const SPEED_START_MS   = 15 / 3.6   // 15 km/h — start a trip
-const SPEED_STOP_MS    =  4 / 3.6   //  4 km/h — considered stopped
-const STOP_DURATION_MS = 5 * 60 * 1000  // 5 min stationary → end trip (avoids traffic lights)
+const SPEED_START_MS   = 5 / 3.6
+const SPEED_STOP_MS    = 2 / 3.6
+const STOP_DURATION_MS = 3 * 60 * 1000
+const MIN_ACCURACY_M = 100
+const MAX_DEGRADED_ACCURACY_M = 500
+const MIN_START_DISTANCE_KM = 0.05
+const MIN_MOVING_DISTANCE_KM = 0.025
 const GEOFENCE_RADIUS_KM = 0.15
 const GEOFENCE_COOLDOWN_MS = 2 * 60 * 60 * 1000
 
@@ -28,7 +32,13 @@ export function isInTradingHours(hours: TradingHours, now = new Date()): boolean
 export async function loadTradingHours(): Promise<TradingHours> {
   const raw = await AsyncStorage.getItem(TRADING_HOURS_KEY)
   if (!raw) return DEFAULT_TRADING_HOURS
-  const parsed = JSON.parse(raw)
+  let parsed: any
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    await AsyncStorage.removeItem(TRADING_HOURS_KEY)
+    return DEFAULT_TRADING_HOURS
+  }
   // Back-compat: schedules saved before the 30-min picker stored whole-hour startHour/endHour.
   if (typeof parsed.startHour === 'number') {
     return { enabled: parsed.enabled, startMin: parsed.startHour * 60, endMin: parsed.endHour * 60, days: parsed.days }
@@ -37,6 +47,7 @@ export async function loadTradingHours(): Promise<TradingHours> {
 }
 
 const STORAGE_KEY     = 'TRADIEE_ACTIVE_TRIP'
+const LAST_LOCATION_KEY = 'TRADIEE_LAST_TRACKED_LOCATION'
 const SESSION_KEY     = 'TRADIEE_SESSION'          // mirrored by supabase.ts for BG task access
 const ACTIVE_JOB_KEY  = 'TRADIEE_ACTIVE_JOB'
 const GEOFENCE_COOLDOWN_KEY = 'TRADIEE_GEOFENCE_LAST_CHECKIN'
@@ -57,6 +68,21 @@ type TripState = {
   lastLng: number
   lastMovingAt: string
   distanceKm: number
+}
+
+type LastLocationState = {
+  lat: number
+  lng: number
+  time: string
+  accuracy: number | null
+}
+
+type LocationSample = {
+  lat: number
+  lng: number
+  time: string
+  accuracy: number | null
+  speedMs: number | null
 }
 
 export type TripFollowup = {
@@ -113,7 +139,13 @@ function uuid() {
 
 async function getState(): Promise<TripState | null> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  return raw ? JSON.parse(raw) : null
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    await AsyncStorage.removeItem(STORAGE_KEY)
+    return null
+  }
 }
 
 async function setState(state: TripState | null) {
@@ -121,12 +153,43 @@ async function setState(state: TripState | null) {
   else await AsyncStorage.removeItem(STORAGE_KEY)
 }
 
+async function getLastLocation(): Promise<LastLocationState | null> {
+  const raw = await AsyncStorage.getItem(LAST_LOCATION_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    await AsyncStorage.removeItem(LAST_LOCATION_KEY)
+    return null
+  }
+}
+
+async function setLastLocation(sample: LocationSample) {
+  await AsyncStorage.setItem(LAST_LOCATION_KEY, JSON.stringify({
+    lat: sample.lat,
+    lng: sample.lng,
+    time: sample.time,
+    accuracy: sample.accuracy,
+  }))
+}
+
+async function clearLastLocation() {
+  await AsyncStorage.removeItem(LAST_LOCATION_KEY)
+}
+
 async function getSupabase() {
   const url = process.env.EXPO_PUBLIC_SUPABASE_URL!
   const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
   // Session is mirrored here by supabase.ts; SecureStore is unavailable in BG tasks
   const stored = await AsyncStorage.getItem(SESSION_KEY)
-  const session = stored ? JSON.parse(stored) : null
+  let session = null
+  if (stored) {
+    try {
+      session = JSON.parse(stored)
+    } catch {
+      await AsyncStorage.removeItem(SESSION_KEY)
+    }
+  }
   const client = createClient(url, key, { auth: { persistSession: false } })
   if (session?.access_token) {
     await client.auth.setSession(session)
@@ -134,25 +197,24 @@ async function getSupabase() {
   return client
 }
 
-async function endTrip(state: TripState, endLat: number, endLng: number) {
+async function endTrip(state: TripState, endLat: number, endLng: number, endTime = new Date().toISOString()): Promise<boolean> {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  if (!user) return false
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('company_id')
     .eq('id', user.id)
     .single()
+  if (!profile?.company_id) return false
 
   const finalDistance = Math.round(
     (state.distanceKm + haversineKm(state.lastLat, state.lastLng, endLat, endLng)) * 100
   ) / 100
-  const endTime = new Date().toISOString()
-
-  await supabase.from('travel_logs').insert({
+  const { error } = await supabase.from('travel_logs').insert({
     id:          state.tripId,
-    company_id:  profile?.company_id,
+    company_id:  profile.company_id,
     profile_id:  user.id,
     started_at:  state.startTime,
     ended_at:    endTime,
@@ -163,6 +225,10 @@ async function endTrip(state: TripState, endLat: number, endLng: number) {
     distance_km: finalDistance,
     is_auto:     true,
   })
+  if (error) {
+    console.error('[tracking] failed to save travel log', error)
+    return false
+  }
 
   // Signal the timesheets tab to prompt the user to start a job timer
   const followup: TripFollowup = {
@@ -172,6 +238,110 @@ async function endTrip(state: TripState, endLat: number, endLng: number) {
     distanceKm:  finalDistance,
   }
   await AsyncStorage.setItem(TRIP_FOLLOWUP_KEY, JSON.stringify(followup))
+  return true
+}
+
+function sampleFromLocation(loc: Location.LocationObject): LocationSample | null {
+  const { latitude: lat, longitude: lng, speed, accuracy } = loc.coords
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  const timestamp = Number.isFinite(loc.timestamp) ? loc.timestamp : Date.now()
+  return {
+    lat,
+    lng,
+    time: new Date(timestamp).toISOString(),
+    accuracy: typeof accuracy === 'number' && Number.isFinite(accuracy) ? accuracy : null,
+    speedMs: typeof speed === 'number' && Number.isFinite(speed) && speed >= 0 ? speed : null,
+  }
+}
+
+function isAccurateEnough(sample: LocationSample) {
+  return sample.accuracy == null || sample.accuracy <= MAX_DEGRADED_ACCURACY_M
+}
+
+function isHighQualitySample(sample: LocationSample) {
+  return sample.accuracy == null || sample.accuracy <= MIN_ACCURACY_M
+}
+
+function isMovingSample(sample: LocationSample, previous: LastLocationState | null, distanceFromPreviousKm: number) {
+  if (sample.speedMs != null && sample.speedMs >= SPEED_START_MS) return true
+  if (!previous) return false
+
+  const elapsedSeconds = Math.max(1, (new Date(sample.time).getTime() - new Date(previous.time).getTime()) / 1000)
+  const derivedSpeedMs = distanceFromPreviousKm * 1000 / elapsedSeconds
+  return distanceFromPreviousKm >= MIN_START_DISTANCE_KM || derivedSpeedMs >= SPEED_START_MS
+}
+
+async function processLocationSample(sample: LocationSample) {
+  if (!isAccurateEnough(sample)) return
+
+  await maybeAutoArrive(sample.lat, sample.lng)
+
+  const previous = await getLastLocation()
+  if (previous && new Date(sample.time).getTime() <= new Date(previous.time).getTime()) return
+
+  const state = await getState()
+  const distanceFromPreviousKm = previous ? haversineKm(previous.lat, previous.lng, sample.lat, sample.lng) : 0
+  const moving = isMovingSample(sample, previous, distanceFromPreviousKm)
+  const stopped = (sample.speedMs ?? 0) < SPEED_STOP_MS && distanceFromPreviousKm < MIN_MOVING_DISTANCE_KM
+
+  if (moving) {
+    if (!state) {
+      await setState({
+        tripId:       uuid(),
+        startLat:     previous?.lat ?? sample.lat,
+        startLng:     previous?.lng ?? sample.lng,
+        startTime:    previous?.time ?? sample.time,
+        lastLat:      sample.lat,
+        lastLng:      sample.lng,
+        lastMovingAt: sample.time,
+        distanceKm:   distanceFromPreviousKm,
+      })
+    } else {
+      await setState({
+        ...state,
+        lastLat: sample.lat,
+        lastLng: sample.lng,
+        lastMovingAt: sample.time,
+        distanceKm: state.distanceKm + distanceFromPreviousKm,
+      })
+    }
+  } else if (stopped && state) {
+    const stoppedMs = new Date(sample.time).getTime() - new Date(state.lastMovingAt).getTime()
+    if (stoppedMs >= STOP_DURATION_MS) {
+      const saved = await endTrip(state, sample.lat, sample.lng, sample.time)
+      if (saved) {
+        await setState(null)
+        await maybeAutoCheckIn(sample.lat, sample.lng, sample.time)
+      }
+    }
+  } else if (!state) {
+    await maybeAutoCheckIn(sample.lat, sample.lng, sample.time)
+  }
+
+  await setLastLocation(sample)
+}
+
+function endSampleFromState(state: TripState): LocationSample {
+  return {
+    lat: state.lastLat,
+    lng: state.lastLng,
+    time: state.lastMovingAt,
+    accuracy: null,
+    speedMs: 0,
+  }
+}
+
+function shouldUseStopLocation(loc: Location.LocationObject, state: TripState) {
+  const sample = sampleFromLocation(loc)
+  if (!sample || !isHighQualitySample(sample)) return null
+  return new Date(sample.time).getTime() >= new Date(state.lastMovingAt).getTime() ? sample : null
+}
+
+function endSampleFromSamples(state: TripState, samples: LocationSample[]) {
+  const lastMovingAt = new Date(state.lastMovingAt).getTime()
+  return [...samples]
+    .reverse()
+    .find(sample => isHighQualitySample(sample) && new Date(sample.time).getTime() >= lastMovingAt) ?? endSampleFromState(state)
 }
 
 function siteCoords(job: SiteJob): { lat: number; lng: number } | null {
@@ -200,7 +370,13 @@ function matchingVisit(visits: Visit[], jobId: string, userId: string, nowMs: nu
 async function recentlyCheckedIn(jobId: string) {
   const raw = await AsyncStorage.getItem(GEOFENCE_COOLDOWN_KEY)
   if (!raw) return false
-  const last = JSON.parse(raw) as { jobId: string; checkedInAt: string }
+  let last: { jobId: string; checkedInAt: string }
+  try {
+    last = JSON.parse(raw)
+  } catch {
+    await AsyncStorage.removeItem(GEOFENCE_COOLDOWN_KEY)
+    return false
+  }
   return last.jobId === jobId && Date.now() - new Date(last.checkedInAt).getTime() < GEOFENCE_COOLDOWN_MS
 }
 
@@ -364,7 +540,13 @@ async function maybeAutoCheckIn(lat: number, lng: number, nowIso: string) {
 async function maybeAutoArrive(lat: number, lng: number) {
   const raw = await AsyncStorage.getItem(ACTIVE_ETA_KEY)
   if (!raw) return
-  const eta = JSON.parse(raw) as ActiveEta
+  let eta: ActiveEta
+  try {
+    eta = JSON.parse(raw)
+  } catch {
+    await AsyncStorage.removeItem(ACTIVE_ETA_KEY)
+    return
+  }
 
   const supabase = await getSupabase()
   const { data: job } = await supabase
@@ -397,11 +579,13 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   const locations: Location.LocationObject[] = data?.locations ?? []
   if (!locations.length) return
 
-  const loc = locations[locations.length - 1]
-  const { latitude: lat, longitude: lng, speed } = loc.coords
-  const speedMs = speed ?? 0
+  const samples = locations
+    .map(sampleFromLocation)
+    .filter((sample): sample is LocationSample => !!sample)
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+  if (!samples.length) return
+
   const nowDate = new Date()
-  const now = nowDate.toISOString()
 
   // Schedule enforcement lives here (not just in the UI) so tracking stops
   // itself the moment the window ends, even if the app is never reopened —
@@ -411,42 +595,20 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
   if (hours.enabled && !isInTradingHours(hours, nowDate)) {
     const state = await getState()
     if (state) {
-      await endTrip(state, lat, lng)
-      await setState(null)
+      const endSample = endSampleFromSamples(state, samples)
+      const saved = await endTrip(state, endSample.lat, endSample.lng, endSample.time)
+      if (saved) {
+        await setState(null)
+        await clearLastLocation()
+      }
     }
-    await Location.stopLocationUpdatesAsync(LOCATION_TASK)
+    const pendingState = await getState()
+    if (!pendingState) await Location.stopLocationUpdatesAsync(LOCATION_TASK)
     return
   }
 
-  await maybeAutoArrive(lat, lng)
-
-  const state = await getState()
-
-  if (speedMs >= SPEED_START_MS) {
-    if (!state) {
-      await setState({
-        tripId:       uuid(),
-        startLat:     lat,
-        startLng:     lng,
-        startTime:    now,
-        lastLat:      lat,
-        lastLng:      lng,
-        lastMovingAt: now,
-        distanceKm:   0,
-      })
-    } else {
-      const added = haversineKm(state.lastLat, state.lastLng, lat, lng)
-      await setState({ ...state, lastLat: lat, lastLng: lng, lastMovingAt: now, distanceKm: state.distanceKm + added })
-    }
-  } else if (speedMs < SPEED_STOP_MS && state) {
-    const stoppedMs = Date.now() - new Date(state.lastMovingAt).getTime()
-    if (stoppedMs >= STOP_DURATION_MS) {
-      await endTrip(state, lat, lng)
-      await setState(null)
-      await maybeAutoCheckIn(lat, lng, now)
-    }
-  } else if (speedMs < SPEED_STOP_MS && !state && (loc.coords.accuracy ?? 999) <= 100) {
-    await maybeAutoCheckIn(lat, lng, now)
+  for (const sample of samples) {
+    await processLocationSample(sample)
   }
 })
 
@@ -462,10 +624,16 @@ export async function requestPermissions(): Promise<boolean> {
 export async function startTracking() {
   const already = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
   if (already) return
+  await clearLastLocation()
+  const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null)
+  const currentSample = current ? sampleFromLocation(current) : null
+  if (currentSample && isAccurateEnough(currentSample)) {
+    await setLastLocation(currentSample)
+  }
   await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-    accuracy: Location.Accuracy.Balanced,
-    distanceInterval: 50,         // update every 50 m
-    timeInterval: 30_000,         // or every 30 s
+    accuracy: Location.Accuracy.High,
+    distanceInterval: 25,         // catch short relocations for the vehicle logbook
+    timeInterval: 15_000,         // or every 15 s
     foregroundService: {
       notificationTitle: 'IndustryForms',
       notificationBody:  'Auto-tracking travel and site check-ins',
@@ -476,16 +644,20 @@ export async function startTracking() {
   })
 }
 
-export async function stopTracking() {
+export async function stopTracking(): Promise<boolean> {
   const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false)
-  if (!running) return
+  if (!running) return true
   const state = await getState()
   if (state) {
     const loc = await Location.getLastKnownPositionAsync()
-    if (loc) await endTrip(state, loc.coords.latitude, loc.coords.longitude)
+    const endSample = loc ? shouldUseStopLocation(loc, state) ?? endSampleFromState(state) : endSampleFromState(state)
+    const saved = await endTrip(state, endSample.lat, endSample.lng, endSample.time)
+    if (!saved) return false
     await setState(null)
   }
+  await clearLastLocation()
   await Location.stopLocationUpdatesAsync(LOCATION_TASK)
+  return true
 }
 
 export async function isTracking(): Promise<boolean> {

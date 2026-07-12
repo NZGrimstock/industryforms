@@ -23,6 +23,7 @@ import { InviteSubcontractorModal } from '@/components/jobs/InviteSubcontractorM
 import { SubcontractorStatus } from '@/components/jobs/SubcontractorStatus'
 import { JobAssigneesCard } from './assignees'
 import { JobSiteSelector } from '@/components/jobs/job-site-selector'
+import { TimesheetTable } from '@/components/timesheets/timesheet-table'
 import Link from 'next/link'
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +49,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -70,6 +71,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     job.quote_id
       ? supabase.from('quote_line_items').select('quantity, unit_price, unit_cost, description, unit, type, price_list_item_id, sort_order').eq('quote_id', job.quote_id).order('sort_order')
       : Promise.resolve({ data: null }),
+    supabase.from('jobs').select('id, job_number, title').eq('company_id', profile!.company_id).order('job_number'),
   ])
 
   const customerSites = customerSitesRes.data
@@ -221,6 +223,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     },
     timezone: (profile as { timezone?: string | null } | null)?.timezone ?? DEFAULT_TIMEZONE,
   }
+  const timezone = sheetData.timezone
 
   return (
     <>
@@ -356,28 +359,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             {(timesheetsRes.data ?? []).length === 0 ? (
               <p className="text-sm text-gray-400 px-6 py-4">No time logged</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-400">
-                    <th className="text-left px-6 py-2 font-medium">Who</th>
-                    <th className="text-left px-6 py-2 font-medium">Start</th>
-                    <th className="text-left px-6 py-2 font-medium">End</th>
-                    <th className="text-right px-6 py-2 font-medium">Rate</th>
-                    <th className="text-left px-6 py-2 font-medium">Billable</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {(timesheetsRes.data ?? []).map(t => (
-                    <tr key={t.id}>
-                      <td className="px-6 py-2.5 text-gray-700">{(t.profiles as {full_name: string} | null)?.full_name ?? '—'}</td>
-                      <td className="px-6 py-2.5 text-gray-500">{formatDateTime(t.started_at)}</td>
-                      <td className="px-6 py-2.5 text-gray-500">{t.ended_at ? formatDateTime(t.ended_at) : <span className="text-yellow-500">Running</span>}</td>
-                      <td className="px-6 py-2.5 text-right text-gray-600">{t.bill_rate ? `${formatCurrency(t.bill_rate)}/hr` : '—'}</td>
-                      <td className="px-6 py-2.5">{t.is_billable ? <span className="text-green-600 text-xs">Yes</span> : <span className="text-gray-400 text-xs">No</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <TimesheetTable
+                timesheets={timesheetsRes.data ?? []}
+                jobs={jobsForPickerRes.data ?? []}
+                timezone={timezone}
+                showJob={false}
+              />
             )}
           </CardContent>
         </Card>

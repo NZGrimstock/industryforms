@@ -4,6 +4,7 @@ import { Stack, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { getConversations, type ConversationSummary } from '@/lib/notify'
 import { colors, radius, shadow } from '@/lib/theme'
+import { Icon, type IconName } from '@/lib/icons'
 
 const POLL_MS = 15000
 
@@ -18,12 +19,12 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'closed', label: 'Closed' },
 ]
 
-const SOURCE_ICON: Record<ConversationSummary['source'], string> = {
-  sms: '\u{1F4AC}',
-  email: '✉️',
-  booking: '\u{1F4C5}',
-  enquiry: '✉️',
-  web_lead: '✉️',
+const SOURCE_ICON: Record<ConversationSummary['source'], IconName> = {
+  sms: 'message-square',
+  email: 'mail',
+  booking: 'calendar',
+  enquiry: 'mail',
+  web_lead: 'mail',
 }
 
 const STATUS_PILL: Record<ConversationSummary['status'], { bg: string; fg: string; label: string }> = {
@@ -155,9 +156,10 @@ export default function InboxScreen() {
                     <Text style={s.name} numberOfLines={1}>{item.displayName}</Text>
                     <Text style={s.time}>{timeAgo(item.lastActivity)}</Text>
                   </View>
-                  <Text style={s.preview} numberOfLines={1}>
-                    <Text style={s.chIcon}>{SOURCE_ICON[item.source]} </Text>{item.preview}
-                  </Text>
+                  <View style={s.previewRow}>
+                    <Icon name={SOURCE_ICON[item.source]} size={12} color={colors.mut} />
+                    <Text style={s.preview} numberOfLines={1}>{item.preview}</Text>
+                  </View>
                   <View style={[s.pill, { backgroundColor: pill.bg, alignSelf: 'flex-start' }]}>
                     <Text style={[s.pillText, { color: pill.fg }]}>{pill.label}</Text>
                   </View>
@@ -192,8 +194,8 @@ const s = StyleSheet.create({
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   name: { fontWeight: '700', fontSize: 15, color: colors.ink, flexShrink: 1 },
   time: { fontSize: 11, color: colors.mut },
-  preview: { fontSize: 13, color: colors.sub, marginTop: 2 },
-  chIcon: { fontSize: 11 },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  preview: { flex: 1, fontSize: 13, color: colors.sub },
   pill: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, marginTop: 5 },
   pillText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   unreadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.brand },

@@ -3,7 +3,7 @@ import { View, Text, FlatList, RefreshControl, StyleSheet, ActivityIndicator } f
 import { Stack } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
 
@@ -81,7 +81,7 @@ export default function ProjectsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Feather name="folder" size={28} color="#d1d5db" />
+              <Icon name="folder" size={28} color="#d1d5db" />
               <Text style={styles.emptyText}>No projects yet</Text>
             </View>
           }
@@ -101,7 +101,7 @@ export default function ProjectsScreen() {
                   </View>
                 </View>
                 <View style={styles.stageRow}>
-                  <Feather name="layers" size={16} color="#f97316" />
+                  <Icon name="layers" size={16} color="#f97316" />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.stageLabel}>Current stage</Text>
                     <Text style={styles.stageName}>{item.current_stage_name ?? 'No stages set'}</Text>

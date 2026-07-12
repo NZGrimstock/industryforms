@@ -24,15 +24,17 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
-  const [customersRes, priceItemsRes, jobStatuses] = await Promise.all([
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct, default_job_assignee_id)').eq('id', user!.id).single()
+  const [customersRes, priceItemsRes, jobStatuses, teamRes] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     getJobStatuses(supabase, profile!.company_id),
+    supabase.from('profiles').select('id, full_name, email').eq('company_id', profile!.company_id).eq('is_active', true).order('full_name'),
   ])
   const customers = customersRes.data
   const priceItems = priceItemsRes.data ?? []
-  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
+  const teamMembers = teamRes.data ?? []
+  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number; default_job_assignee_id?: string | null } | null
   const terminalKeys = jobStatuses.filter(s => s.is_terminal).map(s => s.key)
 
   // Board needs all active statuses; list can be filtered.
@@ -106,7 +108,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </Link>
               ))}
             </div>
-            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
+            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
           </div>
         </div>
 
@@ -121,7 +123,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         {view === 'list' && (
           !jobs?.length ? (
             <EmptyState icon={Briefcase} title="No jobs" description="Create a job to start tracking work" action={
-              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} />
+              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} />
             } />
           ) : (
             <Card className="overflow-hidden">

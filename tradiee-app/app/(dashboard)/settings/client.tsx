@@ -77,6 +77,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
     invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
     quote_footer: (company as Company & { quote_footer?: string }).quote_footer ?? '',
+    default_job_assignee_id: company.default_job_assignee_id ?? '',
     review_link: company.review_link ?? '',
     review_request_enabled: company.review_request_enabled ?? true,
     standard_markup_enabled: (company as Company & { standard_markup_enabled?: boolean }).standard_markup_enabled ?? false,
@@ -106,6 +107,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const [editForm, setEditForm] = useState({
     role: 'staff', hourly_bill_rate: '', hourly_cost_rate: '', is_active: true, vehicle_registration: '', job_title: '',
   })
+  const activeTeam = team.filter(member => member.is_active !== false)
 
   function setC(k: string, v: string) { setCompanyForm(f => ({ ...f, [k]: v })) }
   function setP(k: keyof typeof profileForm, v: string) { setProfileForm(f => ({ ...f, [k]: v })) }
@@ -196,6 +198,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       default_terms: companyForm.default_terms || null,
       standard_markup_enabled: companyForm.standard_markup_enabled,
       standard_markup_pct: parseFloat(companyForm.standard_markup_pct) || 0,
+      default_job_assignee_id: companyForm.default_job_assignee_id || null,
     }).eq('id', company.id)
     if (error) toast(error.message, 'error')
     else { toast('Company settings saved'); router.refresh() }
@@ -513,6 +516,21 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                   <Label>Standard markup (%)</Label>
                   <Input type="number" min="0" step="0.01" value={companyForm.standard_markup_pct} onChange={e => setC('standard_markup_pct', e.target.value)} />
                 </div>
+              </div>
+              <div>
+                <Label>Default job assignee</Label>
+                <Select
+                  value={companyForm.default_job_assignee_id}
+                  onChange={e => setC('default_job_assignee_id', e.target.value)}
+                  options={[
+                    { value: '', label: 'No default' },
+                    ...activeTeam.map(member => ({
+                      value: member.id,
+                      label: member.full_name || member.email,
+                    })),
+                  ]}
+                />
+                <p className="text-xs text-gray-400 mt-1">Pre-selected when creating a job. You can still choose someone else on the job.</p>
               </div>
               <div>
                 <Label>Document number prefixes</Label>
@@ -1172,7 +1190,17 @@ function BillingTab({ company }: { company: Company }) {
     setLoading('portal')
     const res = await fetch('/api/stripe/portal', { method: 'POST' })
     const data = await res.json()
-    if (!res.ok) { toast(data.error ?? 'Failed to open billing portal', 'error'); setLoading(''); return }
+    if (!res.ok) {
+      // No Stripe customer yet — the company has never completed a paid checkout
+      // (trial / test-mode / exempt). Point them at the plan cards below instead
+      // of the opaque "No billing account found".
+      const msg = data.error === 'No billing account found'
+        ? 'No paid subscription yet — choose a plan below to set up billing.'
+        : (data.error ?? 'Failed to open billing portal')
+      toast(msg, 'error')
+      setLoading('')
+      return
+    }
     window.location.assign(data.url)
   }
 
@@ -1239,7 +1267,14 @@ function BillingTab({ company }: { company: Company }) {
               )}
             </div>
             {currentPlan !== 'trial' && (
-              <Button variant="outline" size="sm" loading={loading === 'portal'} onClick={openPortal}>Manage billing</Button>
+              <Button
+                size="sm"
+                loading={loading === 'portal'}
+                onClick={openPortal}
+                className="bg-green-600 text-white hover:bg-green-700 border-transparent"
+              >
+                Manage billing
+              </Button>
             )}
           </div>
           <label className="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">

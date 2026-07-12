@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 import { notifyPreferred } from '@/lib/notify'
 import { logCommunication } from '@/lib/comms'
 import { brandedEmailHtml } from '@/lib/email'
@@ -20,9 +21,9 @@ const bodySchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Accept either a web session cookie or the mobile app's Bearer token.
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const service = createServiceClient()
-  const { data: profile } = await service.from('profiles').select('company_id, full_name').eq('id', user.id).single()
+  const { data: profile } = await service.from('profiles').select('company_id, full_name').eq('id', auth.userId).single()
   if (!profile?.company_id) return NextResponse.json({ error: 'Profile not found' }, { status: 403 })
 
   const { data: job } = await service

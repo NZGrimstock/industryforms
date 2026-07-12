@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, Stack, router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Feather } from '@expo/vector-icons'
+import { Icon } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import {
   startTracking,
@@ -26,6 +26,7 @@ import {
 } from '@/lib/location/tracking'
 import { useTimezone } from '@/lib/profile-context'
 import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
+import { TimeEntryEditModal } from '@/components/timesheets/TimeEntryEditModal'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -74,6 +75,7 @@ export default function TimesheetsScreen() {
   const [tab, setTab] = useState<'time' | 'travel'>(TAB_TIME)
   const [tracking, setTracking] = useState(false)
   const [showLogModal, setShowLogModal] = useState(false)
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
   const [showTradingHours, setShowTradingHours] = useState(false)
   const [tradingHours, setTradingHours] = useState<TradingHours>(DEFAULT_TRADING_HOURS)
   const [savingTradingHours, setSavingTradingHours] = useState(false)
@@ -110,10 +112,22 @@ export default function TimesheetsScreen() {
   useFocusEffect(useCallback(() => {
     // Check for a completed trip waiting for job timer follow-up
     AsyncStorage.getItem(TRIP_FOLLOWUP_KEY).then(raw => {
-      if (raw) setTripFollowup(JSON.parse(raw))
+      if (!raw) return
+      try {
+        setTripFollowup(JSON.parse(raw))
+      } catch {
+        AsyncStorage.removeItem(TRIP_FOLLOWUP_KEY)
+        setTripFollowup(null)
+      }
     })
     AsyncStorage.getItem(AUTO_CHECKIN_NOTICE_KEY).then(raw => {
-      setAutoCheckinNotice(raw ? JSON.parse(raw) : null)
+      if (!raw) { setAutoCheckinNotice(null); return }
+      try {
+        setAutoCheckinNotice(JSON.parse(raw))
+      } catch {
+        AsyncStorage.removeItem(AUTO_CHECKIN_NOTICE_KEY)
+        setAutoCheckinNotice(null)
+      }
     })
     syncTrackingToSchedule().then(setTracking)
   }, []))
@@ -178,8 +192,11 @@ export default function TimesheetsScreen() {
 
   async function toggleTracking() {
     if (tracking) {
-      await stopTracking()
-      setTracking(false)
+      const stopped = await stopTracking()
+      setTracking(!stopped)
+      if (!stopped) {
+        Alert.alert('Trip not saved yet', 'We could not save the active trip, so tracking is staying on to avoid losing this logbook entry. Check your connection and try again.')
+      }
     } else {
       const ok = await requestPermissions()
       if (!ok) { Alert.alert('Permission required', 'Location permission is needed to auto-track travel.'); return }
@@ -362,7 +379,7 @@ export default function TimesheetsScreen() {
             thumbColor={tracking ? '#f97316' : '#9ca3af'}
           />
           <TouchableOpacity onPress={() => setShowTradingHours(true)} style={{ padding: 4 }}>
-            <Feather name="settings" size={15} color={tradingHours.enabled ? '#f97316' : '#9ca3af'} />
+            <Icon name="settings" size={15} color={tradingHours.enabled ? '#f97316' : '#9ca3af'} />
           </TouchableOpacity>
         </View>
       </View>
@@ -370,7 +387,7 @@ export default function TimesheetsScreen() {
       {autoCheckinNotice && (
         <View style={styles.autoBanner}>
           <View style={styles.autoIcon}>
-            <Feather name="map-pin" size={16} color="#15803d" />
+            <Icon name="map-pin" size={16} color="#15803d" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.autoBannerTitle}>Auto check-in started</Text>
@@ -382,7 +399,7 @@ export default function TimesheetsScreen() {
             <Text style={styles.autoBannerBtnText}>View</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={dismissAutoCheckin} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Feather name="x" size={16} color="#16a34a" />
+            <Icon name="x" size={16} color="#16a34a" />
           </TouchableOpacity>
         </View>
       )}
@@ -397,7 +414,7 @@ export default function TimesheetsScreen() {
             <Text style={styles.tripBannerBtnText}>Start timer</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={dismissFollowup} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Feather name="x" size={16} color="#9ca3af" />
+            <Icon name="x" size={16} color="#9ca3af" />
           </TouchableOpacity>
         </View>
       )}
@@ -428,7 +445,7 @@ export default function TimesheetsScreen() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
               ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>No time entries yet</Text></View>}
               renderItem={({ item: e }) => (
-                <View style={styles.card}>
+                <TouchableOpacity style={styles.card} onPress={() => setEditingEntry(e)} activeOpacity={0.7}>
                   <View style={styles.cardRow}>
                     <Text style={styles.jobNum}>{e.job_number}</Text>
                     <Text style={[styles.duration, !e.ended_at && { color: '#22c55e' }]}>
@@ -441,7 +458,7 @@ export default function TimesheetsScreen() {
                     {e.ended_at ? ` → ${formatTime(e.ended_at)}` : ' · in progress'}
                   </Text>
                   {e.notes ? <Text style={styles.noteText} numberOfLines={1}>{e.notes}</Text> : null}
-                </View>
+                </TouchableOpacity>
               )}
             />
           )}
@@ -507,7 +524,7 @@ export default function TimesheetsScreen() {
           <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
             {tripFollowup && (
               <View style={{ backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <Feather name="navigation" size={16} color="#f97316" />
+                <Icon name="navigation" size={16} color="#f97316" />
                 <Text style={{ fontSize: 13, color: '#c2410c', fontWeight: '500' }}>
                   Trip ended · {tripFollowup.distanceKm.toFixed(1)} km · arrived {formatTime(tripFollowup.endTime)}
                 </Text>
@@ -690,6 +707,13 @@ export default function TimesheetsScreen() {
         </SafeAreaView>
       </Modal>
 
+      <TimeEntryEditModal
+        entry={editingEntry}
+        jobs={activeJobs}
+        onClose={() => setEditingEntry(null)}
+        onSaved={() => { setEditingEntry(null); fetchAll() }}
+      />
+
       {/* Allocate travel modal */}
       <Modal visible={showAllocModal} transparent animationType="slide">
         <View style={styles.allocOverlay}>
@@ -701,14 +725,14 @@ export default function TimesheetsScreen() {
               </Text>
             )}
             <TouchableOpacity style={styles.allocRow} onPress={() => allocLog && allocate(allocLog, 'personal')}>
-              <Text style={styles.allocIcon}>🚗</Text>
+              <Icon name="car" size={24} color="#6b7280" style={styles.allocIcon} />
               <View>
                 <Text style={styles.allocLabel}>Personal travel</Text>
                 <Text style={styles.allocDesc}>Not work-related</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.allocRow} onPress={() => allocLog && allocate(allocLog, 'ignore')}>
-              <Text style={styles.allocIcon}>🗑</Text>
+              <Icon name="trash-2" size={24} color="#6b7280" style={styles.allocIcon} />
               <View>
                 <Text style={styles.allocLabel}>Ignore</Text>
                 <Text style={styles.allocDesc}>Remove from logbook</Text>
@@ -716,7 +740,7 @@ export default function TimesheetsScreen() {
             </TouchableOpacity>
             <View style={[styles.allocRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 8 }]}>
               <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                <Text style={styles.allocIcon}>💼</Text>
+                <Icon name="briefcase" size={24} color="#6b7280" style={styles.allocIcon} />
                 <View>
                   <Text style={styles.allocLabel}>Work — assign to job</Text>
                   <Text style={styles.allocDesc}>Links trip to a job</Text>
@@ -750,7 +774,7 @@ export default function TimesheetsScreen() {
               )}
             </View>
             <TouchableOpacity style={styles.allocRow} onPress={() => allocLog && confirmDeleteTrip(allocLog)}>
-              <Text style={styles.allocIcon}>❌</Text>
+              <Icon name="x-circle" size={24} color="#dc2626" style={styles.allocIcon} />
               <View>
                 <Text style={[styles.allocLabel, { color: '#dc2626' }]}>Delete permanently</Text>
                 <Text style={styles.allocDesc}>Not allocatable — remove entirely (GPS glitch, duplicate)</Text>
@@ -817,7 +841,7 @@ const styles = StyleSheet.create({
   allocTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
   allocSub: { fontSize: 13, color: '#6b7280', marginBottom: 16 },
   allocRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
-  allocIcon: { fontSize: 24, width: 32 },
+  allocIcon: { width: 32 },
   allocLabel: { fontSize: 15, fontWeight: '600', color: '#111827' },
   allocDesc: { fontSize: 12, color: '#6b7280' },
   allocCancel: { marginTop: 16, alignItems: 'center', paddingVertical: 12 },

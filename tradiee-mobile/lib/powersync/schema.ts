@@ -31,6 +31,7 @@ const customer_sites = new Table({
   lat: column.real,
   lng: column.real,
   access_notes: column.text,
+  created_at: column.text,
 })
 
 const job_visits = new Table({
@@ -79,6 +80,7 @@ const job_materials = new Table({
   unit: column.text,
   unit_cost: column.real,
   unit_price: column.real,
+  created_at: column.text,
 })
 
 const form_templates = new Table({
@@ -216,6 +218,13 @@ const invoices = new Table({
   invoice_date:        column.text,
   sent_at:             column.text,
   paid_at:             column.text,
+  discount_type:       column.text,
+  discount_value:      column.real,
+  discount_amount:     column.real,
+  is_recurring:        column.integer,
+  recurrence_rule:     column.text,
+  recurrence_next:     column.text,
+  recurrence_end:      column.text,
   created_at:          column.text,
   updated_at:          column.text,
 })

@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
@@ -288,7 +288,7 @@ export default function NewQuoteScreen() {
           <Text style={s.label}>Customer</Text>
           <TouchableOpacity style={s.picker} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
             <Text style={customerId ? s.pickerVal : s.pickerPh}>{customerName || 'Select a customer…'}</Text>
-            <Feather name="chevron-down" size={16} color="#9ca3af" />
+            <Icon name="chevron-down" size={16} color="#9ca3af" />
           </TouchableOpacity>
         </View>
 
@@ -299,7 +299,7 @@ export default function NewQuoteScreen() {
               <Text style={siteId ? s.pickerVal : s.pickerPh}>
                 {siteId ? (sites.find(s2 => s2.id === siteId)?.label || sites.find(s2 => s2.id === siteId)?.address) : 'No site selected…'}
               </Text>
-              <Feather name="chevron-down" size={16} color="#9ca3af" />
+              <Icon name="chevron-down" size={16} color="#9ca3af" />
             </TouchableOpacity>
           </View>
         )}
@@ -398,7 +398,7 @@ export default function NewQuoteScreen() {
                   <View style={s.qSectionRow}>
                     <Text style={s.qSectionTitle}>{sec.title}</Text>
                     <TouchableOpacity onPress={() => removeSection(sec.id)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove section ${sec.title}`} accessibilityRole="button">
-                      <Feather name="x" size={14} color="#d1d5db" />
+                      <Icon name="x" size={14} color="#d1d5db" />
                     </TouchableOpacity>
                   </View>
                   {lineItems.filter(i => i.sectionId === sec.id).map(item => (
@@ -430,7 +430,7 @@ export default function NewQuoteScreen() {
             <TouchableOpacity style={[s.sendBtn, { flex: 1, opacity: saving ? 0.5 : 1 }]} onPress={() => save(true)} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Feather name="send" size={15} color="#fff" />
+                  <Icon name="send" size={15} color="#fff" />
                   <Text style={s.btnText}>Send</Text>
                 </View>
               )}
@@ -452,7 +452,7 @@ export default function NewQuoteScreen() {
           {!showNewCustomer ? (
             <>
               <View style={s.searchBox}>
-                <Feather name="search" size={15} color="#9ca3af" />
+                <Icon name="search" size={15} color="#9ca3af" />
                 <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder="Search customers…" placeholderTextColor="#6b7280" autoFocus />
               </View>
               <FlatList
@@ -465,7 +465,7 @@ export default function NewQuoteScreen() {
                     style={[s.custRow, { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff7ed', borderRadius: 12, marginBottom: 8 }]}
                     onPress={() => setShowNewCustomer(true)}
                   >
-                    <Feather name="plus-circle" size={16} color="#f97316" />
+                    <Icon name="plus-circle" size={16} color="#f97316" />
                     <Text style={{ color: '#f97316', fontWeight: '700', fontSize: 15 }}>New customer</Text>
                   </TouchableOpacity>
                 }
@@ -481,7 +481,7 @@ export default function NewQuoteScreen() {
           ) : (
             <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
               <TouchableOpacity onPress={() => setShowNewCustomer(false)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-                <Feather name="chevron-left" size={16} color="#f97316" />
+                <Icon name="chevron-left" size={16} color="#f97316" />
                 <Text style={{ color: '#f97316', fontWeight: '600' }}>Back to search</Text>
               </TouchableOpacity>
               <Text style={s.label}>First name *</Text>
@@ -542,7 +542,7 @@ function LineItemRow({ item, onRemove }: { item: LineItem; onRemove: () => void 
       </View>
       <Text style={s.lineTotal}>${((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}</Text>
       <TouchableOpacity onPress={onRemove} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel={`Remove ${item.description}`} accessibilityRole="button">
-        <Feather name="x" size={16} color="#d1d5db" />
+        <Icon name="x" size={16} color="#d1d5db" />
       </TouchableOpacity>
     </View>
   )

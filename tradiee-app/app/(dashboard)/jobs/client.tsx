@@ -34,6 +34,8 @@ interface QuickLine {
 interface Props {
   companyId: string
   customers: { id: string; name: string; pricing_group_id?: string | null }[]
+  teamMembers?: { id: string; full_name: string | null; email: string }[]
+  defaultJobAssigneeId?: string | null
   nextJobNumber: string
   priceItems?: PriceItem[]
   standardMarkupEnabled?: boolean
@@ -48,7 +50,12 @@ const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_list_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, nextJobNumber, priceItems = [], standardMarkupEnabled = false, standardMarkupPct = 80, initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
+export function NewJobButton({ companyId, customers, teamMembers = [], defaultJobAssigneeId = null, nextJobNumber, priceItems = [], standardMarkupEnabled = false, standardMarkupPct = 80, initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
+  const initialAssigneeId = teamMembers.some(member => member.id === defaultJobAssigneeId)
+    ? defaultJobAssigneeId!
+    : teamMembers.length === 1
+      ? teamMembers[0].id
+      : ''
   const [open, setOpen] = useState(initialOpen)
   const [step, setStep] = useState<1 | 2>(1)
   const [loading, setLoading] = useState(false)
@@ -63,7 +70,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [form, setForm] = useState({ customerId: initialCustomerId, title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '', siteId: '' })
+  const [form, setForm] = useState({ customerId: initialCustomerId, title: initialTitle, description: initialDescription, status: 'unscheduled', reference: '', siteId: '', assigneeId: initialAssigneeId })
   const selectedCustomer = customers.find(customer => customer.id === form.customerId)
   const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('existing')
   const [newCust, setNewCust] = useState({ name: '', phone: '', addAsSite: false, siteAddress: '' })
@@ -110,7 +117,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
   }
 
   function reset() {
-    setForm({ customerId: '', title: '', description: '', status: 'unscheduled', reference: '', siteId: '' })
+    setForm({ customerId: '', title: '', description: '', status: 'unscheduled', reference: '', siteId: '', assigneeId: initialAssigneeId })
     setCustomerMode('existing')
     setNewCust({ name: '', phone: '', addAsSite: false, siteAddress: '' })
     setSites([])
@@ -195,6 +202,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
       status: form.status,
       reference: form.reference || null,
       site_id: form.siteId || null,
+      assigned_to: form.assigneeId || null,
     }
     if (createdJobId) {
       const { error } = await supabase.from('jobs').update(payload).eq('id', createdJobId)
@@ -217,7 +225,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
     autosaveTimer.current = setTimeout(() => { autosaveJobDraft() }, 1500)
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step, form.title, form.description, form.status, form.reference, form.siteId, form.customerId, customerMode])
+  }, [open, step, form.title, form.description, form.status, form.reference, form.siteId, form.customerId, form.assigneeId, customerMode])
 
   // Step 1: create job record
   async function handleCreateJob(e: React.FormEvent) {
@@ -234,6 +242,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
         status: form.status,
         reference: form.reference || null,
         site_id: form.siteId || null,
+        assigned_to: form.assigneeId || null,
       }).eq('id', createdJobId)
       setLoading(false)
       if (error) { toast(error.message, 'error'); return }
@@ -285,6 +294,7 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
       status: form.status,
       reference: form.reference || null,
       site_id: siteId,
+      assigned_to: form.assigneeId || null,
     }).select('id').single()
     setLoading(false)
     if (error) { toast(error.message, 'error'); return }
@@ -418,6 +428,15 @@ export function NewJobButton({ companyId, customers, nextJobNumber, priceItems =
                 { value: 'in_progress', label: 'In progress' },
               ]} />
             </div>
+            {teamMembers.length > 1 && (
+              <div>
+                <Label>Assign job to</Label>
+                <Select value={form.assigneeId} onChange={e => set('assigneeId', e.target.value)} options={[
+                  { value: '', label: 'Unassigned' },
+                  ...teamMembers.map(member => ({ value: member.id, label: member.full_name || member.email })),
+                ]} />
+              </div>
+            )}
             <div className="flex items-center gap-3 pt-1">
               <Button type="submit" loading={loading}>
                 Next <ChevronRight className="h-4 w-4" />

@@ -6,7 +6,7 @@ import {
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { useTimezone } from '@/lib/profile-context'
@@ -414,7 +414,7 @@ export default function QuoteDetailScreen() {
                 >
                   {accepting
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <><Feather name="check-circle" size={14} color="#fff" /><Text style={s.actionBtnText}> Accept &amp; Create Job</Text></>
+                    : <><Icon name="check-circle" size={14} color="#fff" /><Text style={s.actionBtnText}> Accept &amp; Create Job</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -428,7 +428,7 @@ export default function QuoteDetailScreen() {
                 >
                   {declining
                     ? <ActivityIndicator color="#ef4444" size="small" />
-                    : <><Feather name="x-circle" size={14} color="#ef4444" /><Text style={[s.actionBtnText, { color: '#ef4444' }]}> Decline</Text></>
+                    : <><Icon name="x-circle" size={14} color="#ef4444" /><Text style={[s.actionBtnText, { color: '#ef4444' }]}> Decline</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -441,7 +441,7 @@ export default function QuoteDetailScreen() {
                 >
                   {sending
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <><Feather name="send" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by email</Text></>
+                    : <><Icon name="send" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by email</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -455,7 +455,7 @@ export default function QuoteDetailScreen() {
                 >
                   {texting
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <><Feather name="message-square" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by text</Text></>
+                    : <><Icon name="message-square" size={14} color="#fff" /><Text style={s.actionBtnText}> Send by text</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -468,7 +468,7 @@ export default function QuoteDetailScreen() {
                 >
                   {converting
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <><Feather name="briefcase" size={14} color="#fff" /><Text style={s.actionBtnText}> Convert to Job</Text></>
+                    : <><Icon name="briefcase" size={14} color="#fff" /><Text style={s.actionBtnText}> Convert to Job</Text></>
                   }
                 </TouchableOpacity>
               )}
@@ -638,7 +638,7 @@ function LineRow({ item, isDraft, onEdit, onDelete }: {
       <Text style={s.lineTotal}>{fmt(item.line_total ?? 0)}</Text>
       {isDraft && (
         <TouchableOpacity onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }} accessibilityLabel="Remove line item" accessibilityRole="button">
-          <Feather name="trash-2" size={16} color="#ef4444" />
+          <Icon name="trash-2" size={16} color="#ef4444" />
         </TouchableOpacity>
       )}
     </View>

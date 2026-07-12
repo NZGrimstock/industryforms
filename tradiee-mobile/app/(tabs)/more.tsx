@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Feather } from '@expo/vector-icons'
+import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 
-type FeatherName = React.ComponentProps<typeof Feather>['name']
 
 type MenuItem = {
-  icon: FeatherName
+  icon: IconName
   label: string
   route: string
   badge?: number
@@ -52,8 +51,8 @@ export default function MoreScreen() {
 
   const workItems: MenuItem[] = [
     { icon: 'users',       label: 'Customers',   route: '/customers' },
-    ...(projectsEnabled ? [{ icon: 'folder' as FeatherName, label: 'Projects', route: '/projects' }] : []),
-    ...(profile?.role !== 'staff' ? [{ icon: 'file-text' as FeatherName, label: 'Quotes', route: '/quotes' }] : []),
+    ...(projectsEnabled ? [{ icon: 'folder' as IconName, label: 'Projects', route: '/projects' }] : []),
+    ...(profile?.role !== 'staff' ? [{ icon: 'file-text' as IconName, label: 'Quotes', route: '/quotes' }] : []),
     { icon: 'credit-card', label: 'Invoices',     route: '/invoices' },
     { icon: 'zap',         label: 'Tap to Pay',   route: '/pay-now' },
     { icon: 'clock',       label: 'Time Logs',    route: '/timesheets' },
@@ -75,7 +74,7 @@ export default function MoreScreen() {
         activeOpacity={0.6}
       >
         <View style={s.iconWrap}>
-          <Feather name={item.icon} size={18} color="#6b7280" />
+          <Icon name={item.icon} size={18} color="#6b7280" />
         </View>
         <Text style={s.rowLabel}>{item.label}</Text>
         {item.badge ? (
@@ -83,7 +82,7 @@ export default function MoreScreen() {
             <Text style={s.badgeText}>{item.badge > 99 ? '99+' : item.badge}</Text>
           </View>
         ) : null}
-        <Feather name="chevron-right" size={16} color="#d1d5db" />
+        <Icon name="chevron-right" size={16} color="#d1d5db" />
       </TouchableOpacity>
     )
   }
@@ -103,7 +102,7 @@ export default function MoreScreen() {
               {profile.full_name && <Text style={s.profileName}>{profile.full_name}</Text>}
               <Text style={s.profileEmail}>{profile.email}</Text>
             </View>
-            <Feather name="chevron-right" size={18} color="#d1d5db" />
+            <Icon name="chevron-right" size={18} color="#d1d5db" />
           </TouchableOpacity>
         )}
 
@@ -118,7 +117,7 @@ export default function MoreScreen() {
         </View>
 
         <TouchableOpacity style={s.signOutBtn} onPress={signOut} activeOpacity={0.8}>
-          <Feather name="log-out" size={16} color="#ef4444" />
+          <Icon name="log-out" size={16} color="#ef4444" />
           <Text style={s.signOutText}>Sign out</Text>
         </TouchableOpacity>
       </ScrollView>
