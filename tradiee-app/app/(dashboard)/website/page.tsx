@@ -9,7 +9,7 @@ export default async function WebsitePage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role, is_super_admin, companies(id, name, trade_type, address, logo_url, billing_exempt, subscription_status, addons)')
+    .select('full_name, role, is_super_admin, companies!company_id(id, name, trade_type, address, logo_url, billing_exempt, subscription_status, addons)')
     .eq('id', user!.id)
     .single()
 

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const { invoiceId } = parsed.data
   const service = createServiceClient()
 
-  const { data: profile } = await service.from('profiles').select('company_id, companies(xero_tenant_id, xero_access_token, xero_refresh_token, xero_token_expires_at)').eq('id', user.id).single()
+  const { data: profile } = await service.from('profiles').select('company_id, companies!company_id(xero_tenant_id, xero_access_token, xero_refresh_token, xero_token_expires_at)').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
   const co = profile.companies as unknown as { xero_tenant_id: string | null; xero_access_token: string | null; xero_refresh_token: string | null; xero_token_expires_at: string | null } | null

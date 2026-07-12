@@ -16,7 +16,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url)').eq('id', user!.id).single()
 
   const { data: invoice } = await supabase
     .from('invoices')

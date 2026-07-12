@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
-  const { data: profile } = await service.from('profiles').select('company_id, companies(stripe_customer_id)').eq('id', user.id).single()
+  const { data: profile } = await service.from('profiles').select('company_id, companies!company_id(stripe_customer_id)').eq('id', user.id).single()
 
   const stripeCustomerId = (profile?.companies as unknown as { stripe_customer_id: string | null } | null)?.stripe_customer_id
   if (!stripeCustomerId) return NextResponse.json({ error: 'No billing account found' }, { status: 400 })

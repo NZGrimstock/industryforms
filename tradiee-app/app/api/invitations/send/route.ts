@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   // 1. Get authed user's company_id and company name
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id, companies(name)')
+    .select('company_id, companies!company_id(name)')
     .eq('id', user.id)
     .single()
 

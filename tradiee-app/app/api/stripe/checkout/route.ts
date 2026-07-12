@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   const { plan } = parsed.data
   const service = createServiceClient()
 
-  const { data: profile } = await service.from('profiles').select('company_id, email, full_name, companies(name, stripe_customer_id)').eq('id', user.id).single()
+  const { data: profile } = await service.from('profiles').select('company_id, email, full_name, companies!company_id(name, stripe_customer_id)').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
   const company = profile.companies as unknown as { name: string; stripe_customer_id: string | null } | null

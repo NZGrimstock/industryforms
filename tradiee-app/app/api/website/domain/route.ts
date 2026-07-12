@@ -14,7 +14,7 @@ async function ctx() {
   const service = createServiceClient()
   const { data: profile } = await service
     .from('profiles')
-    .select('is_super_admin, companies(id, billing_exempt, addons)')
+    .select('is_super_admin, companies!company_id(id, billing_exempt, addons)')
     .eq('id', user.id)
     .single()
   const company = profile?.companies as unknown as { id: string; billing_exempt: boolean | null; addons: Record<string, { active?: boolean }> | null } | null

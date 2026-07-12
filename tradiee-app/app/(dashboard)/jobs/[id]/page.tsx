@@ -30,7 +30,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies(name, phone, email, address, gst_number, default_gst_rate, logo_url, country, standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, logo_url, country, standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')

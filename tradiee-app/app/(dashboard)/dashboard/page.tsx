@@ -15,7 +15,7 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: profile } = await supabase.from('profiles').select('*, companies(*)').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(*)').eq('id', user.id).single()
   const timesheetSince = new Date()
   timesheetSince.setDate(timesheetSince.getDate() - 7)
 

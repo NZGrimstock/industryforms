@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, company_id, is_super_admin, companies(name, addons, billing_exempt, subscription_status)')
+    .select('role, company_id, is_super_admin, companies!company_id(name, addons, billing_exempt, subscription_status)')
     .eq('id', user.id)
     .single()
   if (!profile || (profile.role !== 'owner' && profile.role !== 'admin')) {

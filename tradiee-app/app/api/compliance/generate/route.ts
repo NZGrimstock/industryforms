@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     // Fetch profile including compliance fields
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
-      .select('*, companies(name, logo_url)')
+      .select('*, companies!company_id(name, logo_url)')
       .eq('id', user.id)
       .single()
 

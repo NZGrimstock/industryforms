@@ -14,7 +14,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id, full_name, role, is_super_admin, companies(addons, billing_exempt)')
+    .select('company_id, full_name, role, is_super_admin, companies!company_id(addons, billing_exempt)')
     .eq('id', user!.id).single()
   if (profile?.role === 'staff') redirect('/dashboard')
 

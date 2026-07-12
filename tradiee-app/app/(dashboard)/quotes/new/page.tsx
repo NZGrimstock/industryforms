@@ -7,7 +7,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies(default_gst_rate, prices_include_tax)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, prices_include_tax)').eq('id', user!.id).single()
 
   const [customersRes, priceItemsRes, kitsRes, companyRes, ratesRes, taxRatesRes, templateRes, nextNumber] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),

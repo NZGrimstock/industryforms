@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const { jobIds } = parsed.data
 
   const service = createServiceClient()
-  const { data: profile } = await service.from('profiles').select('company_id, companies(default_gst_rate)').eq('id', user.id).single()
+  const { data: profile } = await service.from('profiles').select('company_id, companies!company_id(default_gst_rate)').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
   const companyId = profile.company_id as string
   const gstRate = Number((profile.companies as unknown as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15)

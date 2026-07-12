@@ -10,7 +10,7 @@ export default async function UpgradePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_super_admin, companies(name, subscription_status, subscription_plan, trial_ends_at, billing_exempt)')
+    .select('is_super_admin, companies!company_id(name, subscription_status, subscription_plan, trial_ends_at, billing_exempt)')
     .eq('id', user.id)
     .single()
   const company = (profile?.companies ?? null) as BillingCompany | null

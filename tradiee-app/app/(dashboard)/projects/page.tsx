@@ -23,7 +23,7 @@ export default async function ProjectsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id, full_name, role, is_super_admin, companies(addons, billing_exempt, subscription_status, subscription_plan, trial_ends_at)')
+    .select('company_id, full_name, role, is_super_admin, companies!company_id(addons, billing_exempt, subscription_status, subscription_plan, trial_ends_at)')
     .eq('id', user!.id).single()
   // Staff don't get projects — keep their nav focused.
   if (profile?.role === 'staff') redirect('/dashboard')

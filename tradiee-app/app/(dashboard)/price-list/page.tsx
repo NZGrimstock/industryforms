@@ -5,7 +5,7 @@ import { PriceListClient } from './client'
 export default async function PriceListPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
 
   const [itemsRes, kitsRes, groupsRes] = await Promise.all([
     supabase.from('price_list_items').select('*, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).order('name'),

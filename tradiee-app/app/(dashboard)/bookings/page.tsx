@@ -9,7 +9,7 @@ export default async function BookingsSettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role, is_super_admin, company_id, companies(addons, billing_exempt)')
+    .select('full_name, role, is_super_admin, company_id, companies!company_id(addons, billing_exempt)')
     .eq('id', user!.id)
     .single()
 

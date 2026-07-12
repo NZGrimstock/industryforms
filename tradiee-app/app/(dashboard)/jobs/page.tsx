@@ -24,7 +24,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies(standard_markup_enabled, standard_markup_pct, default_job_assignee_id)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(standard_markup_enabled, standard_markup_pct, default_job_assignee_id)').eq('id', user!.id).single()
   const [customersRes, priceItemsRes, jobStatuses, teamRes] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
