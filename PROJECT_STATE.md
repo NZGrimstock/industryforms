@@ -42,6 +42,86 @@ Vercel prod, mobile in the next APK):
   requested 2026-07-13; a fresh Android APK build was kicked off this session
   to carry the mobile-kits change.
 
+**Continued same session — EAS submit config, ClickSend, Stripe Connect
+(both phases):**
+
+- **`eas.json` Android submit config** — added `submit.production.android`
+  (`serviceAccountKeyPath: ./google-play-service-account.json`, track
+  `internal`). File itself is gitignored — **user must generate it** in Google
+  Play Console → Setup → API access → create service account → download JSON
+  → drop at `tradiee-mobile/google-play-service-account.json`. Not needed for
+  `eas build`, only for automated `eas submit --platform android`.
+- **SMS provider swapped Twilio → ClickSend** (full two-way, per user request
+  — ~40-50% cheaper for NZ/AU). `lib/sms.ts` rewritten: outbound via ClickSend
+  `/v3/sms/send`; inbound + delivery-receipt webhooks re-secured with a shared-
+  secret URL param (`?k=…`) since ClickSend doesn't sign webhooks like Twilio's
+  HMAC did. Field parsing is **tolerant with aliases** (from/sms, body/message,
+  message_id/messageid) because ClickSend's docs are JS-rendered and the exact
+  inbound/DLR payload shape couldn't be scraped — a keys-only debug log (no
+  PII) fires on an unexpected shape so the first real test inbound can confirm
+  field names in one round-trip. `smsConfigured()`/`toE164()` names and the
+  `twilio_sid` column were kept as-is (now holds the ClickSend message id) so
+  no callers needed touching. **User must set** `CLICKSEND_USERNAME` /
+  `CLICKSEND_API_KEY` / `CLICKSEND_FROM` (dedicated number, required for
+  replies to route back) / `CLICKSEND_INBOUND_SECRET`, delete `TWILIO_*`, buy a
+  dedicated ClickSend number, and configure the ClickSend dashboard's Inbound
+  SMS Rule + Delivery Reports URL to point at `/api/sms/inbound?k=…` and
+  `/api/sms/status?k=…`. **SMS is dark until this env is set** — safe no-op,
+  not a crash.
+- **Stripe Connect — Phase 1 (Express onboarding)**: migration
+  `20260713100000_stripe_connect_accounts.sql` adds
+  `companies.stripe_account_id` + `charges/payouts/details_submitted` flags.
+  `lib/connect.ts` (`ensureConnectedAccount`, `createOnboardingLink`,
+  `syncAccountStatus`), `POST /api/stripe/connect/onboard` (+ GET refresh
+  redirect), `GET /api/stripe/connect/status`, webhook `account.updated` case.
+  **`GetPaidCard`** (`components/settings/get-paid-card.tsx`) in Settings →
+  Subscription — "Set up payouts" → Stripe hosted Express onboarding → returns
+  to `?tab=subscription&connect=done`. Decisions locked in by user: **Express**
+  now (Custom/white-label considered later), **no platform application fee**
+  (monetise via subscriptions only). **User must**: apply the migration to
+  cloud Supabase (`supabase db push` — not run from this session) and confirm
+  Connect is enabled on the platform Stripe account before the card can
+  actually onboard anyone (fails safe with 404 until then, no orphaned Stripe
+  accounts created).
+- **Stripe Connect — Phase 2 (money-flow flip)**: `connectOptions(company)` in
+  `lib/stripe.ts` returns Stripe request options `{stripeAccount}` once a
+  company's `charges_enabled` is true, else `undefined`. **Soft fallback** on
+  the two customer-facing pay pages (`api/stripe/payment-intent` — online
+  invoice pay, `api/bookings/deposit-intent` — booking deposits): direct charge
+  once connected, platform-account charge (today's behaviour, unchanged) until
+  then — so neither page ever breaks for a company that hasn't onboarded yet.
+  **Hard gate** on Tap to Pay (`api/stripe/terminal/payment-intent`,
+  `api/stripe/terminal/connection-token`): 409s with "Complete payouts setup…"
+  if not connected, since a card-present charge has nowhere real to settle
+  otherwise — this is a genuinely new requirement, not a regression (Tap to
+  Pay hasn't shipped to real users yet). Tap to Pay direct charges also need
+  the **Terminal Location to live on the connected account**, so it's now
+  per-company (`ensureTerminalLocation()` in `lib/connect.ts`,
+  `companies.stripe_terminal_location_id` via migration
+  `20260713110000_stripe_terminal_location.sql`, new
+  `GET /api/stripe/terminal/location` route) — **replaces** the old single
+  global `EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID` env var, removed from
+  `eas.json` and from `tradiee-mobile/lib/tap-to-pay.ts`
+  (`fetchTerminalLocationId()` fetches it dynamically; `app/pay-now.tsx`
+  calls it right before `connectReader`). Location's address is **best-effort**
+  from the freeform `companies.address` text field (Stripe's Terminal Location
+  API doesn't strictly require more than `country` at the type level; it will
+  reject with a clear 400 if a given country needs more structure — surfaces
+  to the caller, not a silent failure).
+  **⚠ Critical, non-code, easy to miss**: the Stripe webhook endpoint
+  (`app/api/stripe/webhook/route.ts`) **must have "Listen to events on
+  connected accounts" enabled** (Dashboard → Developers → Webhooks → this
+  endpoint) or `payment_intent.succeeded`/`account.updated` fired on a
+  connected account (every direct-charge payment, once a company onboards)
+  never reaches this handler — invoices would silently never get marked paid.
+  Flagged prominently in a code comment at the top of that file too.
+  Sequencing: per user's explicit "connect-first" call, this shipped **before**
+  the app-store Tap to Pay submission, so Tap to Pay ships once on the correct
+  per-tradie settlement model instead of needing a second mobile release to
+  migrate off a platform-account version.
+- Fresh Android release APK built same session carrying Phase 2 — see "Latest
+  APK" line at the top of this file for its current build time/SHA256.
+
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
 competitor). Monorepo at `D:\TRADIEE`:
@@ -64,15 +144,21 @@ the older applied set; the 2026-07-07 local migrations listed below still need
 deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 — already validated + deployed via the PowerSync Dashboard.
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(built 2026-07-13 14:59 NZT, 156,010,334 bytes, SHA256
-`d64bd79c155da5405802346bd8bf617920bbe4e7f0a50a4db51db32b56e26c4a`). This
-build carries the 2026-07-13 mobile-kits change (Bundle/Split on the job
-sheet) on top of every prior mobile fix through commit `1dac35d` — see
-`git log` for current commit hashes if this line goes stale. Build log:
-`tradiee-mobile/release-build-kits-session.log` (`BUILD SUCCESSFUL`, 4m55s).
-The prior APK (2026-07-11 08:52 NZT, SHA256
-`499126468a2101da46cbf168e9f668bef548bd1f6f1bb618ec28ce16b34dc07f`, through
-Job Map locate-retry `ec99cc5`) is superseded. The `release-build-schedule-fix2.log`
+(built 2026-07-13 16:10 NZT, 156,011,530 bytes, SHA256
+`cb76af51f6d4d04eeae7e6595c282aa77bf9f02344ca72302b67d035cb84d929`). This build
+carries the Stripe Connect Phase 2 mobile changes (per-company Tap to Pay
+Terminal Location via `fetchTerminalLocationId()`, replacing the old global
+`EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID`) on top of every prior mobile fix
+through commit `c8bc772` — see `git log` for current commit hashes if this
+line goes stale. Build log: `tradiee-mobile/release-build-connect-phase2.log`
+(`BUILD SUCCESSFUL`, 2m02s). **Not yet submitted to any store** — Android is
+build-ready (`eas build --platform android --profile production`, EAS project
+linked, credentials EAS-managed); Android *submit* needs the Play
+service-account JSON dropped in first (see the eas.json entry in the session
+log above). iOS build/submit both wait on the pending Apple entitlement.
+The prior APK (2026-07-13 14:59 NZT, SHA256
+`d64bd79c155da5405802346bd8bf617920bbe4e7f0a50a4db51db32b56e26c4a`, mobile-kits
+change on commit `1dac35d`) is superseded. The `release-build-schedule-fix2.log`
 build (2026-07-11 07:55 NZT, `BUILD SUCCESSFUL`, 14m56s) preceded it and is
 superseded. The rebuild attempt before that
 (`release-build-schedule-fix.log`) failed with a stale `.cxx` CMake cache
@@ -455,12 +541,19 @@ Settings → Integrations only shows customer-relevant integrations.
 - `R2_ACCOUNT_ID`, `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `R2_PUBLIC_*`/`R2_PRIVATE_*` keys, `NEXT_PUBLIC_R2_PUBLIC_BASE_URL=https://cdn.industryforms.app`
 - `NEXT_PUBLIC_APP_URL=https://app.industryforms.app`, `NEXT_PUBLIC_POWERSYNC_URL`, `CRON_SECRET`
 - **LocationIQ** — `NEXT_PUBLIC_LOCATIONIQ_KEY` for geocoding (address autocomplete + job map pins). Falls back to Nominatim (rate-limited in prod) if unset.
-- **Twilio (live)** — `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`. Point the number's "A MESSAGE COMES IN" webhook at `https://app.industryforms.app/api/sms/inbound` (POST).
-- **Resend (set locally but broken — confirmed 2026-07-06)** — `RESEND_API_KEY` is present in
-  `.env.local` but every real send during Sprint E testing returned `API key is invalid` from
-  Resend itself (not a config-missing no-op — a real rejected key). **Every email in the app is
-  silently failing** if the same key is live in Vercel. Check the Vercel value too; rotate the key
-  in the Resend dashboard if it's stale/revoked. `EMAIL_FROM` (verified sender domain) still needed either way.
+- **SMS — ClickSend (swapped from Twilio 2026-07-13, see session log above)** —
+  `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY`, `CLICKSEND_FROM` (dedicated number,
+  required for two-way replies), `CLICKSEND_INBOUND_SECRET` (shared secret for
+  the `?k=` webhook guard — ClickSend doesn't sign webhooks). **User still
+  needs to**: set this env (Vercel + `.env.local`), delete `TWILIO_*`, buy a
+  ClickSend number, and point the ClickSend dashboard's Inbound SMS Rule +
+  Delivery Reports URL at `/api/sms/inbound?k=…` / `/api/sms/status?k=…`. SMS
+  is dark (safe no-op) until this is done.
+- **Resend — fixed 2026-07-13** — the previously-invalid `RESEND_API_KEY` was
+  rotated in Doppler + Vercel; transactional email is live again. `EMAIL_FROM`
+  (verified sender domain) still needed either way. Quote/invoice send
+  failures now also log to `automation_events` (admin-visible), not just a
+  raw console warn — see the same session's email-failure-visibility entry.
 - **Stripe (live — confirmed 2026-07-04)** — `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
   `STRIPE_WEBHOOK_SECRET` are all live; Sprint D's testing created and refunded real test-mode
   PaymentIntents successfully. Webhook target: `/api/stripe/webhook`.
@@ -758,26 +851,36 @@ so site-scoped routes work at the tenant's root. New `/sitemap.xml` +
 and favicon from the company logo. **GBP sync stubbed** in `lib/gbp-sync.ts`
 — Google Business Profile API needs manual approval we don't have yet.
 
-**Tap to Pay** — **fully wired for iOS + Android** (this line was stale; the
-integration was completed by the 2026-07-07 Codex pass and re-verified
-2026-07-13). Backend: `/api/stripe/terminal/connection-token` +
-`/api/stripe/terminal/payment-intent` (card_present, auto-capture). Mobile:
-SDK `@stripe/stripe-terminal-react-native` (beta.31, supports `tapToPay`)
+**Tap to Pay** — **fully wired for iOS + Android**, now on **direct Stripe
+Connect charges** (see the Stripe Connect Phase 1/2 entries in the 2026-07-13
+session log above — this replaced the original single-tenant design).
+Backend: `/api/stripe/terminal/connection-token` (creates the token on the
+company's connected account) + `/api/stripe/terminal/location` (per-company
+Terminal Location, `ensureTerminalLocation()`) +
+`/api/stripe/terminal/payment-intent` (card_present, auto-capture, direct
+charge). All three **hard-gate 409** if the company hasn't completed Connect
+onboarding — Tap to Pay hasn't shipped to real users yet, so this is a new
+requirement, not a regression. Mobile: SDK
+`@stripe/stripe-terminal-react-native` (beta.31, supports `tapToPay`)
 installed; config plugin + Location/NFC/foreground-service permissions in
 `app.json`; `StripeTerminalProvider` + `tokenProvider` in `app/_layout.tsx`;
 full discover→connect→collect→confirm flow in `app/pay-now.tsx` (Android
-runtime-permission branch + iOS TOS auto-accept). Stripe Terminal Location
-`tml_Gjk2AE1e6OUFu2` ("Industry Forms NZ", Auckland) exists and is set in
-`eas.json`/`.env` as `EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID`; a livemode
-"Mobile Phone Reader" has already connected (confirmed in the Stripe
-Dashboard), so Tap to Pay is **enabled on the account**. **Only remaining
-blockers, both non-code and iOS-only:** Apple's
+runtime-permission branch + iOS TOS auto-accept), now fetching the per-company
+location via `fetchTerminalLocationId()` right before `connectReader` instead
+of a static env var. The original single Terminal Location
+`tml_Gjk2AE1e6OUFu2` ("Industry Forms NZ", Auckland, confirmed enabled on the
+account with a livemode "Mobile Phone Reader" already connected) is now
+superseded per-company infrastructure — kept only as evidence Tap to Pay is
+enabled on the platform Stripe account; each company gets its own Location the
+first time they take a card-present payment after connecting.
+**Only remaining blockers, both non-code and iOS-only:** Apple's
 `com.apple.developer.proximity-reader.payment.acceptance` entitlement
 (requested 2026-07-13, awaiting Apple approval) and an EAS iOS store build
 carrying it (needs interactive Apple creds). Android needs neither — it's
-buildable/testable now. Note: the entitlement is a **native capability, so it
-cannot be shipped via OTA/EAS Update** — it requires a fresh native build +
-App Store review once granted.
+buildable/testable now, though functionally gated on Connect onboarding too
+(see above). Note: the entitlement is a **native capability, so it cannot be
+shipped via OTA/EAS Update** — it requires a fresh native build + App Store
+review once granted.
 
 **Tab-accent + orange cleanup** — `bg-orange-500` etc. sweep across 43 files
 → `bg-[var(--accent,#f97316)]`. Quotes/Jobs/Invoices/Enquiries filter pills
