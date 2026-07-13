@@ -5,6 +5,7 @@ import { Icon, type IconName } from '@/lib/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { AUTO_CHECKIN_NOTICE_KEY, type AutoCheckinNotice } from '@/lib/location/tracking'
+import { useNavStatus } from '@/lib/useNavStatus'
 
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
@@ -231,46 +232,11 @@ const noticeStyles = StyleSheet.create({
 })
 
 export default function TabLayout() {
-  const [pendingCount, setPendingCount] = useState(0)
-  const [unreadInbox, setUnreadInbox] = useState(0)
-  const [isStaff, setIsStaff] = useState(false)
-
-  useEffect(() => {
-    let inboxPoll: ReturnType<typeof setInterval> | null = null
-
-    async function loadProfile() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-      const { data: profile } = await supabase
-        .from('profiles').select('company_id, role').eq('id', session.user.id).single()
-      if (!profile?.company_id) return
-      const staff = profile.role === 'staff'
-      setIsStaff(staff)
-      const { count } = await supabase
-        .from('job_invitations')
-        .select('id', { count: 'exact', head: true })
-        .eq('subcontractor_company_id', profile.company_id)
-        .eq('status', 'pending')
-      setPendingCount(count ?? 0)
-
-      if (!staff) {
-        const loadUnread = async () => {
-          const [msgs, enq] = await Promise.all([
-            supabase.from('customer_messages').select('id', { count: 'exact', head: true })
-              .eq('company_id', profile.company_id).eq('direction', 'inbound').is('read_at', null),
-            supabase.from('enquiries').select('id', { count: 'exact', head: true })
-              .eq('company_id', profile.company_id).eq('status', 'new'),
-          ])
-          setUnreadInbox((msgs.count ?? 0) + (enq.count ?? 0))
-        }
-        loadUnread()
-        inboxPoll = setInterval(loadUnread, 15000)
-      }
-    }
-    loadProfile()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => loadProfile())
-    return () => { subscription.unsubscribe(); if (inboxPoll) clearInterval(inboxPoll) }
-  }, [])
+  // Same badge/role status the persistent bottom bar (rendered globally in
+  // the root layout) uses — kept here too so Inbox's href: null role gate
+  // (real route-level access control, not just a cosmetic button hide)
+  // still applies regardless of which bar is visually driving navigation.
+  const { isStaff, pendingCount, unreadInbox } = useNavStatus()
 
   const HeaderRight = useCallback(() => <ActiveTimerBadge />, [])
 
@@ -283,7 +249,13 @@ export default function TabLayout() {
         headerTitleStyle: styles.headerTitle,
         headerRight: HeaderRight,
         headerShadowVisible: false,
-        tabBarStyle: styles.tabBar,
+        // The visual bar itself now lives in components/BottomTabBar.tsx,
+        // rendered once in the root layout so it persists across every
+        // screen (including jobs/[id], quotes/[id], invoices/[id], which are
+        // separate top-level Stack screens outside this Tabs group and never
+        // had a bar at all before). This Tabs navigator still owns real
+        // routing/state per tab — only its own native bar chrome is hidden.
+        tabBarStyle: { display: 'none' },
         tabBarActiveTintColor: '#f97316',
         tabBarInactiveTintColor: '#9ca3af',
         tabBarShowLabel: true,
@@ -322,11 +294,6 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   header: { backgroundColor: '#ffffff' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: '#111827' },
-  tabBar: {
-    backgroundColor: '#ffffff',
-    borderTopColor: '#e5e7eb',
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
   tabLabel: { fontSize: 10, fontWeight: '500', marginTop: 2 },
   navBadge: {
     position: 'absolute',
