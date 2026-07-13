@@ -203,19 +203,24 @@ the older applied set; the 2026-07-07 local migrations listed below still need
 deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 — already validated + deployed via the PowerSync Dashboard.
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(built 2026-07-13 16:10 NZT, 156,011,530 bytes, SHA256
-`cb76af51f6d4d04eeae7e6595c282aa77bf9f02344ca72302b67d035cb84d929`). This build
-carries the Stripe Connect Phase 2 mobile changes (per-company Tap to Pay
-Terminal Location via `fetchTerminalLocationId()`, replacing the old global
-`EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID`) on top of every prior mobile fix
-through commit `c8bc772` — see `git log` for current commit hashes if this
-line goes stale. Build log: `tradiee-mobile/release-build-connect-phase2.log`
-(`BUILD SUCCESSFUL`, 2m02s). **Not yet submitted to any store** — Android is
-build-ready (`eas build --platform android --profile production`, EAS project
-linked, credentials EAS-managed); Android *submit* needs the Play
-service-account JSON dropped in first (see the eas.json entry in the session
-log above). iOS build/submit both wait on the pending Apple entitlement.
-The prior APK (2026-07-13 14:59 NZT, SHA256
+(built 2026-07-13 21:52 NZT, 156,010,262 bytes, SHA256
+`380576f6598b581530c7859eb430c2a83348978c3548af1a36b039b91ca2c9bc`). This build
+carries the persistent bottom-nav-bar rework (`components/BottomTabBar.tsx`,
+now visible on every screen including jobs/[id]/quotes/[id]/invoices/[id] —
+**needs on-device verification**, not yet manually tested) and the mobile
+quote-to-job conversion fixes (explicit phone-user assignee, automatic
+material/labour/kit copy-over, schedule-now-or-later prompt) on top of every
+prior mobile fix through commit `87ef82e` — see `git log` for current commit
+hashes if this line goes stale. Build log:
+`tradiee-mobile/release-build-navbar-quoteconvert.log` (`BUILD SUCCESSFUL`,
+4m14s). **Not yet submitted to any store** — Android is build-ready
+(`eas build --platform android --profile production`, EAS project linked,
+credentials EAS-managed); Android *submit* needs the Play service-account
+JSON dropped in first (see the eas.json entry in the session log above). iOS
+build is now unblocked too — Apple granted the Tap to Pay entitlement
+2026-07-14 (see the Tap to Pay entry further down for the build command +
+one credentials-resync caveat).
+The prior APK (2026-07-13 16:10 NZT, SHA256
 `d64bd79c155da5405802346bd8bf617920bbe4e7f0a50a4db51db32b56e26c4a`, mobile-kits
 change on commit `1dac35d`) is superseded. The `release-build-schedule-fix2.log`
 build (2026-07-11 07:55 NZT, `BUILD SUCCESSFUL`, 14m56s) preceded it and is
