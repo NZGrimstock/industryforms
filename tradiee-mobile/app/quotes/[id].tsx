@@ -51,9 +51,12 @@ type Section = { id: string; title: string; sort_order: number }
 type LineItem = {
   id: string
   section_id: string | null
+  price_list_item_id: string | null
+  type: string
   description: string
   quantity: number
   unit: string
+  unit_cost: number
   unit_price: number
   line_total: number
   sort_order: number
@@ -115,7 +118,7 @@ export default function QuoteDetailScreen() {
   )
 
   const { data: lineItems, refresh: refreshItems } = useQuery<LineItem>(
-    `SELECT id, section_id, description, quantity, unit, unit_price, line_total, sort_order
+    `SELECT id, section_id, price_list_item_id, type, description, quantity, unit, unit_cost, unit_price, line_total, sort_order
      FROM quote_line_items WHERE quote_id = ? ORDER BY sort_order ASC`,
     [id]
   )
@@ -188,6 +191,59 @@ export default function QuoteDetailScreen() {
     )
   }
 
+  // Shared by Accept and Convert: creates the job explicitly assigned to
+  // whoever is converting it on their phone (not left to infer from a
+  // company-wide default), copies every quote line item across as job
+  // materials automatically (materials/labour/kits/sundries alike — anything
+  // unwanted can be removed manually afterward, matching the same
+  // web "Fill from quote" behaviour), then prompts to schedule now or later.
+  async function createJobFromQuoteAndPrompt() {
+    if (!quote) return
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+    const res = await fetch(`${apiBase}/api/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({
+        title: quote.title,
+        description: quote.customer_message ?? undefined,
+        customer_id: quote.customer_id ?? undefined,
+        quote_id: id,
+        assigned_to: user?.id ?? undefined,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error ?? 'Could not create job')
+    const jobId = json.id as string
+
+    const chargeableLines = (lineItems ?? []).filter(l => l.type !== 'section_header' && l.description.trim())
+    if (chargeableLines.length > 0 && user && quote.company_id) {
+      await supabase.from('job_materials').insert(
+        chargeableLines.map(l => ({
+          job_id: jobId,
+          company_id: quote.company_id,
+          added_by: user.id,
+          price_list_item_id: l.price_list_item_id,
+          description: l.type === 'labour' ? `${l.description} (labour)` : l.description,
+          quantity: l.quantity,
+          unit: l.unit,
+          unit_cost: l.unit_cost,
+          unit_price: l.unit_price,
+        }))
+      )
+    }
+
+    Alert.alert(
+      'Schedule this job?',
+      'You can schedule it now, or come back to it later.',
+      [
+        { text: 'Schedule later', onPress: () => router.push(`/jobs/${jobId}`) },
+        { text: 'Schedule now', onPress: () => router.push(`/jobs/${jobId}?openSchedule=1`) },
+      ]
+    )
+  }
+
   async function acceptQuote() {
     if (!quote) return
     Alert.alert(
@@ -199,24 +255,8 @@ export default function QuoteDetailScreen() {
           text: 'Accept & Create Job', onPress: async () => {
             setAccepting(true)
             try {
-              // Mark quote as accepted
               await supabase.from('quotes').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', id!)
-              // Create job via API
-              const { data: { session } } = await supabase.auth.getSession()
-              const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
-              const res = await fetch(`${apiBase}/api/jobs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-                body: JSON.stringify({
-                  title: quote.title,
-                  description: quote.customer_message ?? undefined,
-                  customer_id: quote.customer_id ?? undefined,
-                  quote_id: id,
-                }),
-              })
-              const json = await res.json()
-              if (!res.ok) throw new Error(json.error ?? 'Could not create job')
-              router.push(`/jobs/${json.id}`)
+              await createJobFromQuoteAndPrompt()
             } catch (e: any) {
               Alert.alert('Error', e.message ?? 'Could not accept quote')
             } finally {
@@ -239,24 +279,7 @@ export default function QuoteDetailScreen() {
           text: 'Create Job', onPress: async () => {
             setConverting(true)
             try {
-              const { data: { session } } = await supabase.auth.getSession()
-              const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
-              const res = await fetch(`${apiBase}/api/jobs`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${session?.access_token}`,
-                },
-                body: JSON.stringify({
-                  title: quote.title,
-                  description: quote.customer_message ?? undefined,
-                  customer_id: quote.customer_id ?? undefined,
-                  quote_id: id,
-                }),
-              })
-              const json = await res.json()
-              if (!res.ok) throw new Error(json.error ?? 'Could not create job')
-              router.push(`/jobs/${json.id}`)
+              await createJobFromQuoteAndPrompt()
             } catch (e: any) {
               Alert.alert('Error', e.message ?? 'Could not create job')
             } finally {

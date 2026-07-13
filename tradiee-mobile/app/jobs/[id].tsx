@@ -102,7 +102,7 @@ export default function JobDetailScreen() {
   const timezone = useTimezone()
   const formatDate = (iso: string) => formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' })
   const formatDateTime = (iso: string) => formatDateTimeTz(iso, timezone, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const { id } = useLocalSearchParams<{ id: string }>()
+  const { id, openSchedule } = useLocalSearchParams<{ id: string; openSchedule?: string }>()
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
@@ -275,6 +275,13 @@ export default function JobDetailScreen() {
   )
   const job = jobs?.[0]
   const jobAddress = job?.site_address ?? job?.customer_billing_address ?? null
+
+  // Auto-open the schedule sheet when arriving from "Schedule now" on quote
+  // conversion (?openSchedule=1) — one-shot, only fires once job data is ready.
+  useEffect(() => {
+    if (openSchedule === '1' && job) setShowScheduleVisit(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSchedule, !!job])
 
   function callPhone(phone: string) {
     Linking.openURL(`tel:${phone.replace(/[^+\d]/g, '')}`).catch(() =>
