@@ -121,6 +121,53 @@ Vercel prod, mobile in the next APK):
   migrate off a platform-account version.
 - Fresh Android release APK built same session carrying Phase 2 — see "Latest
   APK" line at the top of this file for its current build time/SHA256.
+- **SMS shared number pool (session-routed)** — user proposed a shared-pool
+  architecture (a handful of dedicated numbers serving all tenants, rotated
+  via a session table) since dedicated-per-company numbers get expensive at
+  scale; confirmed sound after review, one refinement applied, then built
+  given the user's "100+ tenants, scaling fast" answer. Migration
+  `20260713120000_sms_pool_sessions.sql`: `sms_pool_sessions` (company_id,
+  customer_phone, pool_number, last_activity_at) — **sticky, no fixed TTL**
+  (deliberate: a timer-based pool would let a number get reassigned to an
+  unrelated tenant while the original customer still has it saved, so texting
+  back after "expiry" would get evaluated against the wrong company; sticky-
+  forever avoids that failure mode entirely — the refinement over the user's
+  original TTL-based proposal). The real collision guard is the unique index
+  on `(pool_number, customer_phone)`: the same customer phone can never be
+  mapped to the same pool number by two different companies at once — a pool
+  number still serves unlimited *different* customer phones concurrently.
+  `lib/sms.ts`: `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU` (comma-separated
+  E.164 lists — env config, since buying numbers is a rare ops action, not
+  runtime state) + `resolveOutboundFrom()` does sticky lookup-or-assign,
+  picking a pool number not already tied to that exact customer phone by
+  another company. Falls back to the single `CLICKSEND_FROM` number when the
+  pool env isn't set — **works unchanged today, pool activates once numbers
+  are bought and the env is configured.**
+  **Also fixed a real pre-existing bug while here**: the inbound webhook
+  previously resolved the sending company via a bare cross-tenant
+  `customers.phone` match (`.limit(1)`, no `company_id` filter at all) —
+  `customers.phone` has no uniqueness constraint, so if two unrelated
+  companies each had a customer record for the same phone number, an inbound
+  reply could silently land in the wrong company's inbox. This was an
+  unbounded, permanent risk (not a rare edge case) inherited from the
+  original Twilio-era code, present regardless of pool or single-number mode.
+  Now: company is resolved via `sms_pool_sessions(pool_number, customer_phone)`
+  — the session created by the matching *outbound* send is the only source
+  of truth for the tenant, so there's no ambiguous cross-tenant scan anymore.
+  No session = genuinely unattributable (a cold text to a pool number with no
+  prior outbound history) → a generic auto-reply ("This number is automated…"),
+  no company guessed, no `customer_messages` row created. Legacy single-number
+  mode (pool env unset) is untouched.
+  Also fixed a bug this same change would have introduced: `app/api/sms/send/route.ts`
+  hardcoded `from_number: CLICKSEND_FROM`, which is unset in pool mode —
+  `sendSms()` now returns the `from` it actually used so the thread history
+  stays accurate.
+  **User must, when ready to activate the pool**: buy ~3 NZ + 3 AU dedicated
+  ClickSend numbers, set `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU` (comma-
+  separated E.164), and configure ClickSend's Inbound SMS Rule + Delivery
+  Reports URL on **every** pool number (not just one) pointing at
+  `/api/sms/inbound?k=…` / `/api/sms/status?k=…`. Apply the migration to
+  cloud Supabase before activating.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -542,13 +589,17 @@ Settings → Integrations only shows customer-relevant integrations.
 - `NEXT_PUBLIC_APP_URL=https://app.industryforms.app`, `NEXT_PUBLIC_POWERSYNC_URL`, `CRON_SECRET`
 - **LocationIQ** — `NEXT_PUBLIC_LOCATIONIQ_KEY` for geocoding (address autocomplete + job map pins). Falls back to Nominatim (rate-limited in prod) if unset.
 - **SMS — ClickSend (swapped from Twilio 2026-07-13, see session log above)** —
-  `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY`, `CLICKSEND_FROM` (dedicated number,
-  required for two-way replies), `CLICKSEND_INBOUND_SECRET` (shared secret for
-  the `?k=` webhook guard — ClickSend doesn't sign webhooks). **User still
-  needs to**: set this env (Vercel + `.env.local`), delete `TWILIO_*`, buy a
-  ClickSend number, and point the ClickSend dashboard's Inbound SMS Rule +
-  Delivery Reports URL at `/api/sms/inbound?k=…` / `/api/sms/status?k=…`. SMS
-  is dark (safe no-op) until this is done.
+  `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY`, `CLICKSEND_INBOUND_SECRET` (shared
+  secret for the `?k=` webhook guard — ClickSend doesn't sign webhooks), plus
+  **either** `CLICKSEND_FROM` (single dedicated number — simplest, fine below
+  ~15-20 tenants) **or** `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU`
+  (comma-separated E.164 lists — the shared-pool architecture built same
+  session for scale, see above; ~3 NZ + 3 AU numbers). **User still needs
+  to**: set this env (Vercel + `.env.local`), delete `TWILIO_*`, buy the
+  ClickSend number(s), and point the ClickSend dashboard's Inbound SMS Rule +
+  Delivery Reports URL at `/api/sms/inbound?k=…` / `/api/sms/status?k=…` on
+  **every** number if using the pool. SMS is dark (safe no-op) until this is
+  done.
 - **Resend — fixed 2026-07-13** — the previously-invalid `RESEND_API_KEY` was
   rotated in Doppler + Vercel; transactional email is live again. `EMAIL_FROM`
   (verified sender domain) still needed either way. Quote/invoice send
