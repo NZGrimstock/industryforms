@@ -1,29 +1,29 @@
-// SMS via ClickSend. Mirrors lib/email.ts: a guarded sender that no-ops
-// (without throwing) when not configured, so builds/runtime never depend on SMS
-// being set up. Swapped from Twilio 2026-07-13 — ClickSend is materially
-// cheaper for NZ/AU. The `sms_usage_events.twilio_sid` column is kept as-is: it
-// now holds the ClickSend message_id. Every reader treats it as an opaque
-// provider message id, so renaming the column would be a pointless migration.
-import { randomUUID, timingSafeEqual } from 'crypto'
+// SMS via Twilio. Mirrors lib/email.ts: a guarded sender that no-ops (without
+// throwing) when not configured, so builds/runtime never depend on SMS being
+// set up. Briefly swapped to ClickSend 2026-07-13, reverted same day — its
+// pricing didn't actually beat Twilio once checked properly. The number-pool
+// session-routing built during that swap (and the cross-tenant collision fix
+// it carries) is provider-agnostic, so it's kept as-is, just wired back to
+// Twilio's send/webhook APIs.
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 
-const CLICKSEND_USERNAME = process.env.CLICKSEND_USERNAME
-const CLICKSEND_API_KEY = process.env.CLICKSEND_API_KEY
-// Dedicated number / sender ID. Required as the `from` for two-way replies to
-// route back to us; if unset ClickSend uses a shared number (outbound only).
-const CLICKSEND_FROM = process.env.CLICKSEND_FROM
+const SID = process.env.TWILIO_ACCOUNT_SID
+const TOKEN = process.env.TWILIO_AUTH_TOKEN
+// Single dedicated number — used when the pool below isn't configured.
+const FROM = process.env.TWILIO_FROM_NUMBER
 const SMS_BILLING_DISABLED = 'SMS billing is not enabled for this account'
 
 // Shared number pool (2026-07-13): a handful of dedicated numbers serve ALL
 // tenants, routed by sms_pool_sessions rather than one number per company.
 // Numbers themselves are env config (bought a few times a year, not runtime
 // state); comma-separated E.164, e.g. "+64211110001,+64211110002,+64211110003".
-// Falls back to the single CLICKSEND_FROM number (pre-pool behaviour) when
+// Falls back to the single TWILIO_FROM_NUMBER (pre-pool behaviour) when
 // unset — keeps dev/small-scale environments working without real pool
 // numbers provisioned.
 function poolNumbers(country: 'NZ' | 'AU'): string[] {
-  const raw = country === 'AU' ? process.env.CLICKSEND_POOL_AU : process.env.CLICKSEND_POOL_NZ
+  const raw = country === 'AU' ? process.env.TWILIO_POOL_AU : process.env.TWILIO_POOL_NZ
   return (raw ?? '').split(',').map(n => n.trim()).filter(Boolean)
 }
 
@@ -39,39 +39,31 @@ export function allPoolNumbers(): string[] {
 }
 
 export function smsConfigured(): boolean {
-  return !!(CLICKSEND_USERNAME && CLICKSEND_API_KEY)
+  return !!(SID && TOKEN)
 }
 
 export function isSmsBillingDisabledError(error: string | null | undefined): boolean {
   return error === SMS_BILLING_DISABLED
 }
 
-// ClickSend does NOT sign inbound/DLR webhooks (unlike Twilio's HMAC), so we
-// gate them with a shared secret carried in the URL (?k=…), compared in
-// constant time. Set the same secret on the ClickSend inbound rule + delivery-
-// report URLs. Returns false (→ caller 503s) when the secret isn't configured,
-// so nothing spoofed can land during the dark period.
-export function clickSendWebhookAuthorized(req: Request): boolean {
-  const secret = process.env.CLICKSEND_INBOUND_SECRET
-  if (!secret) return false
-  const provided = new URL(req.url).searchParams.get('k') ?? ''
-  const a = Buffer.from(provided)
-  const b = Buffer.from(secret)
+/**
+ * Verify Twilio's X-Twilio-Signature on an inbound webhook request.
+ * Algorithm (no SDK — the `twilio` package isn't a dependency here, and this
+ * is a single well-documented HMAC-SHA1 computation):
+ * https://www.twilio.com/docs/usage/security#validating-requests
+ */
+export function validateTwilioSignature(
+  authToken: string,
+  signature: string,
+  url: string,
+  params: Record<string, string>
+): boolean {
+  const data = Object.keys(params).sort().reduce((acc, key) => acc + key + params[key], url)
+  const expected = createHmac('sha1', authToken).update(data, 'utf8').digest('base64')
+  const a = Buffer.from(expected)
+  const b = Buffer.from(signature)
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
-}
-
-// ClickSend webhooks arrive as form-encoded or JSON depending on the rule's
-// configured method — read both into a flat string map.
-export async function readWebhookParams(req: Request): Promise<Record<string, string>> {
-  const ct = req.headers.get('content-type') ?? ''
-  if (ct.includes('application/json')) {
-    const json = await req.json().catch(() => ({})) as Record<string, unknown>
-    return Object.fromEntries(Object.entries(json).map(([k, v]) => [k, String(v ?? '')]))
-  }
-  const form = await req.formData().catch(() => null)
-  if (!form) return {}
-  return Object.fromEntries(Array.from(form.entries()).map(([k, v]) => [k, String(v)]))
 }
 
 /**
@@ -95,7 +87,7 @@ export function toE164(raw: string | null | undefined, country: 'NZ' | 'AU' = 'N
 // on every send so last_activity_at stays meaningful for observability.
 async function resolveOutboundFrom(companyId: string | null | undefined, dest: string, country: 'NZ' | 'AU'): Promise<string | undefined> {
   const candidates = poolNumbers(country)
-  if (candidates.length === 0) return CLICKSEND_FROM || undefined
+  if (candidates.length === 0) return FROM || undefined
   if (!companyId) return candidates[0]
 
   const service = createServiceClient()
@@ -153,8 +145,8 @@ export async function sendSms(
     relatedId?: string | null
   }
 ): Promise<{ id?: string; error?: string; from?: string }> {
-  if (!smsConfigured()) {
-    console.warn('ClickSend not configured — SMS not sent')
+  if (!SID || !TOKEN) {
+    console.warn('Twilio not configured — SMS not sent')
     return { error: 'SMS service not configured' }
   }
   const dest = toE164(to, country)
@@ -168,39 +160,26 @@ export async function sendSms(
   }
 
   // Which number this send goes FROM: a sticky pool-number assignment for
-  // this (company, customer) pair once CLICKSEND_POOL_NZ/AU is configured,
-  // else the single CLICKSEND_FROM number (pre-pool behaviour).
+  // this (company, customer) pair once TWILIO_POOL_NZ/AU is configured, else
+  // the single TWILIO_FROM_NUMBER (pre-pool behaviour).
   const from = await resolveOutboundFrom(companyId, dest, country)
+  if (!from) return { error: 'No sender number configured' }
 
-  // Delivery receipts are configured account-wide in the ClickSend dashboard
-  // (Messaging → Delivery Reports → URL), not per message like Twilio's
-  // StatusCallback — so there's nothing to attach here. `custom_string` carries
-  // the company id so DLRs/replies can be correlated.
-  const res = await fetch('https://rest.clicksend.com/v3/sms/send', {
+  const statusCallback = process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/sms/status`
+    : undefined
+
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
     method: 'POST',
-    headers: {
-      Authorization: 'Basic ' + Buffer.from(`${CLICKSEND_USERNAME}:${CLICKSEND_API_KEY}`).toString('base64'),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messages: [{
-        source: 'industryforms',
-        ...(from ? { from } : {}),
-        to: dest,
-        body,
-        ...(companyId ? { custom_string: companyId } : {}),
-      }],
+    headers: { Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      From: from, To: dest, Body: body,
+      ...(statusCallback ? { StatusCallback: statusCallback } : {}),
     }),
   })
-  const data = await res.json().catch(() => ({})) as {
-    response_code?: string; response_msg?: string
-    data?: { messages?: Array<{ message_id?: string; status?: string }> }
-  }
-  const msg = data.data?.messages?.[0]
-  if (!res.ok || data.response_code !== 'SUCCESS' || (msg?.status && msg.status !== 'SUCCESS')) {
-    return { error: msg?.status || data.response_msg || `SMS failed (${res.status})` }
-  }
-  const sid = typeof msg?.message_id === 'string' ? msg.message_id : randomUUID()
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) return { error: data.message ?? `SMS failed (${res.status})` }
+  const sid = typeof data.sid === 'string' ? data.sid : randomUUID()
   if (companyId) {
     await recordSmsUsage({
       companyId,
@@ -220,15 +199,12 @@ export async function sendSms(
 // billing ledger entry, just a generic bounce so the sender isn't left
 // hanging. Used only by the inbound webhook's unmapped-message path.
 export async function sendRawSms(from: string, to: string, body: string): Promise<void> {
-  if (!smsConfigured()) return
+  if (!SID || !TOKEN) return
   try {
-    await fetch('https://rest.clicksend.com/v3/sms/send', {
+    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
       method: 'POST',
-      headers: {
-        Authorization: 'Basic ' + Buffer.from(`${CLICKSEND_USERNAME}:${CLICKSEND_API_KEY}`).toString('base64'),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ messages: [{ source: 'industryforms', from, to, body }] }),
+      headers: { Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ From: from, To: to, Body: body }),
     })
   } catch (error) {
     console.error('[sms] unmapped auto-reply failed', error)

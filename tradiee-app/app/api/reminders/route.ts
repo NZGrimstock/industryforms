@@ -521,7 +521,7 @@ export async function GET(req: NextRequest) {
     envVars: {
       CRON_SECRET: !!process.env.CRON_SECRET,
       RESEND_API_KEY: !!process.env.RESEND_API_KEY,
-      SMS_CLICKSEND: smsConfigured(),
+      TWILIO: smsConfigured(),
     },
   })
 }
