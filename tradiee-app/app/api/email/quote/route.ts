@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendEmail, quoteEmailHtml } from '@/lib/email'
+import { quoteEmailHtml } from '@/lib/email'
+import { notify } from '@/lib/notify'
 import { logCommunication } from '@/lib/comms'
 import { formatCurrency } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
@@ -62,14 +63,19 @@ export async function POST(req: NextRequest) {
     timezone: callerProfile?.timezone ?? DEFAULT_TIMEZONE,
   })
 
-  const result = await sendEmail({
-    to: customer.email,
-    subject: `Quote ${quote.quote_number} from ${company.name}`,
-    html,
-    replyTo: company.email ?? undefined,
+  // Route through notify() so a failed send is recorded in automation_events
+  // (surfaced in the admin failures report), not just returned as a 500.
+  const [emailResult] = await notify({
+    service,
+    companyId: quote.company_id,
+    customerId: quote.customer_id,
+    eventType: 'quote_email',
+    email: { to: customer.email, subject: `Quote ${quote.quote_number} from ${company.name}`, html, replyTo: company.email ?? null },
   })
 
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+  if (emailResult?.status !== 'sent') {
+    return NextResponse.json({ error: emailResult?.error ?? 'Failed to send email' }, { status: 500 })
+  }
 
   await service.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
   await logCommunication(service, {

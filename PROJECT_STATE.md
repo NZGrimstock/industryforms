@@ -1,6 +1,46 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-11. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-13. Catch-up doc for a fresh session. Read this first.
+
+## Session 2026-07-13 (Claude) — optimization pass + Tap to Pay verification
+
+Worked a strategic optimization list; most of it was already built or was
+config, not code. What actually landed (all `tsc`-clean; web on `main` →
+Vercel prod, mobile in the next APK):
+
+- **Supplier-invoice AI reconciler** — `app/api/supplier-invoice/parse/route.ts`
+  now runs `arithmeticFault()` before accepting the fast `gpt-5.4-nano` parse
+  and forces the `gpt-5.4-mini` re-parse on a fault. Two **confounder-safe**
+  checks only (the parser strips GST + skips freight, so `sum(lines) < total`
+  is normal — a naive "must balance" check would misfire on every invoice):
+  (1) per-line `qty×unit_cost ≠ line_total`, (2) goods subtotal exceeding the
+  grand total. Verified with 6 assert cases.
+- **Kit "Split"** — kits can now be added as one **Bundle** line (existing) or
+  **Split** into one editable, stock-tracked line per component. Web:
+  `jobs/[id]/materials.tsx` + `invoices/[id]/client.tsx`. **Mobile: added kit
+  support entirely** (`tradiee-mobile/app/jobs/[id].tsx`) — kits aren't in the
+  PowerSync sync rules, so they're fetched **online** from Supabase (consistent
+  with `addMaterial`, which already writes straight to Supabase). Bundle/Split
+  picker + `consume_price_list_stock` + optimistic append.
+- **Email failure visibility** — the two revenue sends (`app/api/email/quote`
+  + `app/api/email/invoice`) now route through `notify()` so a failed send is
+  logged to `automation_events` (visible in the admin failures report), not
+  just returned as a 500. Bookings/reminders already used `notify()`.
+- **NZD/AUD currency bug (root-cause, 3 places)** — every Stripe PaymentIntent
+  hardcoded `currency: 'nzd'`, charging AU companies in NZD. Added
+  `stripeCurrency(country)` in `lib/stripe.ts`; wired into terminal
+  payment-intent, online invoice payment-intent, and booking deposit-intent
+  (all now resolve `companies.country`).
+- **Resend key** — user rotated the invalid `RESEND_API_KEY` in Doppler +
+  Vercel; transactional email is live again.
+- **Verified flagged bug-classes are contained** — the `gst_rate` vs
+  `default_gst_rate` typo has zero remaining instances; every `is_terminal`
+  reader falls back to `DEFAULT_JOB_STATUSES` (web + mobile). No lingering
+  siblings.
+- **Tap to Pay** — confirmed already fully wired (see the Tap to Pay entry
+  below, corrected from its stale "install pending" text). Apple entitlement
+  requested 2026-07-13; a fresh Android APK build was kicked off this session
+  to carry the mobile-kits change.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -716,11 +756,26 @@ so site-scoped routes work at the tenant's root. New `/sitemap.xml` +
 and favicon from the company logo. **GBP sync stubbed** in `lib/gbp-sync.ts`
 — Google Business Profile API needs manual approval we don't have yet.
 
-**Tap to Pay scaffolding** — `/api/stripe/terminal/connection-token` +
-`/api/stripe/terminal/payment-intent` (card_present, auto-capture). Mobile
-side: `tradiee-mobile/lib/tap-to-pay.ts` with fetch helpers and a wiring
-doc-comment. **Install pending: `@stripe/stripe-terminal-react-native` +
-Apple's proximity-reader entitlement** before the iPhone flow works.
+**Tap to Pay** — **fully wired for iOS + Android** (this line was stale; the
+integration was completed by the 2026-07-07 Codex pass and re-verified
+2026-07-13). Backend: `/api/stripe/terminal/connection-token` +
+`/api/stripe/terminal/payment-intent` (card_present, auto-capture). Mobile:
+SDK `@stripe/stripe-terminal-react-native` (beta.31, supports `tapToPay`)
+installed; config plugin + Location/NFC/foreground-service permissions in
+`app.json`; `StripeTerminalProvider` + `tokenProvider` in `app/_layout.tsx`;
+full discover→connect→collect→confirm flow in `app/pay-now.tsx` (Android
+runtime-permission branch + iOS TOS auto-accept). Stripe Terminal Location
+`tml_Gjk2AE1e6OUFu2` ("Industry Forms NZ", Auckland) exists and is set in
+`eas.json`/`.env` as `EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID`; a livemode
+"Mobile Phone Reader" has already connected (confirmed in the Stripe
+Dashboard), so Tap to Pay is **enabled on the account**. **Only remaining
+blockers, both non-code and iOS-only:** Apple's
+`com.apple.developer.proximity-reader.payment.acceptance` entitlement
+(requested 2026-07-13, awaiting Apple approval) and an EAS iOS store build
+carrying it (needs interactive Apple creds). Android needs neither — it's
+buildable/testable now. Note: the entitlement is a **native capability, so it
+cannot be shipped via OTA/EAS Update** — it requires a fresh native build +
+App Store review once granted.
 
 **Tab-accent + orange cleanup** — `bg-orange-500` etc. sweep across 43 files
 → `bg-[var(--accent,#f97316)]`. Quotes/Jobs/Invoices/Enquiries filter pills

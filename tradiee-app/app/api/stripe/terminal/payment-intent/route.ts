@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, stripeCurrency } from '@/lib/stripe'
 
 const bodySchema = z.object({ invoice_id: z.string().uuid(), amount: z.number().positive().optional() })
 
@@ -38,12 +38,13 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('id, company_id, total, amount_paid, invoice_number')
+    .select('id, company_id, total, amount_paid, invoice_number, companies(country)')
     .eq('id', invoice_id)
     .single()
   if (!invoice || invoice.company_id !== profile.company_id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  const company = invoice.companies as unknown as { country: string | null } | null
 
   const outstanding = Number(invoice.total) - Number(invoice.amount_paid)
   const requested = amount ? Number(amount) : outstanding
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
   const stripe = getStripe()
   const pi = await stripe.paymentIntents.create({
     amount: cents,
-    currency: 'nzd',
+    currency: stripeCurrency(company?.country),
     payment_method_types: ['card_present'],
     capture_method: 'automatic',
     metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, channel: 'tap_to_pay' },

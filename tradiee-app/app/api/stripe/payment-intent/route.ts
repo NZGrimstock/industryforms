@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, stripeCurrency } from '@/lib/stripe'
 
 const bodySchema = z.object({ token: z.string().trim().min(1).max(200) })
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const service = createServiceClient()
   const { data: invoice } = await service
     .from('invoices')
-    .select('id, total, amount_paid, invoice_number, company_id, companies(name, stripe_customer_id)')
+    .select('id, total, amount_paid, invoice_number, company_id, companies(name, stripe_customer_id, country)')
     .eq('public_token', token)
     .single()
 
@@ -23,11 +23,11 @@ export async function POST(req: NextRequest) {
   const amountDue = Math.round((Number(invoice.total) - Number(invoice.amount_paid)) * 100)
   if (amountDue <= 0) return NextResponse.json({ error: 'Invoice already paid' }, { status: 400 })
 
-  const company = invoice.companies as unknown as { name: string } | null
+  const company = invoice.companies as unknown as { name: string; country: string | null } | null
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
-    currency: 'nzd',
+    currency: stripeCurrency(company?.country),
     metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number },
     description: `Invoice ${invoice.invoice_number} — ${company?.name ?? ''}`,
   })

@@ -13,3 +13,9 @@ export function getStripe(): Stripe {
   }
   return _stripe
 }
+
+// Charge in the company's own currency. Companies are NZ or AU (companies.country);
+// anything else (or unset) falls back to NZD — the app's primary market.
+export function stripeCurrency(country?: string | null): 'nzd' | 'aud' {
+  return country === 'AU' ? 'aud' : 'nzd'
+}

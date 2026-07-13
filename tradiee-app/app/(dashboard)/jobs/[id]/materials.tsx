@@ -274,6 +274,39 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
     router.refresh()
   }
 
+  // Explode a kit into its individual component lines instead of one bundle
+  // row — so a tech can delete or swap a single component on site without
+  // touching the others. Each line is a normal tracked price-list item priced
+  // at its own standard sell, so stock and job-costing stay accurate.
+  async function addKitAsItems(kit: Kit) {
+    const components = kit.kit_items.filter(ki => ki.price_list_items)
+    if (components.length === 0) return
+    for (const c of components) {
+      if (!confirmStock(c.price_list_items!, Number(c.quantity))) return
+    }
+    setLoading(true)
+    const { data, error } = await supabase.from('job_materials').insert(
+      components.map(c => ({
+        job_id: jobId,
+        company_id: companyId,
+        added_by: profileId,
+        price_list_item_id: c.price_list_items!.id,
+        description: c.price_list_items!.name,
+        quantity: Number(c.quantity),
+        unit: c.price_list_items!.unit,
+        unit_cost: Number(c.price_list_items!.cost_price),
+        unit_price: sellPrice(c.price_list_items!, standardMarkupEnabled, standardMarkupPct),
+      }))
+    ).select('id, description, quantity, unit, unit_price, price_list_item_id')
+    setLoading(false)
+    if (error) return
+    setMaterials(prev => [...prev, ...(data ?? [])])
+    setPicker(null)
+    setSearch('')
+    void consumeStock(components.map(c => ({ item_id: c.price_list_items!.id, quantity: Number(c.quantity) })))
+    router.refresh()
+  }
+
   async function fillFromQuote() {
     if (quoteLines.length === 0) return
     if (materials.length > 0 && !confirm('Add all line items from the quote to this job? Existing materials will be kept.')) return
@@ -381,10 +414,13 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
           </div>
           <div className="max-h-52 overflow-y-auto space-y-0.5">
             {picker === 'kits' ? filteredKits.map(kit => (
-              <button key={kit.id} onClick={() => addKit(kit)} disabled={loading} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-white disabled:opacity-50">
-                <span className="text-gray-800">{kit.name}</span>
-                <span className="text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{formatCurrency(Number(kit.sell_price ?? 0))} · {kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span>
-              </button>
+              <div key={kit.id} className="w-full px-3 py-2 rounded-lg flex items-center justify-between gap-3 text-sm hover:bg-white">
+                <span className="text-gray-800 truncate">{kit.name}<span className="ml-2 text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{formatCurrency(Number(kit.sell_price ?? 0))} · {kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span></span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button onClick={() => addKit(kit)} disabled={loading} className="rounded-md px-2 py-1 text-xs font-medium text-[var(--accent,#f97316)] hover:bg-[var(--accent,#f97316)]/10 disabled:opacity-50">Bundle</button>
+                  <button onClick={() => addKitAsItems(kit)} disabled={loading} title="Add each component as its own editable line" className="rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50">Split</button>
+                </span>
+              </div>
             )) : filteredItems.map(item => (
               <button key={item.id} onClick={() => addPriceItem(item)} disabled={loading} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-white disabled:opacity-50">
                 <div>

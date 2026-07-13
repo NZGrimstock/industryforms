@@ -86,6 +86,9 @@ type Job = {
 type Note = { id: string; body: string; author_id: string | null; created_at: string }
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number }
 type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string }
+type KitComponent = { quantity: number; price_list_items: { id: string; name: string; unit: string | null; cost_price: number | null; sell_price: number | null } | null }
+type Kit = { id: string; code: string | null; name: string; sell_price: number | null; use_item_sell_total: boolean | null; kit_items: KitComponent[] }
+type MatInsert = { job_id: string; company_id: string; added_by: string | null; price_list_item_id: string | null; description: string; quantity: number; unit: string; unit_cost: number; unit_price: number }
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
 type JobInvoice = { id: string; invoice_number: string; status: string; total: number; amount_paid: number; invoice_date: string | null }
 type TimeLogEntry = { id: string; job_id: string | null; started_at: string; ended_at: string | null; break_minutes: number; notes: string | null }
@@ -106,6 +109,9 @@ export default function JobDetailScreen() {
   const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
   const [savingMaterial, setSavingMaterial] = useState(false)
   const [optimisticMaterials, setOptimisticMaterials] = useState<Material[]>([])
+  const [kits, setKits] = useState<Kit[]>([])
+  const [showKitPicker, setShowKitPicker] = useState(false)
+  const [addingKit, setAddingKit] = useState(false)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -510,6 +516,70 @@ export default function JobDetailScreen() {
       },
     ])
     setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    refreshMaterials?.()
+    hapticSuccess()
+  }
+
+  // Kits aren't synced to the device (sync-rules.yaml only carries
+  // price_list_items), so fetch them online — consistent with addMaterial,
+  // which already writes job_materials straight to Supabase, not the offline
+  // queue, so the screen is online whenever items get added anyway.
+  useEffect(() => {
+    if (!companyId) return
+    let cancelled = false
+    supabase
+      .from('kits')
+      .select('id, code, name, sell_price, use_item_sell_total, kit_items(quantity, price_list_items(id, name, unit, cost_price, sell_price))')
+      .eq('company_id', companyId)
+      .order('name')
+      .then(({ data }) => { if (!cancelled) setKits((data as Kit[] | null) ?? []) })
+    return () => { cancelled = true }
+  }, [companyId])
+
+  // Bundle = one aggregate "kit" line at the kit price. Split = one editable,
+  // stock-tracked line per component, so a tech can swap/delete a single part
+  // on site. Both consume component stock identically.
+  async function addKit(kit: Kit, mode: 'bundle' | 'split') {
+    if (!companyId || addingKit) return
+    const components = kit.kit_items.filter(ki => ki.price_list_items)
+    if (components.length === 0) return
+    setAddingKit(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const compRows: MatInsert[] = components.map(ki => {
+      const p = ki.price_list_items!
+      return {
+        job_id: id, company_id: companyId, added_by: user?.id ?? null,
+        price_list_item_id: p.id, description: p.name, quantity: Number(ki.quantity),
+        unit: p.unit || 'ea', unit_cost: Number(p.cost_price) || 0,
+        unit_price: Number(p.sell_price) || Number(p.cost_price) || 0,
+      }
+    })
+    let rows: MatInsert[]
+    if (mode === 'split') {
+      rows = compRows
+    } else {
+      const kitCost = compRows.reduce((s, r) => s + r.unit_cost * r.quantity, 0)
+      const kitSell = kit.use_item_sell_total
+        ? compRows.reduce((s, r) => s + r.unit_price * r.quantity, 0)
+        : Number(kit.sell_price) || 0
+      rows = [{
+        job_id: id, company_id: companyId, added_by: user?.id ?? null,
+        price_list_item_id: null, description: kit.code ? `${kit.name} (${kit.code})` : kit.name,
+        quantity: 1, unit: 'kit', unit_cost: Number(kitCost.toFixed(2)), unit_price: Number(kitSell.toFixed(2)),
+      }]
+    }
+    const { data, error } = await supabase
+      .from('job_materials')
+      .insert(rows)
+      .select('id, description, quantity, unit, unit_price')
+    setAddingKit(false)
+    setShowKitPicker(false)
+    if (error) { Alert.alert('Could not add kit', error.message); return }
+    setOptimisticMaterials(prev => [...prev, ...((data as Material[] | null) ?? [])])
+    await supabase.rpc('consume_price_list_stock', {
+      p_company_id: companyId,
+      p_lines: components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })),
+    })
     refreshMaterials?.()
     hapticSuccess()
   }
@@ -967,6 +1037,11 @@ export default function JobDetailScreen() {
               <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' })}>
                 <Text style={styles.addLink}>Add sundry</Text>
               </TouchableOpacity>
+              {kits.length > 0 && (
+                <TouchableOpacity onPress={() => { hapticTap(); setShowKitPicker(true) }}>
+                  <Text style={styles.addLink}>Add kit</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
           {displayedMaterials.length === 0 ? (
@@ -1244,6 +1319,28 @@ export default function JobDetailScreen() {
                 <View style={[styles.dot, { backgroundColor: statusHex(s.color) }]} />
                 <Text style={styles.pickerLabel}>{s.label}</Text>
               </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={showKitPicker} transparent animationType="fade" onRequestClose={() => !addingKit && setShowKitPicker(false)}>
+        <TouchableOpacity style={styles.overlay} onPress={() => !addingKit && setShowKitPicker(false)} activeOpacity={1}>
+          <View style={styles.picker}>
+            <Text style={styles.pickerTitle}>Add kit</Text>
+            {kits.map(kit => (
+              <View key={kit.id} style={styles.kitRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerLabel} numberOfLines={1}>{kit.name}</Text>
+                  <Text style={styles.kitMeta}>{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</Text>
+                </View>
+                <TouchableOpacity style={styles.kitBtn} disabled={addingKit} onPress={() => addKit(kit, 'bundle')}>
+                  <Text style={styles.kitBtnText}>Bundle</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.kitBtn, styles.kitBtnAlt]} disabled={addingKit} onPress={() => addKit(kit, 'split')}>
+                  <Text style={[styles.kitBtnText, styles.kitBtnTextAlt]}>Split</Text>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         </TouchableOpacity>
@@ -1532,4 +1629,10 @@ const styles = StyleSheet.create({
   invCreateText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   pickerLabel: { fontSize: 16, color: '#374151' },
+  kitRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
+  kitMeta: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
+  kitBtn: { backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  kitBtnAlt: { backgroundColor: '#f3f4f6' },
+  kitBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  kitBtnTextAlt: { color: '#374151' },
 })

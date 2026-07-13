@@ -171,6 +171,43 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     setLoading(false)
   }
 
+  // Explode a kit into its component lines instead of one bundle row, so a
+  // line can be swapped/removed on its own. Each line is priced at its
+  // standard sell (or customer-group price) and taxed like any other item.
+  async function addKitAsItems(kit: Kit) {
+    const components = kit.kit_items.filter(ki => ki.price_list_items)
+    if (components.length === 0) return
+    for (const c of components) {
+      if (!confirmStock(c.price_list_items!, Number(c.quantity))) return
+    }
+    setLoading(true)
+    const { error } = await supabase.from('invoice_line_items').insert(
+      components.map((c, i) => {
+        const price = Number((priceForCustomerGroup(c.price_list_items!, invoiceCustomer) || c.price_list_items!.cost_price).toFixed(2))
+        const qty = Number(c.quantity)
+        return {
+          invoice_id: invoice.id,
+          price_list_item_id: c.price_list_items!.id,
+          type: c.price_list_items!.type === 'labour' ? 'labour' : 'material',
+          description: c.price_list_items!.name,
+          quantity: qty,
+          unit: c.price_list_items!.unit,
+          unit_price: price,
+          tax_rate: gstRate,
+          line_total: lineNet(qty, price, null, 0, gstRate, pricesIncludeTax),
+          sort_order: 99 + i,
+        }
+      })
+    )
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
+    await consumeStock(components.map(c => ({ item_id: c.price_list_items!.id, quantity: Number(c.quantity) })))
+    await recompute(invoice.discount_type, invoice.discount_value)
+    toast(`Added ${kit.name} components`)
+    setActiveDialog(null)
+    router.refresh()
+    setLoading(false)
+  }
+
   async function addSundries() {
     const amountText = prompt('Sundries price')
     if (amountText == null) return
@@ -363,10 +400,13 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
                 <>
                   <p className="px-1 pt-1 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Kits</p>
                   {kits.map(kit => (
-                    <button key={kit.id} type="button" onClick={() => addKit(kit)} disabled={loading} className="w-full text-left px-3 py-2 rounded-lg flex items-center justify-between text-sm hover:bg-gray-50 disabled:opacity-50">
-                      <span className="text-gray-800">{kit.name}</span>
-                      <span className="text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{formatCurrency(Number(kit.sell_price ?? 0))} · {kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span>
-                    </button>
+                    <div key={kit.id} className="w-full px-3 py-2 rounded-lg flex items-center justify-between gap-3 text-sm hover:bg-gray-50">
+                      <span className="text-gray-800 truncate">{kit.name}<span className="ml-2 text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{formatCurrency(Number(kit.sell_price ?? 0))} · {kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span></span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <button type="button" onClick={() => addKit(kit)} disabled={loading} className="rounded-md px-2 py-1 text-xs font-medium text-[var(--accent,#f97316)] hover:bg-[var(--accent,#f97316)]/10 disabled:opacity-50">Bundle</button>
+                        <button type="button" onClick={() => addKitAsItems(kit)} disabled={loading} title="Add each component as its own editable line" className="rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50">Split</button>
+                      </span>
+                    </div>
                   ))}
                   <p className="px-1 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Items</p>
                 </>

@@ -83,6 +83,8 @@ Rules:
       })
       parsed = parseJsonObject<ParsedSupplierInvoice>(raw)
       if (!hasUsableLineItems(parsed)) throw new Error('No usable invoice line items found')
+      const bad = arithmeticFault(parsed)
+      if (bad) throw new Error(`Arithmetic inconsistency (${bad}) — retrying with a stronger model`)
     } catch (nanoError) {
       console.warn('[supplier-invoice/parse] nano parse fallback', nanoError)
       const raw = await createOpenAIText({
@@ -110,6 +112,40 @@ Rules:
     console.error('[supplier-invoice/parse]', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Parse failed' }, { status: 500 })
   }
+}
+
+// Deterministic sanity check on the extracted numbers. Returns a fault string
+// if the arithmetic is internally impossible, else null. A fault triggers the
+// stronger-model re-parse before the human ever sees the figures.
+//
+// ponytail: two confounder-safe checks only — this parser deliberately strips
+// GST from line items and skips freight/fees (see prompt), so sum(line_total)
+// is an ex-GST goods subtotal and `total` is the GST+freight-inclusive grand
+// total. That means sum(lines) < total is the NORMAL, expected state — a naive
+// "must balance to the cent" check would fire the expensive fallback on nearly
+// every real invoice. So we only flag the two things that are wrong under
+// EVERY interpretation:
+//   1. a line where qty*unit_cost disagrees with its own line_total (mis-keyed
+//      unit fraction / transcription error — the exact failure the doc worried
+//      about), and
+//   2. goods subtotal EXCEEDING the grand total (impossible: GST+freight only
+//      add on top), which catches duplicated/hallucinated lines.
+// Tolerance: 2c or 1% of the figure, whichever is larger, to absorb rounding.
+export function arithmeticFault(parsed: ParsedSupplierInvoice): string | null {
+  const tol = (x: number) => Math.max(0.02, Math.abs(x) * 0.01)
+  for (const item of parsed.items ?? []) {
+    const qty = Number(item.quantity)
+    const cost = Number(item.unit_cost)
+    const line = Number(item.line_total)
+    if (!Number.isFinite(qty) || !Number.isFinite(cost) || !Number.isFinite(line)) continue
+    if (Math.abs(qty * cost - line) > tol(line)) return 'line total ≠ qty × unit cost'
+  }
+  const total = Number(parsed.total)
+  if (Number.isFinite(total) && total > 0) {
+    const sum = (parsed.items ?? []).reduce((s, i) => s + (Number(i.line_total) || 0), 0)
+    if (sum - total > tol(total)) return 'line items exceed invoice total'
+  }
+  return null
 }
 
 function hasUsableLineItems(parsed: ParsedSupplierInvoice): boolean {
