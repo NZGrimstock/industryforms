@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, connectOptions } from '@/lib/stripe'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -25,12 +25,31 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await createServiceClient()
     .from('profiles')
-    .select('id')
+    .select('company_id')
     .eq('id', user.id)
     .single()
   if (!profile) return NextResponse.json({ error: 'No profile' }, { status: 403 })
 
+  const { data: company } = await createServiceClient()
+    .from('companies')
+    .select('stripe_account_id, stripe_charges_enabled')
+    .eq('id', profile.company_id)
+    .single()
+
+  // Direct-charge Terminal: the connection token, Location and reader must all
+  // live on the connected account. Called eagerly on every app launch
+  // (StripeTerminalInitializer), so this failing for a not-yet-onboarded
+  // company is expected and silently caught there — it only surfaces to the
+  // user when they actually try to take a payment on Pay Now.
+  const options = connectOptions(company)
+  if (!options) {
+    return NextResponse.json(
+      { error: 'Complete payouts setup in Settings → Subscription before taking card payments.' },
+      { status: 409 }
+    )
+  }
+
   const stripe = getStripe()
-  const token = await stripe.terminal.connectionTokens.create()
+  const token = await stripe.terminal.connectionTokens.create({}, options)
   return NextResponse.json({ secret: token.secret })
 }

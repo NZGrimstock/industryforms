@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getStripe, stripeCurrency } from '@/lib/stripe'
+import { getStripe, stripeCurrency, connectOptions } from '@/lib/stripe'
 
 const bodySchema = z.object({ invoice_id: z.string().uuid(), amount: z.number().positive().optional() })
 
@@ -38,13 +38,26 @@ export async function POST(req: NextRequest) {
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('id, company_id, total, amount_paid, invoice_number, companies(country)')
+    .select('id, company_id, total, amount_paid, invoice_number, companies(country, stripe_account_id, stripe_charges_enabled)')
     .eq('id', invoice_id)
     .single()
   if (!invoice || invoice.company_id !== profile.company_id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  const company = invoice.companies as unknown as { country: string | null } | null
+  const company = invoice.companies as unknown as {
+    country: string | null; stripe_account_id: string | null; stripe_charges_enabled: boolean | null
+  } | null
+
+  // Tap to Pay is a direct charge on the connected account — no platform
+  // fallback (unlike online invoice pay / booking deposits), since a card-
+  // present charge with no connected account has nowhere real to settle.
+  const options = connectOptions(company)
+  if (!options) {
+    return NextResponse.json(
+      { error: 'Complete payouts setup in Settings → Subscription before taking card payments.' },
+      { status: 409 }
+    )
+  }
 
   const outstanding = Number(invoice.total) - Number(invoice.amount_paid)
   const requested = amount ? Number(amount) : outstanding
@@ -59,7 +72,7 @@ export async function POST(req: NextRequest) {
     payment_method_types: ['card_present'],
     capture_method: 'automatic',
     metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, channel: 'tap_to_pay' },
-  })
+  }, options)
 
   return NextResponse.json({
     client_secret: pi.client_secret,

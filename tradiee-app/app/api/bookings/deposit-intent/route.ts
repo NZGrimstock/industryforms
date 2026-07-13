@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getStripe, stripeCurrency } from '@/lib/stripe'
+import { getStripe, stripeCurrency, connectOptions } from '@/lib/stripe'
 
 const bodySchema = z.object({ bookingId: z.string().uuid() })
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient()
   const { data: booking } = await service.from('bookings')
-    .select('id, status, deposit_required, deposit_paid, company_id, companies(name, country)')
+    .select('id, status, deposit_required, deposit_paid, company_id, companies(name, country, stripe_account_id, stripe_charges_enabled)')
     .eq('id', bookingId).single()
 
   if (!booking || booking.status !== 'deposit_pending') {
@@ -25,14 +25,18 @@ export async function POST(req: NextRequest) {
   const amountDue = Math.round((Number(booking.deposit_required) - Number(booking.deposit_paid)) * 100)
   if (amountDue <= 0) return NextResponse.json({ error: 'Deposit already paid' }, { status: 400 })
 
-  const company = booking.companies as unknown as { name: string; country: string | null } | null
+  const company = booking.companies as unknown as {
+    name: string; country: string | null; stripe_account_id: string | null; stripe_charges_enabled: boolean | null
+  } | null
   const stripe = getStripe()
+  // Direct charge on the connected account once onboarded, else the platform
+  // account (today's behaviour) — see lib/stripe.ts connectOptions.
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
     currency: stripeCurrency(company?.country),
     metadata: { booking_id: booking.id },
     description: `Booking deposit — ${company?.name ?? ''}`,
-  })
+  }, connectOptions(company))
 
   await service.from('bookings').update({ stripe_payment_intent_id: paymentIntent.id }).eq('id', bookingId)
 

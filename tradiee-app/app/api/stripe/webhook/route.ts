@@ -1,3 +1,10 @@
+// ⚠ Stripe Connect requires this endpoint to also be listening to Connect
+// events (Dashboard → Developers → Webhooks → this endpoint → enable "Listen
+// to events on connected accounts"), one-time Dashboard config, not code.
+// Without it, payment_intent.succeeded / account.updated fired on a connected
+// account (i.e. every direct-charge invoice/deposit/Tap-to-Pay payment once a
+// company has completed Connect onboarding) never reaches this handler and
+// invoices silently never get marked paid.
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'

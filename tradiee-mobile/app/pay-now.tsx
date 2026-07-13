@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '@/lib/icons'
 import { requestNeededAndroidPermissions, useStripeTerminal, type Reader } from '@stripe/stripe-terminal-react-native'
 import { supabase } from '@/lib/supabase'
-import { fetchTerminalPaymentIntent, STRIPE_TERMINAL_LOCATION_ID } from '@/lib/tap-to-pay'
+import { fetchTerminalPaymentIntent, fetchTerminalLocationId } from '@/lib/tap-to-pay'
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
@@ -162,7 +162,6 @@ export default function PayNowScreen() {
     try {
       // Codex build audit marker (2026-07-07): real Stripe Terminal Tap to Pay collect-confirm flow.
       if (!API_BASE) throw new Error('Missing EXPO_PUBLIC_API_URL.')
-      if (!STRIPE_TERMINAL_LOCATION_ID) throw new Error('Missing EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID.')
 
       if (!isInitialized) {
         const init = await initialize()
@@ -182,6 +181,10 @@ export default function PayNowScreen() {
 
       setStage('connecting')
       if (!connectedReader) {
+        // Per-company Terminal Location (Stripe Connect direct charges) — 409s
+        // with a clear message if payouts setup isn't finished yet.
+        const locationId = await fetchTerminalLocationId(API_BASE)
+
         discoveredReaders.current = []
         const discovery = await discoverReaders({ discoveryMethod: 'tapToPay' })
         if (discovery.error) throw discovery.error
@@ -192,7 +195,7 @@ export default function PayNowScreen() {
         const connected = await connectReader({
           discoveryMethod: 'tapToPay',
           reader,
-          locationId: STRIPE_TERMINAL_LOCATION_ID,
+          locationId,
           merchantDisplayName: 'IndustryForms',
           tosAcceptancePermitted: true,
           autoReconnectOnUnexpectedDisconnect: true,

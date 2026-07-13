@@ -19,3 +19,18 @@ export function getStripe(): Stripe {
 export function stripeCurrency(country?: string | null): 'nzd' | 'aud' {
   return country === 'AU' ? 'aud' : 'nzd'
 }
+
+export type ConnectCompany = { stripe_account_id?: string | null; stripe_charges_enabled?: boolean | null }
+
+// Direct-charge request options — passing these makes the PaymentIntent live
+// on the connected account, so funds settle straight to the tradie's own bank
+// account (no application fee; IndustryForms monetises via subscriptions).
+// Returns undefined (today's platform-account charge) until the company has
+// completed Stripe Connect onboarding, so live customer-facing pay pages never
+// break for a company that hasn't set up payouts yet — see lib/connect.ts.
+export function connectOptions(company: ConnectCompany | null | undefined): Stripe.RequestOptions | undefined {
+  if (company?.stripe_account_id && company.stripe_charges_enabled) {
+    return { stripeAccount: company.stripe_account_id }
+  }
+  return undefined
+}

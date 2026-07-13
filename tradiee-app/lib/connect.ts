@@ -2,9 +2,10 @@
 //
 // Each company gets its own connected account so customer payments (invoices,
 // booking deposits, Tap to Pay) settle to the tradie, not the platform. No
-// application fee — IndustryForms monetises via subscriptions.
-// Phase 2 (Tap to Pay direct charges) will additionally request the
-// card_present_payments capability here.
+// application fee — IndustryForms monetises via subscriptions. Tap to Pay
+// (Phase 2) needs no separate capability — this API version covers card-present
+// under the same card_payments capability requested below; it just needs a
+// Terminal Location that lives on the connected account (ensureTerminalLocation).
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 
@@ -77,4 +78,43 @@ export async function syncAccountStatus(accountId: string): Promise<{
     })
     .eq('stripe_account_id', accountId)
   return status
+}
+
+type TerminalLocationCompany = {
+  id: string
+  name: string | null
+  phone: string | null
+  address: string | null
+  country: string | null
+  stripe_account_id: string
+  stripe_terminal_location_id: string | null
+}
+
+// Tap to Pay direct charges require the Location + reader to live on the
+// connected account, not the platform. Created once, lazily, on first use.
+// Address is best-effort from the freeform companies.address field — Stripe
+// rejects with a clear 400 if a country needs more structure than that, which
+// surfaces straight to the caller rather than failing silently.
+export async function ensureTerminalLocation(company: TerminalLocationCompany): Promise<string> {
+  if (company.stripe_terminal_location_id) return company.stripe_terminal_location_id
+
+  const location = await getStripe().terminal.locations.create(
+    {
+      display_name: company.name ?? 'IndustryForms',
+      phone: company.phone ?? undefined,
+      address: {
+        country: company.country === 'AU' ? 'AU' : 'NZ',
+        line1: company.address ?? undefined,
+      },
+    },
+    { stripeAccount: company.stripe_account_id }
+  )
+
+  const { error } = await createServiceClient()
+    .from('companies')
+    .update({ stripe_terminal_location_id: location.id })
+    .eq('id', company.id)
+  if (error) throw new Error(`Failed to save terminal location: ${error.message}`)
+
+  return location.id
 }
