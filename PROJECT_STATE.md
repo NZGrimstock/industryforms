@@ -39,8 +39,10 @@ Vercel prod, mobile in the next APK):
   siblings.
 - **Tap to Pay** — confirmed already fully wired (see the Tap to Pay entry
   below, corrected from its stale "install pending" text). Apple entitlement
-  requested 2026-07-13; a fresh Android APK build was kicked off this session
-  to carry the mobile-kits change.
+  requested 2026-07-13, **granted 2026-07-14** — see the updated Tap to Pay
+  entry further down for the now-unblocked iOS build path + both `eas build`
+  commands. A fresh Android APK was also built same session to carry the
+  mobile-kits change (separate from the EAS store build).
 
 **Continued same session — EAS submit config, ClickSend, Stripe Connect
 (both phases):**
@@ -932,14 +934,30 @@ account with a livemode "Mobile Phone Reader" already connected) is now
 superseded per-company infrastructure — kept only as evidence Tap to Pay is
 enabled on the platform Stripe account; each company gets its own Location the
 first time they take a card-present payment after connecting.
-**Only remaining blockers, both non-code and iOS-only:** Apple's
-`com.apple.developer.proximity-reader.payment.acceptance` entitlement
-(requested 2026-07-13, awaiting Apple approval) and an EAS iOS store build
-carrying it (needs interactive Apple creds). Android needs neither — it's
-buildable/testable now, though functionally gated on Connect onboarding too
-(see above). Note: the entitlement is a **native capability, so it cannot be
-shipped via OTA/EAS Update** — it requires a fresh native build + App Store
-review once granted.
+**Apple's `com.apple.developer.proximity-reader.payment.acceptance`
+entitlement was GRANTED 2026-07-14** (requested 2026-07-13) — the only
+remaining blocker is now just running the iOS build. Config plugin
+(`@stripe/stripe-terminal-react-native`, `tapToPayCheck: true`) already
+handles injecting the entitlement into the generated provisioning profile at
+EAS prebuild time — no manual `app.json` entitlements edit needed. **Before
+building**, confirm the capability shows as enabled on the `com.industryforms.app`
+App ID in Apple Developer Portal (Certificates, IDs & Profiles → Identifiers);
+if EAS's cached provisioning profile predates the grant, run
+`cd tradiee-mobile && eas credentials` (iOS → production) to force it to
+resync/regenerate before building, otherwise a stale profile could still lack
+the capability.
+Build commands (both run interactively — Apple/Google prompts, EAS build
+queue):
+```
+cd tradiee-mobile
+eas build --platform android --profile production   # no blockers, ready now
+eas build --platform ios --profile production        # now unblocked by the entitlement grant
+```
+Both platforms are functionally gated on Stripe Connect onboarding too (see
+above) — Tap to Pay 409s with "Complete payouts setup…" until a company
+connects. Note: the entitlement is a **native capability, so it cannot be
+shipped via OTA/EAS Update** — it required this fresh native build + App
+Store review, which is now unblocked.
 
 **Tab-accent + orange cleanup** — `bg-orange-500` etc. sweep across 43 files
 → `bg-[var(--accent,#f97316)]`. Quotes/Jobs/Invoices/Enquiries filter pills
