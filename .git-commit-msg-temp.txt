@@ -1,0 +1,22 @@
+Fix persistent nav bar: absolute positioning instead of flex-sibling
+
+Root cause of "bar works on jobs/quotes/invoices but not other screens": the
+flex-sibling approach depends on every screen sharing layout space correctly
+with the bar, but (tabs) wraps its own nested Tabs navigator, which -- unlike
+a plain leaf screen such as jobs/[id] -- renders via react-native-screens'
+native full-window sizing and doesn't reliably respect an outer JS flex
+sibling. That's exactly the asymmetry reported: plain detail screens shared
+space fine, the actual (tabs) screens didn't.
+
+- BottomTabBar.tsx: now absolutely positioned (bottom:0, left:0, right:0,
+  zIndex/elevation 50) -- renders on top regardless of how anything beneath
+  it sizes itself, sidestepping the nested-navigator sizing quirk entirely.
+  Exports BOTTOM_BAR_CONTENT_HEIGHT so content-inset stays in sync with the
+  bar's actual height from one source.
+- app/_layout.tsx: adds contentStyle: { paddingBottom } globally on the root
+  Stack's screenOptions (session-gated) -- reserves matching space on every
+  screen in one place, rather than touching individual screen files.
+
+Verified: tsc clean.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

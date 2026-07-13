@@ -1,7 +1,7 @@
 // Register background location task at module scope (required by expo-task-manager)
 import '@/lib/location/tracking'
 import { useEffect, useRef, useState } from 'react'
-import { Platform, View } from 'react-native'
+import { Platform } from 'react-native'
 import { Stack, router } from 'expo-router'
 import { PowerSyncContext } from '@powersync/react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -15,7 +15,6 @@ import { supabase } from '@/lib/supabase'
 import { ProfileProvider } from '@/lib/profile-context'
 import { fetchConnectionToken } from '@/lib/tap-to-pay'
 import { sendSms } from '@/lib/notify'
-import { BottomTabBar } from '@/components/BottomTabBar'
 import type { Session } from '@supabase/supabase-js'
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
@@ -164,41 +163,30 @@ export default function RootLayout() {
           {/* Codex build audit marker (2026-07-07): Stripe Terminal provider/init wiring. */}
           <StripeTerminalInitializer enabled={!!session} />
           <StatusBar style="dark" />
-          {/* Persistent bottom bar: a flex sibling of the Stack (not absolute-
-              positioned), so the Stack naturally gets the remaining height and
-              no individual screen needs its own bottom padding. Session-gated
-              so it doesn't show on login/signup. Rendered here — one level
-              above (tabs) — is what makes it survive every pushed screen,
-              including jobs/[id]/quotes/[id]/invoices/[id], which are
-              top-level Stack screens outside the (tabs) group and previously
-              had no bar at all. */}
-          <View style={{ flex: 1 }}>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="login" />
-              <Stack.Screen name="signup" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="jobs/[id]" options={{ headerShown: true, title: 'Job', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="quotes/[id]" options={{ headerShown: true, title: 'Quote', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="invoices/[id]" options={{ headerShown: true, title: 'Invoice', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="customers/[id]" options={{ headerShown: true, title: 'Customer', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="customers/index" options={{ headerShown: true, title: 'Customers', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="customers/new" options={{ headerShown: true, title: 'New Customer', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="projects/index" options={{ headerShown: true, title: 'Projects', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="invoices/index" options={{ headerShown: true, title: 'Invoices', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="timesheets" options={{ headerShown: true, title: 'Time Logs', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="job-map" options={{ headerShown: true, title: 'Job Map', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="invitations" options={{ headerShown: true, title: 'Invitations', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="pay-now" options={{ headerShown: true, title: 'Pay Now', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="messages/[key]" options={{ headerShown: true, title: 'Thread', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="on-my-way" options={{ headerShown: true, title: 'On my way', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profile', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="jobs/new" options={{ headerShown: true, title: 'New Job', headerTintColor: '#f97316' }} />
-              <Stack.Screen name="quotes/new" options={{ headerShown: true, title: 'New Quote', headerTintColor: '#f97316' }} />
-            </Stack>
-            {session && <BottomTabBar />}
-          </View>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="login" />
+            <Stack.Screen name="signup" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="jobs/[id]" options={{ headerShown: true, title: 'Job', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="quotes/[id]" options={{ headerShown: true, title: 'Quote', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invoices/[id]" options={{ headerShown: true, title: 'Invoice', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="customers/[id]" options={{ headerShown: true, title: 'Customer', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="customers/index" options={{ headerShown: true, title: 'Customers', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="customers/new" options={{ headerShown: true, title: 'New Customer', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="projects/index" options={{ headerShown: true, title: 'Projects', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invoices/index" options={{ headerShown: true, title: 'Invoices', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="timesheets" options={{ headerShown: true, title: 'Time Logs', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="job-map" options={{ headerShown: true, title: 'Job Map', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invitations" options={{ headerShown: true, title: 'Invitations', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="invite/[token]" options={{ headerShown: true, title: 'Job Invitation', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="pay-now" options={{ headerShown: true, title: 'Pay Now', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="messages/[key]" options={{ headerShown: true, title: 'Thread', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="on-my-way" options={{ headerShown: true, title: 'On my way', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="profile" options={{ headerShown: true, title: 'Profile', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="jobs/new" options={{ headerShown: true, title: 'New Job', headerTintColor: '#f97316' }} />
+            <Stack.Screen name="quotes/new" options={{ headerShown: true, title: 'New Quote', headerTintColor: '#f97316' }} />
+          </Stack>
         </PowerSyncContext.Provider>
       </StripeTerminalProvider>
       </ProfileProvider>
