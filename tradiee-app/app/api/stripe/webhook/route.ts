@@ -60,6 +60,21 @@ export async function POST(req: NextRequest) {
       break
     }
 
+    case 'account.updated': {
+      // Connect (Express) onboarding progress — keep the company's capability
+      // flags in sync so Settings reflects reality without polling.
+      const account = event.data.object as Stripe.Account
+      await service
+        .from('companies')
+        .update({
+          stripe_charges_enabled: !!account.charges_enabled,
+          stripe_payouts_enabled: !!account.payouts_enabled,
+          stripe_details_submitted: !!account.details_submitted,
+        })
+        .eq('stripe_account_id', account.id)
+      break
+    }
+
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const sub = event.data.object as Stripe.Subscription
