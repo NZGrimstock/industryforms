@@ -51,23 +51,17 @@ Vercel prod, mobile in the next APK):
   Play Console → Setup → API access → create service account → download JSON
   → drop at `tradiee-mobile/google-play-service-account.json`. Not needed for
   `eas build`, only for automated `eas submit --platform android`.
-- **SMS provider swapped Twilio → ClickSend** (full two-way, per user request
-  — ~40-50% cheaper for NZ/AU). `lib/sms.ts` rewritten: outbound via ClickSend
-  `/v3/sms/send`; inbound + delivery-receipt webhooks re-secured with a shared-
-  secret URL param (`?k=…`) since ClickSend doesn't sign webhooks like Twilio's
-  HMAC did. Field parsing is **tolerant with aliases** (from/sms, body/message,
-  message_id/messageid) because ClickSend's docs are JS-rendered and the exact
-  inbound/DLR payload shape couldn't be scraped — a keys-only debug log (no
-  PII) fires on an unexpected shape so the first real test inbound can confirm
-  field names in one round-trip. `smsConfigured()`/`toE164()` names and the
-  `twilio_sid` column were kept as-is (now holds the ClickSend message id) so
-  no callers needed touching. **User must set** `CLICKSEND_USERNAME` /
-  `CLICKSEND_API_KEY` / `CLICKSEND_FROM` (dedicated number, required for
-  replies to route back) / `CLICKSEND_INBOUND_SECRET`, delete `TWILIO_*`, buy a
-  dedicated ClickSend number, and configure the ClickSend dashboard's Inbound
-  SMS Rule + Delivery Reports URL to point at `/api/sms/inbound?k=…` and
-  `/api/sms/status?k=…`. **SMS is dark until this env is set** — safe no-op,
-  not a crash.
+- **SMS provider swapped Twilio → ClickSend, then reverted same day** — tried
+  ClickSend for its advertised NZ/AU pricing, but a proper cost check showed
+  it didn't actually beat Twilio, so reverted (see the revert entry further
+  down this session log). Net effect on the codebase: **zero** — `lib/sms.ts`
+  is back to Twilio's API and HMAC signature verification exactly as before,
+  `smsConfigured()`/`toE164()` names unchanged throughout. The one thing that
+  *did* stick from the detour is genuinely valuable and is documented in the
+  SMS shared number pool entry below: the number-pool session-routing
+  architecture and the cross-tenant collision fix it carries are provider-
+  agnostic, so they carried straight over to Twilio rather than being thrown
+  away with the ClickSend code.
 - **Stripe Connect — Phase 1 (Express onboarding)**: migration
   `20260713100000_stripe_connect_accounts.sql` adds
   `companies.stripe_account_id` + `charges/payouts/details_submitted` flags.
@@ -136,13 +130,11 @@ Vercel prod, mobile in the next APK):
   on `(pool_number, customer_phone)`: the same customer phone can never be
   mapped to the same pool number by two different companies at once — a pool
   number still serves unlimited *different* customer phones concurrently.
-  `lib/sms.ts`: `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU` (comma-separated
-  E.164 lists — env config, since buying numbers is a rare ops action, not
-  runtime state) + `resolveOutboundFrom()` does sticky lookup-or-assign,
-  picking a pool number not already tied to that exact customer phone by
-  another company. Falls back to the single `CLICKSEND_FROM` number when the
-  pool env isn't set — **works unchanged today, pool activates once numbers
-  are bought and the env is configured.**
+  `lib/sms.ts`: `resolveOutboundFrom()` does sticky lookup-or-assign, picking
+  a pool number not already tied to that exact customer phone by another
+  company. Falls back to the single dedicated number when the pool env isn't
+  set — **works unchanged today, pool activates once numbers are bought and
+  the env is configured.**
   **Also fixed a real pre-existing bug while here**: the inbound webhook
   previously resolved the sending company via a bare cross-tenant
   `customers.phone` match (`.limit(1)`, no `company_id` filter at all) —
@@ -158,16 +150,34 @@ Vercel prod, mobile in the next APK):
   prior outbound history) → a generic auto-reply ("This number is automated…"),
   no company guessed, no `customer_messages` row created. Legacy single-number
   mode (pool env unset) is untouched.
-  Also fixed a bug this same change would have introduced: `app/api/sms/send/route.ts`
-  hardcoded `from_number: CLICKSEND_FROM`, which is unset in pool mode —
-  `sendSms()` now returns the `from` it actually used so the thread history
-  stays accurate.
+  Also fixed a bug this same change would have introduced:
+  `app/api/sms/send/route.ts` used to hardcode `from_number` from a flat env
+  var, which is unset in pool mode — `sendSms()` now returns the `from` it
+  actually used so the thread history stays accurate.
+  **This architecture is provider-agnostic** — built during the brief
+  ClickSend detour below, it carried straight over to the Twilio revert with
+  zero changes to its logic, only to which wire API `resolveOutboundFrom`'s
+  chosen number gets sent through.
   **User must, when ready to activate the pool**: buy ~3 NZ + 3 AU dedicated
-  ClickSend numbers, set `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU` (comma-
-  separated E.164), and configure ClickSend's Inbound SMS Rule + Delivery
-  Reports URL on **every** pool number (not just one) pointing at
-  `/api/sms/inbound?k=…` / `/api/sms/status?k=…`. Apply the migration to
-  cloud Supabase before activating.
+  Twilio numbers, set `TWILIO_POOL_NZ`/`TWILIO_POOL_AU` (comma-separated
+  E.164), and point each number's "A MESSAGE COMES IN" webhook at
+  `/api/sms/inbound`. Apply the migration to cloud Supabase before activating.
+
+- **SMS provider reverted ClickSend → Twilio, same day (2026-07-13)** — a
+  proper cost check showed ClickSend didn't actually beat Twilio's pricing
+  once compared proportionately, so reverted. `lib/sms.ts` outbound send and
+  the inbound/status webhooks are back to Twilio's Messages API and HMAC-SHA1
+  `X-Twilio-Signature` verification (restored function verified against
+  Twilio's own published test vector from their docs — not just "looks like
+  before"). Env vars: `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/
+  `TWILIO_FROM_NUMBER` (single-number mode) or `TWILIO_POOL_NZ`/`TWILIO_POOL_AU`
+  (pool mode, see the pool entry above) replace all `CLICKSEND_*` vars —
+  **delete those, they do nothing now.** `TWILIO_OWNER_COMPANY_ID` (legacy
+  single-number unmatched-sender fallback) was never renamed, still applies.
+  Net effect: the codebase is back to exactly its pre-ClickSend Twilio shape,
+  plus the pool/session architecture and cross-tenant collision fix — which
+  is genuinely new and stayed, since it doesn't care which provider sends the
+  wire request.
 
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
@@ -588,18 +598,16 @@ Settings → Integrations only shows customer-relevant integrations.
 - `R2_ACCOUNT_ID`, `R2_PUBLIC_BUCKET`, `R2_PRIVATE_BUCKET`, `R2_PUBLIC_*`/`R2_PRIVATE_*` keys, `NEXT_PUBLIC_R2_PUBLIC_BASE_URL=https://cdn.industryforms.app`
 - `NEXT_PUBLIC_APP_URL=https://app.industryforms.app`, `NEXT_PUBLIC_POWERSYNC_URL`, `CRON_SECRET`
 - **LocationIQ** — `NEXT_PUBLIC_LOCATIONIQ_KEY` for geocoding (address autocomplete + job map pins). Falls back to Nominatim (rate-limited in prod) if unset.
-- **SMS — ClickSend (swapped from Twilio 2026-07-13, see session log above)** —
-  `CLICKSEND_USERNAME`, `CLICKSEND_API_KEY`, `CLICKSEND_INBOUND_SECRET` (shared
-  secret for the `?k=` webhook guard — ClickSend doesn't sign webhooks), plus
-  **either** `CLICKSEND_FROM` (single dedicated number — simplest, fine below
-  ~15-20 tenants) **or** `CLICKSEND_POOL_NZ`/`CLICKSEND_POOL_AU`
+- **Twilio (live — ClickSend tried and reverted same day 2026-07-13, see
+  session log above)** — `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, plus
+  **either** `TWILIO_FROM_NUMBER` (single dedicated number — simplest, fine
+  below ~15-20 tenants) **or** `TWILIO_POOL_NZ`/`TWILIO_POOL_AU`
   (comma-separated E.164 lists — the shared-pool architecture built same
-  session for scale, see above; ~3 NZ + 3 AU numbers). **User still needs
-  to**: set this env (Vercel + `.env.local`), delete `TWILIO_*`, buy the
-  ClickSend number(s), and point the ClickSend dashboard's Inbound SMS Rule +
-  Delivery Reports URL at `/api/sms/inbound?k=…` / `/api/sms/status?k=…` on
-  **every** number if using the pool. SMS is dark (safe no-op) until this is
-  done.
+  session for scale, see above; ~3 NZ + 3 AU numbers). Point each number's "A
+  MESSAGE COMES IN" webhook at `https://app.industryforms.app/api/sms/inbound`
+  (POST) — **every** number if using the pool. Delete any lingering
+  `CLICKSEND_*` vars, they do nothing now. SMS is dark (safe no-op) until this
+  env is set.
 - **Resend — fixed 2026-07-13** — the previously-invalid `RESEND_API_KEY` was
   rotated in Doppler + Vercel; transactional email is live again. `EMAIL_FROM`
   (verified sender domain) still needed either way. Quote/invoice send
