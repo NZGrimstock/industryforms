@@ -15,6 +15,29 @@ const CLICKSEND_API_KEY = process.env.CLICKSEND_API_KEY
 const CLICKSEND_FROM = process.env.CLICKSEND_FROM
 const SMS_BILLING_DISABLED = 'SMS billing is not enabled for this account'
 
+// Shared number pool (2026-07-13): a handful of dedicated numbers serve ALL
+// tenants, routed by sms_pool_sessions rather than one number per company.
+// Numbers themselves are env config (bought a few times a year, not runtime
+// state); comma-separated E.164, e.g. "+64211110001,+64211110002,+64211110003".
+// Falls back to the single CLICKSEND_FROM number (pre-pool behaviour) when
+// unset — keeps dev/small-scale environments working without real pool
+// numbers provisioned.
+function poolNumbers(country: 'NZ' | 'AU'): string[] {
+  const raw = country === 'AU' ? process.env.CLICKSEND_POOL_AU : process.env.CLICKSEND_POOL_NZ
+  return (raw ?? '').split(',').map(n => n.trim()).filter(Boolean)
+}
+
+export function poolConfigured(): boolean {
+  return poolNumbers('NZ').length > 0 || poolNumbers('AU').length > 0
+}
+
+// Every pool number across every country — used by the inbound webhook to
+// recognise "this destination is one of ours" regardless of which country's
+// bucket it came from.
+export function allPoolNumbers(): string[] {
+  return [...poolNumbers('NZ'), ...poolNumbers('AU')]
+}
+
 export function smsConfigured(): boolean {
   return !!(CLICKSEND_USERNAME && CLICKSEND_API_KEY)
 }
@@ -67,6 +90,59 @@ export function toE164(raw: string | null | undefined, country: 'NZ' | 'AU' = 'N
   return '+' + cc + n
 }
 
+// Sticky pool-number assignment for a (company, customer) pair. No fixed
+// expiry (see migration comment) — reused forever once created, touched here
+// on every send so last_activity_at stays meaningful for observability.
+async function resolveOutboundFrom(companyId: string | null | undefined, dest: string, country: 'NZ' | 'AU'): Promise<string | undefined> {
+  const candidates = poolNumbers(country)
+  if (candidates.length === 0) return CLICKSEND_FROM || undefined
+  if (!companyId) return candidates[0]
+
+  const service = createServiceClient()
+
+  const { data: existing } = await service
+    .from('sms_pool_sessions')
+    .select('pool_number')
+    .eq('company_id', companyId)
+    .eq('customer_phone', dest)
+    .maybeSingle()
+  if (existing) {
+    await service.from('sms_pool_sessions')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('company_id', companyId).eq('customer_phone', dest)
+    return existing.pool_number
+  }
+
+  // First contact with this customer for this company — find a pool number
+  // not already assigned to this exact customer phone by a DIFFERENT company
+  // (the actual collision this table exists to prevent).
+  const { data: taken } = await service
+    .from('sms_pool_sessions')
+    .select('pool_number')
+    .eq('customer_phone', dest)
+    .in('pool_number', candidates)
+  const takenSet = new Set((taken ?? []).map(r => r.pool_number))
+  const free = candidates.filter(n => !takenSet.has(n))
+
+  // ponytail: if every pool number for this country is already tied to this
+  // exact customer phone by other tenants — i.e. 3+ unrelated companies all
+  // texting the same person concurrently — just reuse the first number.
+  // Astronomically rare (would need one person to be a live SMS conversation
+  // with 3+ competing trades businesses on the platform at once); accepting
+  // the theoretical collision here beats failing to send at all.
+  const chosen = free.length > 0 ? free[Math.floor(Math.random() * free.length)] : candidates[0]
+
+  const { error } = await service.from('sms_pool_sessions').insert({
+    company_id: companyId, customer_phone: dest, pool_number: chosen,
+  })
+  // A concurrent send racing us to the same (company, customer) pair is fine
+  // — unique-violation just means the other request already created it.
+  if (error && error.code !== '23505') {
+    console.error('[sms] pool session insert failed', error)
+  }
+  return chosen
+}
+
 export async function sendSms(
   { to, body, country = 'NZ', companyId, relatedType, relatedId }: {
     to: string | null | undefined
@@ -76,7 +152,7 @@ export async function sendSms(
     relatedType?: string
     relatedId?: string | null
   }
-): Promise<{ id?: string; error?: string }> {
+): Promise<{ id?: string; error?: string; from?: string }> {
   if (!smsConfigured()) {
     console.warn('ClickSend not configured — SMS not sent')
     return { error: 'SMS service not configured' }
@@ -91,6 +167,11 @@ export async function sendSms(
     billing = { billable: check.billable, stripeCustomerId: check.stripeCustomerId }
   }
 
+  // Which number this send goes FROM: a sticky pool-number assignment for
+  // this (company, customer) pair once CLICKSEND_POOL_NZ/AU is configured,
+  // else the single CLICKSEND_FROM number (pre-pool behaviour).
+  const from = await resolveOutboundFrom(companyId, dest, country)
+
   // Delivery receipts are configured account-wide in the ClickSend dashboard
   // (Messaging → Delivery Reports → URL), not per message like Twilio's
   // StatusCallback — so there's nothing to attach here. `custom_string` carries
@@ -104,7 +185,7 @@ export async function sendSms(
     body: JSON.stringify({
       messages: [{
         source: 'industryforms',
-        ...(CLICKSEND_FROM ? { from: CLICKSEND_FROM } : {}),
+        ...(from ? { from } : {}),
         to: dest,
         body,
         ...(companyId ? { custom_string: companyId } : {}),
@@ -131,7 +212,27 @@ export async function sendSms(
       relatedId,
     })
   }
-  return { id: sid }
+  return { id: sid, from }
+}
+
+// Fire-and-forget reply to a pool number with no matching session (a cold
+// text with no prior outbound history) — no company to attribute it to, no
+// billing ledger entry, just a generic bounce so the sender isn't left
+// hanging. Used only by the inbound webhook's unmapped-message path.
+export async function sendRawSms(from: string, to: string, body: string): Promise<void> {
+  if (!smsConfigured()) return
+  try {
+    await fetch('https://rest.clicksend.com/v3/sms/send', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Basic ' + Buffer.from(`${CLICKSEND_USERNAME}:${CLICKSEND_API_KEY}`).toString('base64'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messages: [{ source: 'industryforms', from, to, body }] }),
+    })
+  } catch (error) {
+    console.error('[sms] unmapped auto-reply failed', error)
+  }
 }
 
 async function resolveSmsBilling(companyId: string): Promise<{ billable: boolean; stripeCustomerId: string | null; error?: string }> {

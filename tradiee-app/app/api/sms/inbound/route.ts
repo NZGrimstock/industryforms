@@ -1,16 +1,55 @@
 // ClickSend Inbound SMS webhook.
 // Configure in ClickSend: SMS → Settings → Inbound SMS Rules → action "Send to
 // URL" → `${NEXT_PUBLIC_APP_URL}/api/sms/inbound?k=${CLICKSEND_INBOUND_SECRET}`
-// (POST). Requires a dedicated inbound number so replies route back to us.
+// (POST), applied to every pool number (CLICKSEND_POOL_NZ/AU) so they all
+// reach this one endpoint. Requires dedicated number(s) so replies route back.
 //
-// We look up the customer by phone (E.164) and route the message to their
-// thread. If no customer matches, the row still lands (customer_id null) so
-// owners can see the orphan in the /messages Unmatched tab.
+// Two routing modes:
+//  - Pool mode (CLICKSEND_POOL_NZ/AU set): the company is resolved from
+//    sms_pool_sessions by (pool_number = to, customer_phone = from) — the
+//    session created by the matching outbound send is the ONLY source of
+//    truth for which tenant this belongs to. A bare cross-tenant customer-
+//    phone lookup (the pre-pool approach) is unsafe once one number serves
+//    many companies: two unrelated tenants can each have a customer row for
+//    the same phone number, and a `.limit(1)` match would silently misroute.
+//    No matching session = genuinely unattributable (a cold text to a pool
+//    number with no prior outbound history) — sent a generic auto-reply
+//    instead of guessing a company.
+//  - Legacy single-number mode (pool unset): pre-2026-07-13 behaviour,
+//    unchanged — one CLICKSEND_FROM number, customer matched by phone across
+//    all companies, TWILIO_OWNER_COMPANY_ID as the unmatched-sender fallback.
 
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { toE164, clickSendWebhookAuthorized, readWebhookParams } from '@/lib/sms'
+import { toE164, clickSendWebhookAuthorized, readWebhookParams, poolConfigured, allPoolNumbers, sendRawSms } from '@/lib/sms'
 import { notifyCompanyInbox } from '@/lib/push'
+
+type ServiceClient = ReturnType<typeof createServiceClient>
+
+async function landMessage(service: ServiceClient, params: {
+  companyId: string; customerId: string | null; from: string; to: string; body: string; sid: string; title: string
+}) {
+  const { data: inserted } = await service.from('customer_messages').insert({
+    company_id: params.companyId,
+    customer_id: params.customerId,
+    direction: 'inbound',
+    body: params.body,
+    twilio_sid: params.sid || null,
+    from_number: params.from,
+    to_number: params.to,
+    source: 'sms',
+    status: 'open',
+  }).select('id').single()
+
+  if (inserted) {
+    await notifyCompanyInbox(service, params.companyId, {
+      title: params.title,
+      body: params.body,
+      key: params.customerId ? `sms:${params.customerId}` : `sms-unmatched:${inserted.id}`,
+      phone: params.from,
+    })
+  }
+}
 
 export async function POST(req: Request) {
   // Dark until the shared secret is configured — refuse to process (and never
@@ -21,7 +60,7 @@ export async function POST(req: Request) {
   const params = await readWebhookParams(req)
 
   // ClickSend inbound fields; accept the common aliases across rule/automation
-  // shapes. `original_message_id` links a reply back to the outbound message.
+  // shapes.
   const from = params.from || params.sms || ''
   const to = params.to || ''
   const body = params.body || params.message || ''
@@ -34,71 +73,72 @@ export async function POST(req: Request) {
   }
 
   const service = createServiceClient()
+  const matchPhone = toE164(from) ?? from
 
-  // Owner number gate (single-tenant): only accept messages to our number.
-  // Per-company number → company_id routing is a later multi-tenant concern.
+  if (poolConfigured()) {
+    if (!allPoolNumbers().includes(to)) return new NextResponse('Unknown destination', { status: 200 })
+
+    const { data: session } = await service
+      .from('sms_pool_sessions')
+      .select('company_id')
+      .eq('pool_number', to)
+      .eq('customer_phone', matchPhone)
+      .maybeSingle()
+
+    if (!session) {
+      // No session = no company can be attributed — a cold text, not an
+      // outbound reply. Generic bounce, no customer_messages row, no company
+      // notified (there isn't one to notify).
+      console.warn('[sms/inbound] no pool session for this customer/number pair — sending generic auto-reply')
+      await sendRawSms(to, from, 'This number is automated. Please contact the business directly via their website.')
+      return new NextResponse('OK', { status: 200 })
+    }
+
+    await service.from('sms_pool_sessions')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('pool_number', to).eq('customer_phone', matchPhone)
+
+    // Company is now known — match the customer WITHIN that company only
+    // (no cross-tenant ambiguity left; the session already resolved the tenant).
+    const { data: customer } = await service
+      .from('customers')
+      .select('id, name')
+      .eq('company_id', session.company_id)
+      .or(`phone.eq.${matchPhone},phone.eq.${from}`)
+      .limit(1)
+      .maybeSingle()
+
+    await landMessage(service, {
+      companyId: session.company_id,
+      customerId: customer?.id ?? null,
+      from, to, body, sid,
+      title: customer?.name ?? from,
+    })
+    return new NextResponse('OK', { status: 200 })
+  }
+
+  // Legacy single-number mode — unchanged from pre-pool behaviour.
   const ownerNumber = process.env.CLICKSEND_FROM
   if (ownerNumber && to && to !== ownerNumber) {
     return new NextResponse('Unknown destination', { status: 200 })
   }
 
-  // Best-effort customer match: any customer whose normalised phone equals the
-  // inbound sender.
-  const matchPhone = toE164(from) ?? from
   const { data: customer } = await service
     .from('customers')
-    .select('id, company_id')
+    .select('id, company_id, name')
     .or(`phone.eq.${matchPhone},phone.eq.${from}`)
     .limit(1)
     .maybeSingle()
 
   if (customer) {
-    const { data: inserted } = await service.from('customer_messages').insert({
-      company_id: customer.company_id,
-      customer_id: customer.id,
-      direction: 'inbound',
-      body,
-      twilio_sid: sid || null,
-      from_number: from,
-      to_number: to,
-      source: 'sms',
-      status: 'open',
-    }).select('id').single()
-
-    if (inserted) {
-      const { data: custRow } = await service.from('customers').select('name').eq('id', customer.id).single()
-      await notifyCompanyInbox(service, customer.company_id, {
-        title: custRow?.name ?? 'New message',
-        body,
-        key: `sms:${customer.id}`,
-        phone: from,
-      })
-    }
+    await landMessage(service, {
+      companyId: customer.company_id, customerId: customer.id, from, to, body, sid,
+      title: customer.name ?? 'New message',
+    })
   } else {
-    // Unmatched sender — still land the row (customer_id null) so it shows up in
-    // the Unmatched tab and can be converted to a customer.
     const ownerCompanyId = process.env.TWILIO_OWNER_COMPANY_ID
     if (ownerCompanyId) {
-      const { data: inserted } = await service.from('customer_messages').insert({
-        company_id: ownerCompanyId,
-        customer_id: null,
-        direction: 'inbound',
-        body,
-        twilio_sid: sid || null,
-        from_number: from,
-        to_number: to,
-        source: 'sms',
-        status: 'open',
-      }).select('id').single()
-
-      if (inserted) {
-        await notifyCompanyInbox(service, ownerCompanyId, {
-          title: from,
-          body,
-          key: `sms-unmatched:${inserted.id}`,
-          phone: from,
-        })
-      }
+      await landMessage(service, { companyId: ownerCompanyId, customerId: null, from, to, body, sid, title: from })
     }
   }
 
