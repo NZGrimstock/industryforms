@@ -49,7 +49,7 @@ export async function createOnboardingLink(accountId: string): Promise<string> {
   const link = await getStripe().accountLinks.create({
     account: accountId,
     refresh_url: `${appUrl}/api/stripe/connect/onboard?refresh=1`,
-    return_url: `${appUrl}/settings?connect=done`,
+    return_url: `${appUrl}/settings?tab=subscription&connect=done`,
     type: 'account_onboarding',
   })
   return link.url

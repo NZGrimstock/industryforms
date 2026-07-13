@@ -18,6 +18,7 @@ import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } fr
 import { getPlan, planForSeats } from '@/lib/plans'
 import { extractAccent } from '@/lib/extract-color'
 import { MfaSection } from '@/components/settings/mfa-section'
+import { GetPaidCard } from '@/components/settings/get-paid-card'
 import { TIMEZONES } from '@/lib/datetime'
 
 interface Props {
@@ -837,6 +838,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
       {tab === 'subscription' && (
         <div className="space-y-6 max-w-7xl">
+          <GetPaidCard />
           <BillingTab company={company} />
         </div>
       )}
