@@ -64,13 +64,15 @@ the older applied set; the 2026-07-07 local migrations listed below still need
 deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 — already validated + deployed via the PowerSync Dashboard.
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
-(built 2026-07-11 08:52 NZT, 148,773,857 bytes, SHA256
-`499126468a2101da46cbf168e9f668bef548bd1f6f1bb618ec28ce16b34dc07f`). This
-build carries every mobile fix through the Job Map locate-retry commit
-(`ec99cc5`) — see `git log` for current commit hashes if this line goes
-stale. Build log: `tradiee-mobile/release-build-jobmap-fix.log` (`BUILD
-SUCCESSFUL`, 6m28s — fast because most native modules were already
-compiled from the prior clean build). The `release-build-schedule-fix2.log`
+(built 2026-07-13 14:59 NZT, 156,010,334 bytes, SHA256
+`d64bd79c155da5405802346bd8bf617920bbe4e7f0a50a4db51db32b56e26c4a`). This
+build carries the 2026-07-13 mobile-kits change (Bundle/Split on the job
+sheet) on top of every prior mobile fix through commit `1dac35d` — see
+`git log` for current commit hashes if this line goes stale. Build log:
+`tradiee-mobile/release-build-kits-session.log` (`BUILD SUCCESSFUL`, 4m55s).
+The prior APK (2026-07-11 08:52 NZT, SHA256
+`499126468a2101da46cbf168e9f668bef548bd1f6f1bb618ec28ce16b34dc07f`, through
+Job Map locate-retry `ec99cc5`) is superseded. The `release-build-schedule-fix2.log`
 build (2026-07-11 07:55 NZT, `BUILD SUCCESSFUL`, 14m56s) preceded it and is
 superseded. The rebuild attempt before that
 (`release-build-schedule-fix.log`) failed with a stale `.cxx` CMake cache
