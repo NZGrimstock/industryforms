@@ -1,6 +1,7 @@
-// Twilio Inbound SMS webhook.
-// Configure in Twilio console: messaging service / number "A MESSAGE COMES IN"
-// → `${NEXT_PUBLIC_APP_URL}/api/sms/inbound` (POST, x-www-form-urlencoded).
+// ClickSend Inbound SMS webhook.
+// Configure in ClickSend: SMS → Settings → Inbound SMS Rules → action "Send to
+// URL" → `${NEXT_PUBLIC_APP_URL}/api/sms/inbound?k=${CLICKSEND_INBOUND_SECRET}`
+// (POST). Requires a dedicated inbound number so replies route back to us.
 //
 // We look up the customer by phone (E.164) and route the message to their
 // thread. If no customer matches, the row still lands (customer_id null) so
@@ -8,50 +9,41 @@
 
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { toE164, validateTwilioSignature } from '@/lib/sms'
+import { toE164, clickSendWebhookAuthorized, readWebhookParams } from '@/lib/sms'
 import { notifyCompanyInbox } from '@/lib/push'
 
 export async function POST(req: Request) {
-  // Twilio is intentionally dark until TWILIO_AUTH_TOKEN is set — refuse to
-  // process (and never write a row) while unconfigured, so no spoofed inbound
-  // can land during the dark period.
-  const authToken = process.env.TWILIO_AUTH_TOKEN
-  if (!authToken) return new NextResponse('SMS not configured', { status: 503 })
+  // Dark until the shared secret is configured — refuse to process (and never
+  // write a row) while unset, so no spoofed inbound can land.
+  if (!process.env.CLICKSEND_INBOUND_SECRET) return new NextResponse('SMS not configured', { status: 503 })
+  if (!clickSendWebhookAuthorized(req)) return new NextResponse('Invalid secret', { status: 403 })
 
-  // Parse the body ONCE — reused for both signature validation and message
-  // handling (re-reading a consumed request body throws).
-  const form = await req.formData()
-  const params = Object.fromEntries(
-    Array.from(form.entries()).map(([k, v]) => [k, String(v)])
-  )
+  const params = await readWebhookParams(req)
 
-  // Must exactly match the URL Twilio called (canonical app URL — a proxy
-  // rewriting hosts/subdomains is the usual cause of false signature failures).
-  const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/sms/inbound`
-  const signature = req.headers.get('x-twilio-signature') ?? ''
-  if (!validateTwilioSignature(authToken, signature, url, params)) {
-    return new NextResponse('Invalid signature', { status: 403 })
+  // ClickSend inbound fields; accept the common aliases across rule/automation
+  // shapes. `original_message_id` links a reply back to the outbound message.
+  const from = params.from || params.sms || ''
+  const to = params.to || ''
+  const body = params.body || params.message || ''
+  const sid = params.message_id || params.messageid || ''
+  if (!from || !body) {
+    // Names only, no values — lets us confirm ClickSend's field mapping from a
+    // real test inbound without logging message content (PII).
+    console.warn('[sms/inbound] unexpected payload shape, keys=', Object.keys(params).join(','))
+    return new NextResponse('Missing fields', { status: 400 })
   }
-
-  const from = params.From ?? ''
-  const to = params.To ?? ''
-  const body = params.Body ?? ''
-  const sid = params.MessageSid ?? ''
-  if (!from || !to || !body) return new NextResponse('Missing fields', { status: 400 })
 
   const service = createServiceClient()
 
-  // Find the company that owns the destination number (TWILIO_FROM_NUMBER for
-  // single-tenant deployments; per-company numbers can be added later —
-  // tracked as an open decision in SPRINTS_GROWTH_ENGINE_RESCOPED.md).
-  const ownerNumber = process.env.TWILIO_FROM_NUMBER
-  if (ownerNumber && to !== ownerNumber) {
+  // Owner number gate (single-tenant): only accept messages to our number.
+  // Per-company number → company_id routing is a later multi-tenant concern.
+  const ownerNumber = process.env.CLICKSEND_FROM
+  if (ownerNumber && to && to !== ownerNumber) {
     return new NextResponse('Unknown destination', { status: 200 })
   }
 
-  // Best-effort customer match: any customer whose normalised phone equals
-  // the inbound sender. Multi-tenant deployments will need a richer routing
-  // layer (per-company Twilio number → company_id).
+  // Best-effort customer match: any customer whose normalised phone equals the
+  // inbound sender.
   const matchPhone = toE164(from) ?? from
   const { data: customer } = await service
     .from('customers')
@@ -83,8 +75,8 @@ export async function POST(req: Request) {
       })
     }
   } else {
-    // Unmatched sender — still land the row (customer_id null) so it shows
-    // up in the Unmatched tab and can be converted to a customer.
+    // Unmatched sender — still land the row (customer_id null) so it shows up in
+    // the Unmatched tab and can be converted to a customer.
     const ownerCompanyId = process.env.TWILIO_OWNER_COMPANY_ID
     if (ownerCompanyId) {
       const { data: inserted } = await service.from('customer_messages').insert({
@@ -110,6 +102,6 @@ export async function POST(req: Request) {
     }
   }
 
-  // Twilio expects 200 with optional TwiML; empty body is fine.
-  return new NextResponse('<Response/>', { status: 200, headers: { 'Content-Type': 'text/xml' } })
+  // ClickSend just needs a 2xx to consider the webhook delivered.
+  return new NextResponse('OK', { status: 200 })
 }

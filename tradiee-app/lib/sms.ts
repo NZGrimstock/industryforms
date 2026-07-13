@@ -1,40 +1,54 @@
-// SMS via Twilio. Mirrors lib/email.ts: a guarded sender that no-ops (without
-// throwing) when not configured, so builds/runtime never depend on SMS being set up.
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+// SMS via ClickSend. Mirrors lib/email.ts: a guarded sender that no-ops
+// (without throwing) when not configured, so builds/runtime never depend on SMS
+// being set up. Swapped from Twilio 2026-07-13 — ClickSend is materially
+// cheaper for NZ/AU. The `sms_usage_events.twilio_sid` column is kept as-is: it
+// now holds the ClickSend message_id. Every reader treats it as an opaque
+// provider message id, so renaming the column would be a pointless migration.
+import { randomUUID, timingSafeEqual } from 'crypto'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 
-const SID = process.env.TWILIO_ACCOUNT_SID
-const TOKEN = process.env.TWILIO_AUTH_TOKEN
-const FROM = process.env.TWILIO_FROM_NUMBER
+const CLICKSEND_USERNAME = process.env.CLICKSEND_USERNAME
+const CLICKSEND_API_KEY = process.env.CLICKSEND_API_KEY
+// Dedicated number / sender ID. Required as the `from` for two-way replies to
+// route back to us; if unset ClickSend uses a shared number (outbound only).
+const CLICKSEND_FROM = process.env.CLICKSEND_FROM
 const SMS_BILLING_DISABLED = 'SMS billing is not enabled for this account'
 
 export function smsConfigured(): boolean {
-  return !!(SID && TOKEN && FROM)
+  return !!(CLICKSEND_USERNAME && CLICKSEND_API_KEY)
 }
 
 export function isSmsBillingDisabledError(error: string | null | undefined): boolean {
   return error === SMS_BILLING_DISABLED
 }
 
-/**
- * Verify Twilio's X-Twilio-Signature on an inbound webhook request.
- * Algorithm (no SDK — the `twilio` package isn't a dependency here, and this
- * is a single well-documented HMAC-SHA1 computation):
- * https://www.twilio.com/docs/usage/security#validating-requests
- */
-export function validateTwilioSignature(
-  authToken: string,
-  signature: string,
-  url: string,
-  params: Record<string, string>
-): boolean {
-  const data = Object.keys(params).sort().reduce((acc, key) => acc + key + params[key], url)
-  const expected = createHmac('sha1', authToken).update(data, 'utf8').digest('base64')
-  const a = Buffer.from(expected)
-  const b = Buffer.from(signature)
+// ClickSend does NOT sign inbound/DLR webhooks (unlike Twilio's HMAC), so we
+// gate them with a shared secret carried in the URL (?k=…), compared in
+// constant time. Set the same secret on the ClickSend inbound rule + delivery-
+// report URLs. Returns false (→ caller 503s) when the secret isn't configured,
+// so nothing spoofed can land during the dark period.
+export function clickSendWebhookAuthorized(req: Request): boolean {
+  const secret = process.env.CLICKSEND_INBOUND_SECRET
+  if (!secret) return false
+  const provided = new URL(req.url).searchParams.get('k') ?? ''
+  const a = Buffer.from(provided)
+  const b = Buffer.from(secret)
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
+}
+
+// ClickSend webhooks arrive as form-encoded or JSON depending on the rule's
+// configured method — read both into a flat string map.
+export async function readWebhookParams(req: Request): Promise<Record<string, string>> {
+  const ct = req.headers.get('content-type') ?? ''
+  if (ct.includes('application/json')) {
+    const json = await req.json().catch(() => ({})) as Record<string, unknown>
+    return Object.fromEntries(Object.entries(json).map(([k, v]) => [k, String(v ?? '')]))
+  }
+  const form = await req.formData().catch(() => null)
+  if (!form) return {}
+  return Object.fromEntries(Array.from(form.entries()).map(([k, v]) => [k, String(v)]))
 }
 
 /**
@@ -63,8 +77,8 @@ export async function sendSms(
     relatedId?: string | null
   }
 ): Promise<{ id?: string; error?: string }> {
-  if (!SID || !TOKEN || !FROM) {
-    console.warn('Twilio not configured — SMS not sent')
+  if (!smsConfigured()) {
+    console.warn('ClickSend not configured — SMS not sent')
     return { error: 'SMS service not configured' }
   }
   const dest = toE164(to, country)
@@ -77,24 +91,35 @@ export async function sendSms(
     billing = { billable: check.billable, stripeCustomerId: check.stripeCustomerId }
   }
 
-  const statusCallback = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/sms/status`
-    : undefined
-
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
+  // Delivery receipts are configured account-wide in the ClickSend dashboard
+  // (Messaging → Delivery Reports → URL), not per message like Twilio's
+  // StatusCallback — so there's nothing to attach here. `custom_string` carries
+  // the company id so DLRs/replies can be correlated.
+  const res = await fetch('https://rest.clicksend.com/v3/sms/send', {
     method: 'POST',
     headers: {
-      Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'),
-      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: 'Basic ' + Buffer.from(`${CLICKSEND_USERNAME}:${CLICKSEND_API_KEY}`).toString('base64'),
+      'Content-Type': 'application/json',
     },
-    body: new URLSearchParams({
-      From: FROM, To: dest, Body: body,
-      ...(statusCallback ? { StatusCallback: statusCallback } : {}),
+    body: JSON.stringify({
+      messages: [{
+        source: 'industryforms',
+        ...(CLICKSEND_FROM ? { from: CLICKSEND_FROM } : {}),
+        to: dest,
+        body,
+        ...(companyId ? { custom_string: companyId } : {}),
+      }],
     }),
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) return { error: data.message ?? `SMS failed (${res.status})` }
-  const sid = typeof data.sid === 'string' ? data.sid : randomUUID()
+  const data = await res.json().catch(() => ({})) as {
+    response_code?: string; response_msg?: string
+    data?: { messages?: Array<{ message_id?: string; status?: string }> }
+  }
+  const msg = data.data?.messages?.[0]
+  if (!res.ok || data.response_code !== 'SUCCESS' || (msg?.status && msg.status !== 'SUCCESS')) {
+    return { error: msg?.status || data.response_msg || `SMS failed (${res.status})` }
+  }
+  const sid = typeof msg?.message_id === 'string' ? msg.message_id : randomUUID()
   if (companyId) {
     await recordSmsUsage({
       companyId,

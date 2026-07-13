@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     direction: 'outbound',
     body,
     twilio_sid: result.id ?? null,
-    from_number: process.env.TWILIO_FROM_NUMBER ?? null,
+    from_number: process.env.CLICKSEND_FROM ?? null,
     to_number: customer.phone,
   })
 
