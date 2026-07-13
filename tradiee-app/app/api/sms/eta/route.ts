@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const { data: job } = await service
     .from('jobs')
-    .select('id, company_id, job_number, customer_id, customers(name, phone, email), companies(name, country, logo_url)')
+    .select('id, company_id, job_number, customer_id, customers(name, phone, email), companies(name, phone, country, logo_url)')
     .eq('id', jobId)
     .single()
   if (!job || job.company_id !== profile.company_id) {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const customer = job.customers as unknown as { name: string; phone: string | null; email: string | null } | null
-  const company = job.companies as unknown as { name: string; country: string | null; logo_url: string | null } | null
+  const company = job.companies as unknown as { name: string; phone: string | null; country: string | null; logo_url: string | null } | null
   if (!customer || (!customer.phone && !customer.email)) {
     return NextResponse.json({ error: 'Customer has no phone or email' }, { status: 400 })
   }
@@ -54,12 +54,17 @@ export async function POST(req: NextRequest) {
   const tech = profile.full_name?.split(' ')[0] ?? 'Your technician'
   const firstName = customer.name.split(' ')[0]
   const companyName = company?.name ?? 'us'
+  // One-way message — SMS has no reply-to, so if plans change the customer
+  // needs a real number to reach, not just this notification thread. Only on
+  // the two statuses where something might still need coordinating; "arrived"
+  // has nothing left to arrange.
+  const callSignoff = company?.phone && status !== 'arrived' ? ` Call/text us on ${company.phone} if that doesn't work.` : ''
 
   const body = status === 'arrived'
     ? `Hi ${firstName}, it's ${tech} from ${companyName} — I've arrived.`
     : status === 'running_late'
-      ? `Hi ${firstName}, it's ${tech} from ${companyName} — running about ${etaMinutes} min late, sorry!`
-      : `Hi ${firstName}, it's ${tech} from ${companyName}. On my way — ETA about ${etaMinutes} min${distanceKm ? ` (${distanceKm} km)` : ''}.`
+      ? `Hi ${firstName}, it's ${tech} from ${companyName} — running about ${etaMinutes} min late, sorry!${callSignoff}`
+      : `Hi ${firstName}, it's ${tech} from ${companyName}. On my way — ETA about ${etaMinutes} min${distanceKm ? ` (${distanceKm} km)` : ''}.${callSignoff}`
 
   const results = await notifyPreferred({
     service,
