@@ -436,8 +436,8 @@ export default function JobDetailScreen() {
       return
     }
     const result = source === 'camera'
-      ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsMultipleSelection: false, mediaTypes: ImagePicker.MediaTypeOptions.Images })
+      ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsMultipleSelection: false, mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true })
     if (result.canceled || !result.assets[0]) return
 
     setUploadingPhoto(true)
@@ -458,12 +458,14 @@ export default function JobDetailScreen() {
       if (!signRes.ok) throw new Error((await signRes.json()).error ?? 'Could not get upload URL')
       const { url, key } = await signRes.json()
 
-      const fileBody = {
-        uri: asset.uri,
-        name: `job-photo.${ext}`,
-        type: contentType,
-      } as unknown as BodyInit
-      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: fileBody })
+      // RN fetch can't PUT a {uri} object as a raw body ("unsupported BodyInit type").
+      // Decode the picker's base64 to bytes and PUT that — the approach Supabase's
+      // own RN guide uses because Blob uploads are unreliable on device.
+      if (!asset.base64) throw new Error('Could not read image data')
+      const binary = atob(asset.base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const put = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType }, body: bytes.buffer })
       if (!put.ok) throw new Error('Upload to storage failed')
 
       const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', session.user.id).single()
@@ -984,6 +986,10 @@ export default function JobDetailScreen() {
         {/* Materials / line items — directly above Forms */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Materials</Text>
+          {isDone && (
+            <Text style={styles.emptyText}>Job completed — materials are locked. Reopen the job to change them.</Text>
+          )}
+          {!isDone && (
           <View style={styles.materialAddBox}>
             <PriceListDescriptionInput
               value={materialLine.description}
@@ -1051,6 +1057,7 @@ export default function JobDetailScreen() {
               )}
             </View>
           </View>
+          )}
           {displayedMaterials.length === 0 ? (
             <Text style={styles.emptyText}>No materials yet</Text>
           ) : (

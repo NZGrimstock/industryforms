@@ -44,6 +44,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editMember, setEditMember] = useState<Profile | null>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
   const [team, setTeam] = useState<Profile[]>(initialTeam)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(company.logo_url ?? null)
@@ -295,6 +297,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
   function openEdit(member: Profile) {
     setEditMember(member)
+    setNewPassword('')
     setEditForm({
       role: member.role ?? 'staff',
       vehicle_registration: (member as unknown as { vehicle_registration?: string }).vehicle_registration ?? '',
@@ -325,6 +328,23 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     toast('Team member updated')
     setEditMember(null)
     setLoading(false)
+  }
+
+  async function setMemberPassword() {
+    if (!editMember) return
+    if (newPassword.length < 8) { toast('Password must be at least 8 characters', 'error'); return }
+    setPwLoading(true)
+    const res = await fetch('/api/auth/set-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: editMember.id, password: newPassword }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setPwLoading(false)
+    if (!res.ok) { toast(data.error ?? 'Could not set password', 'error'); return }
+    // Show it once so the admin can pass it to the staff member — we never store it.
+    toast(`Password set for ${editMember.full_name}. Give them: ${newPassword}`)
+    setNewPassword('')
   }
 
   async function archiveTeamMember(member: Profile) {
@@ -1000,6 +1020,22 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </div>
               <div className="flex gap-3"><Button type="submit" loading={loading}>Save changes</Button><Button type="button" variant="outline" onClick={() => setEditMember(null)}>Cancel</Button></div>
             </form>
+
+            {/* Set a login password for this member. We apply it via the admin API and
+                show it once so you can pass it on — passwords are never stored or shown later. */}
+            <div className="mt-5 pt-5 border-t border-gray-200">
+              <Label>Set login password</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="text"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="New password (min 8 chars)"
+                />
+                <Button type="button" variant="outline" loading={pwLoading} onClick={setMemberPassword}>Set</Button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Applied immediately. Shown once here so you can give it to {editMember?.full_name?.split(' ')[0] || 'them'} — we don&apos;t store it. They can also reset it themselves from the app&apos;s &ldquo;Forgot password&rdquo; link.</p>
+            </div>
           </Dialog>
         </div>
       )}

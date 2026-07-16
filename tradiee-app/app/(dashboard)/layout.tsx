@@ -8,6 +8,7 @@ import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { SidebarProvider } from '@/components/layout/sidebar-context'
 import { PowerSyncProvider } from '@/components/providers/powersync-provider'
 import { TimezoneProvider } from '@/components/providers/timezone-provider'
+import { CountryProvider } from '@/components/providers/country-provider'
 import { SyncStatusBar } from '@/components/ui/sync-status-bar'
 import { WelcomeTutorial } from '@/components/ui/welcome-tutorial'
 
@@ -20,10 +21,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // billing-exempt review accounts bypass this).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, is_super_admin, welcome_tutorial_seen_at, timezone, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode)')
+    .select('role, is_super_admin, welcome_tutorial_seen_at, timezone, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode, country)')
     .eq('id', user.id)
     .single()
-  const company = (profile?.companies ?? null) as (BillingCompany & { theme_accent?: string | null; test_mode?: boolean | null }) | null
+  const company = (profile?.companies ?? null) as (BillingCompany & { theme_accent?: string | null; test_mode?: boolean | null; country?: string | null }) | null
   if (!hasAccess(!!profile?.is_super_admin, company)) redirect('/upgrade')
   const brandAccent = company?.theme_accent ?? null
   const testMode = company?.test_mode ?? false
@@ -36,6 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <TimezoneProvider timezone={profile?.timezone}>
+     <CountryProvider country={company?.country}>
       <PowerSyncProvider>
         <SidebarProvider>
           <div className="flex h-full">
@@ -49,6 +51,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />
         </SidebarProvider>
       </PowerSyncProvider>
+     </CountryProvider>
     </TimezoneProvider>
   )
 }

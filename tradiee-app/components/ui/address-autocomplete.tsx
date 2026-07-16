@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { useCountry } from '@/components/providers/country-provider'
 
 interface Props {
   value: string
@@ -10,6 +11,8 @@ interface Props {
   required?: boolean
   className?: string
   id?: string
+  /** Override the company country (e.g. on the signup form). Defaults to the CountryProvider. */
+  country?: string
 }
 
 const API_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_KEY
@@ -29,7 +32,12 @@ export function AddressAutocomplete({
   required,
   className,
   id,
+  country,
 }: Props) {
+  const providerCountry = useCountry()
+  // 'NZ'/'AU' → LocationIQ countrycodes 'nz'/'au'. Falls back to both if unknown.
+  const cc = (country ?? providerCountry ?? '').toLowerCase()
+  const countryCodes = cc === 'nz' || cc === 'au' ? cc : 'nz,au'
   const [query, setQuery] = useState(value)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
@@ -58,7 +66,7 @@ export function AddressAutocomplete({
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://api.locationiq.com/v1/autocomplete?key=${API_KEY}&q=${encodeURIComponent(text)}&limit=5&countrycodes=nz,au&dedupe=1&format=json`
+          `https://api.locationiq.com/v1/autocomplete?key=${API_KEY}&q=${encodeURIComponent(text)}&limit=5&countrycodes=${countryCodes}&dedupe=1&format=json`
         )
         if (!res.ok) return
         const data: Suggestion[] = await res.json()

@@ -1,0 +1,33 @@
+# Dependencies are installed by EAS from package-lock.json.
+node_modules/
+
+# Native build outputs/caches. Keep Android source checked in for the bare app.
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/**/.cxx/
+ios/
+
+# Local Expo/web output and caches.
+.expo/
+dist/
+web-build/
+.cache/
+.gradle/
+.kotlin/
+
+# Local env, credentials, and logs.
+.env
+.env.*
+*.log
+*.p8
+*.p12
+*.key
+*.jks
+*.mobileprovision
+google-play-service-account.json
+
+# Misc local/editor files.
+.DS_Store
+*.tsbuildinfo

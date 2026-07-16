@@ -122,23 +122,13 @@ export async function POST(req: NextRequest) {
         if (!customerId) { skipped++; continue }
 
         const status = normaliseJobStatus(row.status)
-        const { data: lastJob } = await service
-          .from('jobs')
-          .select('job_number')
-          .eq('company_id', companyId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const nextNum = lastJob
-          ? `J${String(parseInt(lastJob.job_number.replace(/\D/g, '') || '0') + 1).padStart(4, '0')}`
-          : 'J0001'
 
+        // job_number is assigned by the DB trigger (unique, never reused).
         // Jobs table has description only — no separate notes column
         const desc = [row.description?.trim(), row.notes?.trim()].filter(Boolean).join('\n') || null
         const payload = {
           company_id: companyId,
           customer_id: customerId,
-          job_number: nextNum,
           title,
           description: desc,
           status,
@@ -188,7 +178,9 @@ export async function POST(req: NextRequest) {
           status,
           notes: row.description?.trim() || null,
         }
-        const { error } = await service.from('invoices').insert(payload)
+        // Preserve the original invoice number from the old system (RPC sets the
+        // skip flag so the auto-numbering trigger doesn't overwrite it).
+        const { error } = await service.rpc('import_invoice', { p: payload })
         if (error) skipped++
         else inserted++
       }

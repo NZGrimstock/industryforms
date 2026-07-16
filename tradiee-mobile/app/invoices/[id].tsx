@@ -172,6 +172,7 @@ export default function InvoiceDetailScreen() {
 
   async function addLine() {
     if (!invoice || !newLine.description.trim()) return
+    if (invoice.status === 'paid') { Alert.alert('Invoice paid', 'Line items are locked on a paid invoice.'); return }
     const qty = parseFloat(newLine.quantity) || 1
     const price = parseFloat(newLine.unit_price) || 0
     setSavingLine(true)
@@ -434,7 +435,10 @@ export default function InvoiceDetailScreen() {
             </TouchableOpacity>
           ))}
 
-          {/* Add line */}
+          {/* Add line — locked once the invoice is fully paid */}
+          {isPaid ? (
+            <Text style={{ fontSize: 13, color: '#9ca3af', paddingTop: 12 }}>Invoice paid — line items are locked.</Text>
+          ) : (
           <View style={[styles.lineRow, { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingTop: 12 }]}>
             <PriceListDescriptionInput
               value={newLine.description}
@@ -457,6 +461,7 @@ export default function InvoiceDetailScreen() {
               {savingLine ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Add line</Text>}
             </TouchableOpacity>
           </View>
+          )}
 
           <View style={styles.totalsBox}>
             <View style={styles.totalRow}>

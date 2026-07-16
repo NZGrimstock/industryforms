@@ -55,3 +55,17 @@ tradiee-*-history.bundle
 # Local caches — never belong in git
 .npm-cache/
 .tmp/
+.appdata/
+.cache/
+.config/
+.localappdata/
+.eas-build-src/
+
+# Store submission credentials
+google-play-service-account.json
+*-service-account*.json
+capable-droplet-*.json
+
+# Store build artifacts
+*.aab
+tradiee-mobile/store-artifacts/

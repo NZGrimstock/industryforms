@@ -12,6 +12,7 @@ import { resolveCompanyUser } from '@/lib/api-auth'
 import { InvoicePdf, type InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { putObject, presignedDownload, PRIVATE_BUCKET } from '@/lib/r2'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
+import { logoDataUri } from '@/lib/pdf-logo'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       email: co?.email ?? null,
       phone: co?.phone ?? null,
       gst_number: co?.gst_number ?? null,
-      logo_url: co?.logo_url ?? null,
+      logo_url: await logoDataUri(co?.logo_url),
     },
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }

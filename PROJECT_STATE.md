@@ -1,6 +1,167 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-13. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-16. Catch-up doc for a fresh session. Read this first.
+
+## Session 2026-07-16 (Claude) — mobile forgot-password, admin set-password, and 8 bug-fix batch
+
+**Forgot password**: mobile login screen now has a "Forgot password?" link
+(`tradiee-mobile/app/login.tsx`) that calls `resetPasswordForEmail`, reusing
+the web app's existing `/reset-password` page as the redirect target — no
+deep-link plumbing needed.
+
+**Admin "Set password" for team members** (web Settings → Team): user asked
+for admin-viewable/eye-icon passwords that sync when a user self-resets —
+declined that design since passwords are only ever stored as one-way hashes
+(nothing to reveal) and a self-reset never reaches the server in plaintext
+(nothing to sync). Built the secure alternative instead: new
+`POST /api/auth/set-password` (`tradiee-app/app/api/auth/set-password/route.ts`,
+same owner/admin + same-company guard as the invite route) lets an admin set
+a member's password via `admin.updateUserById`; shown once in a toast so it
+can be handed off, never stored. UI is in the edit-member dialog in
+`tradiee-app/app/(dashboard)/settings/client.tsx`.
+
+**8-item bug batch** (user-reported list), root-caused rather than
+symptom-patched:
+1. **Mobile photo upload "unsupported BodyInit type"** — RN `fetch` can't PUT
+   a `{uri,name,type}` object as a raw body. Fixed by requesting `base64` from
+   `expo-image-picker` and PUTing the decoded `Uint8Array.buffer` instead.
+   `tradiee-mobile/app/jobs/[id].tsx`.
+2. **Supplier-invoice upload needed a manual refresh** to show imported
+   materials — `SupplierInvoiceParser` now calls `router.refresh()` after
+   saving. `tradiee-app/components/ui/supplier-invoice-parser.tsx`.
+3. **Invoice logo not appearing** — root cause was `@react-pdf/renderer`
+   fetching the logo image cross-origin when rendered client-side (web
+   Print/PDF buttons), which CORS silently drops; mobile's server PDF route
+   had the same risk for non-PNG/JPEG logos. Fixed once with a shared helper,
+   `tradiee-app/lib/pdf-logo.ts` (`logoDataUri`), that fetches the logo
+   server-side and inlines it as a `sharp`-transcoded PNG data URI. Wired into
+   `app/(dashboard)/invoices/[id]/page.tsx` and
+   `app/api/invoices/[id]/pdf/route.ts`.
+4. **Job/quote/invoice/PO numbers could be reused** after a delete — old
+   `nextDocNumber()` was `count(*) + 1`, so deleting a row lets the next
+   insert reuse its number (also race-prone under concurrent creates). Fixed
+   at the DB level: new migration
+   `supabase/migrations/20260716120000_unique_doc_numbers.sql` adds a
+   `doc_counters` table + `next_doc_number()` (atomic, row-locking upsert) +
+   a `BEFORE INSERT` trigger on quotes/invoices/jobs/purchase_orders that
+   assigns the number server-side regardless of which app/client inserts.
+   Counters are seeded from each company's existing max number. CSV import
+   (`app/api/import/route.ts`) keeps its ability to preserve original invoice
+   numbers via a new `import_invoice()` RPC that sets a skip-flag GUC before
+   inserting (import previously computed its own job number by hand — that's
+   now dead code, the trigger handles it). **`lib/numbering.ts`'s
+   `nextDocNumber()` is now just a preview** (reads `doc_counters`) — the
+   trigger is the source of truth.
+   **⚠️ This migration has not been pushed to the live Supabase project yet
+   — run `supabase db push` (or apply via CI) before relying on unique
+   numbers.** Until then the old count-based behavior is still live in prod.
+5. **AU addresses showing for NZ companies (and vice versa)** — address
+   autocomplete hardcoded `countrycodes=nz,au`. Added a `CountryProvider`
+   (`tradiee-app/components/providers/country-provider.tsx`, mirrors the
+   existing `TimezoneProvider` pattern) wrapping the dashboard layout, reading
+   `companies.country`; `AddressAutocomplete` now restricts suggestions to
+   that country (`country` prop lets signup override before login). Mobile
+   equivalent added to `lib/profile-context.tsx` (`useCountry()`) and
+   `components/AddressAutocomplete.tsx`.
+6. **Web quote builder had no inline "new customer"** (mobile quotes already
+   did) — added the same inline-create pattern used by the jobs form
+   (name/phone/email, dedupes by name) to `CustomerCombobox` in
+   `tradiee-app/components/forms/quote-builder.tsx`.
+7. **Completed jobs could still have materials edited** — mobile job detail
+   now hides the "add material" box once the job reaches its terminal
+   "completed" status; notes remain editable. Deliberately scoped to
+   materials only, not the whole job (invoicing/photos after completion are
+   normal). `tradiee-mobile/app/jobs/[id].tsx`.
+8. **Paid invoices could still have line items added** — mobile invoice
+   detail hides/guards "Add line" once `status === 'paid'`.
+   `tradiee-mobile/app/invoices/[id].tsx`.
+
+All TypeScript/ESLint clean on both apps. Not yet exercised in a running
+build — user is testing on the next mobile build. **Outstanding for next
+session**: push the numbering migration (`supabase db push`); consider
+web-side (not just mobile) locks for items 7/8 if the user wants parity.
+
+## Session 2026-07-14 (Codex) - production mobile builds/store submission attempt
+
+User asked to build Android + iOS production builds and submit to stores after
+the native Expo tab-bar rollback.
+
+- **Prep/validation**: `npx.cmd tsc --noEmit` passed in `tradiee-mobile`.
+  Added `tradiee-mobile/.easignore` so future EAS uploads do not try to ship
+  `node_modules`, local native build caches, old logs, or credentials. Copied
+  the Google Play service-account JSON into the path expected by `eas.json`
+  (`tradiee-mobile/google-play-service-account.json`, gitignored).
+- **EAS archive workaround**: direct builds from `tradiee-mobile` uploaded a
+  700 MB archive because local ignored build folders were being swept in. Built
+  from a clean temporary source export at
+  `D:\TRADIEE\.eas-build-src\tradiee-mobile` (own tiny git repo, source only,
+  local `node_modules` junction only for config-plugin resolution). Clean
+  archive uploaded as 726 KB.
+- **iOS production build succeeded**: build
+  `d48f79d2-1778-43d0-b30d-8fa2b56f5bf9`, build number `7`, artifact
+  `https://expo.dev/artifacts/eas/6wC3GKn4QdSvD4WrGlH7A2JoltBgT2wI75ZCqjxY00M.ipa`.
+  iOS submit did **not** complete: `eas submit` needs `ascAppId`, and App Store
+  Connect currently has no app record for `com.industryforms.app` (API lookup
+  returned `[]`). The Developer Portal bundle ID does exist:
+  `GK8S3YBZ82` / `com.industryforms.app`. Attempting to create the App Store
+  Connect app record through the API key failed with 403 (`apps` resource does
+  not allow `CREATE` for this key). **User must create the app record in App
+  Store Connect** (name `IndustryForms`, bundle ID `com.industryforms.app`, SKU
+  e.g. `industryforms-ios`), then add the returned numeric Apple app ID as
+  `submit.production.ios.ascAppId` and run:
+  `npx.cmd eas-cli submit --platform ios --id d48f79d2-1778-43d0-b30d-8fa2b56f5bf9 --profile production --non-interactive --wait`.
+- **Android package-name correction for Google Play**: the Play Console app
+  expects package name `com.industryforms`, while the first store AAB built
+  this session used `com.industryforms.app`. Renaming the file does not change
+  the embedded package, so that artifact will fail the Play Console upload
+  check shown in App integrity. `tradiee-mobile/app.json` now keeps iOS on
+  `com.industryforms.app` but sets Android to `com.industryforms`.
+- **Corrected Android production build succeeded with the Google Play upload
+  key**: build `2bb62bbd-414a-4ed2-8b48-c287195541f2`, versionCode `4`,
+  production/store build for Android package `com.industryforms`, artifact
+  `https://expo.dev/artifacts/eas/WTlxahpqvvp2pgkeMCOYikm712s9xRSOcA1RRRu18yU.aab`.
+  Local copy:
+  `tradiee-mobile/store-artifacts/industryforms-android-com.industryforms-v4-playkey.aab`.
+  Verified with `bundletool` that the embedded package is
+  `com.industryforms`, and verified with `keytool -printcert -jarfile` that
+  the signing SHA1 is the Play-expected
+  `68:7E:4B:D7:14:97:7E:C0:3D:E9:5A:BC:BF:4E:24:B3:FE:9B:C1:61`.
+  This is the AAB to upload to the existing Google Play app.
+- **Superseded corrected Android build**: build
+  `a73c671c-c155-4309-ab13-72c1427fa63b`, versionCode `3`, artifact
+  `https://expo.dev/artifacts/eas/ZQ_zM2mBm3ItR506-KCw9JuqwCY3F412RM0Jw5X5Qu8.aab`,
+  had the correct package and signing key but Google Play reported
+  versionCode `3` had already been used. Use versionCode `4` above instead.
+- **Superseded corrected Android build**: build
+  `e3fba176-594c-441a-8d50-f12b02bcff28`, versionCode `2`, artifact
+  `https://expo.dev/artifacts/eas/RRhJ35hy6Glyxs5wFpledDkHurwC0IWkitDtF2SV5Ao.aab`,
+  has the correct package `com.industryforms` but was signed with the newly
+  generated EAS key SHA1
+  `62:C5:84:16:A5:26:8D:58:3F:88:CE:76:7F:3C:A6:23:4D:91:B4:FC`; Google Play
+  rejects it for the existing app.
+- **Superseded Android production build**: build
+  `3ea4b278-0ba8-4e71-b28b-9fbfe7c292b5`, versionCode `8`, artifact
+  `https://expo.dev/artifacts/eas/QHyiFgeDcASj4JZU4mtrDVbQRHc81HxCh5LWWfH2LeM.aab`,
+  is valid only for package `com.industryforms.app` and should not be uploaded
+  to the current Play Console app expecting `com.industryforms`.
+- **Android submit blocker**: fallback submit of older finished AAB
+  `ebeddb6d-f332-410c-8018-a8709e71fcbd` (versionCode `4`, native-tab rollback
+  commit) reached Google Play but failed because the **Google Play Android
+  Developer API is disabled** for Google Cloud project `1016825408419`.
+  Service-account attempt to enable `androidpublisher.googleapis.com` failed
+  with `PERMISSION_DENIED`. User must enable:
+  `https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=1016825408419`,
+  wait for propagation, then retry Android submit with the corrected package
+  and corrected signing key build:
+  `npx.cmd eas-cli submit --platform android --id 2bb62bbd-414a-4ed2-8b48-c287195541f2 --profile production --non-interactive --wait`.
+- **Duplicate cleanup**: early 700 MB upload attempts spawned duplicate builds.
+  Canceled Android `94f59dca-6f45-44e4-9299-cef1906dbb09`,
+  `e0a14003-78ca-420a-ada2-7b3b1da267f2`,
+  `d9a29e8b-9e43-4047-8e82-c37a44979414`; canceled iOS
+  `c30b70ce-79f0-42b4-b680-e7c89eed085a` and
+  `55ad208d-c38c-4f73-b52c-70ea19b39f79`. Extra finished iOS
+  `60ede948-175a-4262-b574-41ee55b3842c` exists but was not submitted; keep
+  `d48f79d2...` as the clean iOS artifact from this session.
 
 ## Session 2026-07-13 (Claude) — optimization pass + Tap to Pay verification
 
@@ -181,6 +342,18 @@ Vercel prod, mobile in the next APK):
   is genuinely new and stayed, since it doesn't care which provider sends the
   wire request.
 
+- **Mobile bottom nav rollback (same day)** - user reported the new custom
+  persistent mobile bottom bar was not working and clarified they only want
+  Expo's native tab bar. Rolled back the custom bar path: root
+  `tradiee-mobile/app/_layout.tsx` no longer renders `BottomTabBar`,
+  `tradiee-mobile/app/(tabs)/_layout.tsx` owns the visible native Expo
+  `Tabs` bar again (`tabBarStyle: styles.tabBar`), and the custom-only
+  `tradiee-mobile/components/BottomTabBar.tsx` plus
+  `tradiee-mobile/lib/useNavStatus.ts` files were deleted. Verified with
+  `npx.cmd tsc --noEmit` in `tradiee-mobile`. No APK has been rebuilt after
+  this rollback yet, so the 2026-07-13 21:52 APK still contains the broken
+  custom bar unless rebuilt.
+
 ## What it is
 **IndustryForms** — a SaaS job-management app for NZ/AU tradespeople (a Tradify
 competitor). Monorepo at `D:\TRADIEE`:
@@ -205,13 +378,13 @@ deploy verification. PowerSync sync rules switched to **streams (edition 3)**
 Latest APK is `tradiee-mobile/android/app/build/outputs/apk/release/app-release.apk`
 (built 2026-07-13 21:52 NZT, 156,010,262 bytes, SHA256
 `380576f6598b581530c7859eb430c2a83348978c3548af1a36b039b91ca2c9bc`). This build
-carries the persistent bottom-nav-bar rework (`components/BottomTabBar.tsx`,
-now visible on every screen including jobs/[id]/quotes/[id]/invoices/[id] —
-**needs on-device verification**, not yet manually tested) and the mobile
-quote-to-job conversion fixes (explicit phone-user assignee, automatic
-material/labour/kit copy-over, schedule-now-or-later prompt) on top of every
-prior mobile fix through commit `87ef82e` — see `git log` for current commit
-hashes if this line goes stale. Build log:
+still carries the now-reverted persistent bottom-nav-bar rework
+(`components/BottomTabBar.tsx`) and the mobile quote-to-job conversion fixes
+(explicit phone-user assignee, automatic material/labour/kit copy-over,
+schedule-now-or-later prompt) on top of every prior mobile fix through commit
+`87ef82e` — see `git log` for current commit hashes if this line goes stale.
+The working tree has since been rolled back to Expo's native tab bar; rebuild
+before distributing so the broken custom bar is not shipped. Build log:
 `tradiee-mobile/release-build-navbar-quoteconvert.log` (`BUILD SUCCESSFUL`,
 4m14s). **Not yet submitted to any store** — Android is build-ready
 (`eas build --platform android --profile production`, EAS project linked,

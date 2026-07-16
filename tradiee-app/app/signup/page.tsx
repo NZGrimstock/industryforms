@@ -122,7 +122,7 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Business address</label>
-              <AddressAutocomplete value={companyAddress} onChange={setCompanyAddress} placeholder="Start typing your address…" />
+              <AddressAutocomplete value={companyAddress} onChange={setCompanyAddress} placeholder="Start typing your address…" country={country} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Trade / industry *</label>

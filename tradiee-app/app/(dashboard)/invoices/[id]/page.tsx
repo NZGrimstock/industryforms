@@ -8,6 +8,7 @@ import { discountLabel } from '@/lib/pricing'
 import { InvoiceDetailClient } from './client'
 import { RecurringInvoiceCard } from './recurring-card'
 import { SaveInvoiceTemplateButton } from './save-template'
+import { logoDataUri } from '@/lib/pdf-logo'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import Link from 'next/link'
@@ -47,7 +48,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       email: co?.email ?? null,
       phone: co?.phone ?? null,
       gst_number: co?.gst_number ?? null,
-      logo_url: co?.logo_url ?? null,
+      logo_url: await logoDataUri(co?.logo_url),
     },
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }

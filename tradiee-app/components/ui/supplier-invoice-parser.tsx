@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import { Upload, CheckCircle, XCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
@@ -43,6 +44,7 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
   const [expanded, setExpanded] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
+  const router = useRouter()
 
   async function handleFile(file: File) {
     setStage('parsing')
@@ -116,6 +118,9 @@ export function SupplierInvoiceParser({ jobId, companyId, priceItems, onSaved }:
     }
     setStage('done')
     onSaved?.()
+    // Server component renders the materials list — refresh so the imported items
+    // appear immediately instead of only after a manual page reload.
+    router.refresh()
   }
 
   if (stage === 'done') {

@@ -21,6 +21,18 @@ export default function LoginScreen() {
     else router.replace('/(tabs)/jobs')
   }
 
+  async function forgotPassword() {
+    if (!email) { Alert.alert('Enter your email first', 'Type your email above, then tap Forgot password.'); return }
+    setLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${process.env.EXPO_PUBLIC_API_URL}/reset-password`,
+    })
+    setLoading(false)
+    // Don't reveal whether the account exists.
+    Alert.alert('Check your email', `If an account exists for ${email.trim()}, we've sent a link to reset your password.`)
+    if (error) console.warn('reset email error', error.message)
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -69,6 +81,10 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={forgotPassword} disabled={loading} style={styles.forgotLink}>
+          <Text style={styles.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={() => router.push('/signup')} style={styles.signupLink}>
           <Text style={styles.signupLinkText}>No account? <Text style={styles.signupLinkBold}>Create one free</Text></Text>
         </TouchableOpacity>
@@ -92,6 +108,8 @@ const styles = StyleSheet.create({
   eyeText: { fontSize: 18 },
   button: { backgroundColor: '#f97316', borderRadius: 12, padding: 15, alignItems: 'center', marginTop: 4 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  forgotLink: { alignItems: 'center', marginTop: 14 },
+  forgotText: { fontSize: 14, color: '#f97316', fontWeight: '600' },
   signupLink: { alignItems: 'center', marginTop: 16 },
   signupLinkText: { fontSize: 14, color: '#6b7280' },
   signupLinkBold: { color: '#f97316', fontWeight: '600' },

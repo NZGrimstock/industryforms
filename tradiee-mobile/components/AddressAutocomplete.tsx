@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { View, TextInput, TouchableOpacity, Text, StyleSheet, TextInputProps } from 'react-native'
+import { useCountry } from '@/lib/profile-context'
 
 // Mirrors tradiee-app/components/ui/address-autocomplete.tsx so mobile and web
 // behave the same way: falls back to a plain input when no LocationIQ key is
@@ -22,6 +23,8 @@ interface Props extends Omit<TextInputProps, 'value' | 'onChangeText'> {
 export function AddressAutocomplete({ value, onChangeText, onSelect, style, ...inputProps }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cc = useCountry().toLowerCase()
+  const countryCodes = cc === 'nz' || cc === 'au' ? cc : 'nz,au'
 
   function handleChange(text: string) {
     onChangeText(text)
@@ -30,7 +33,7 @@ export function AddressAutocomplete({ value, onChangeText, onSelect, style, ...i
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(
-          `https://api.locationiq.com/v1/autocomplete?key=${API_KEY}&q=${encodeURIComponent(text)}&limit=5&countrycodes=nz,au&dedupe=1&format=json`
+          `https://api.locationiq.com/v1/autocomplete?key=${API_KEY}&q=${encodeURIComponent(text)}&limit=5&countrycodes=${countryCodes}&dedupe=1&format=json`
         )
         if (!res.ok) return
         const data: Suggestion[] = await res.json()

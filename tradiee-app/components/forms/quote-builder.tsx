@@ -160,19 +160,25 @@ function LineDescriptionInput({
   )
 }
 
-// Customer typeahead combobox
-function CustomerCombobox({ customers, value, onChange }: {
+// Customer typeahead combobox with inline "new customer" (same as the jobs form).
+function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: {
   customers: (Customer & { customer_sites: CustomerSite[] })[]
   value: string
   onChange: (id: string) => void
+  companyId: string
+  onCreated: (c: Customer & { customer_sites: CustomerSite[] }) => void
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newCust, setNewCust] = useState({ name: '', phone: '', email: '' })
+  const [saving, setSaving] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const selected = customers.find(c => c.id === value)
+  const { toast } = useToast()
 
   useEffect(() => {
-    function click(e: MouseEvent) { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    function click(e: MouseEvent) { if (!ref.current?.contains(e.target as Node)) { setOpen(false); setCreating(false) } }
     document.addEventListener('mousedown', click)
     return () => document.removeEventListener('mousedown', click)
   }, [])
@@ -180,6 +186,30 @@ function CustomerCombobox({ customers, value, onChange }: {
   const filtered = query
     ? customers.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
     : customers
+
+  async function createCustomer() {
+    const name = newCust.name.trim()
+    if (!name) { toast('Enter the customer name', 'error'); return }
+    setSaving(true)
+    const supabase = createClient()
+    // Reuse an existing same-name customer to avoid duplicates (matches jobs form).
+    const { data: existing } = await supabase.from('customers')
+      .select('id').eq('company_id', companyId).ilike('name', name).limit(1).maybeSingle()
+    if (existing) {
+      setSaving(false); setCreating(false); setOpen(false)
+      onChange(existing.id)
+      toast('Using existing customer with that name')
+      return
+    }
+    const { data: created, error } = await supabase.from('customers')
+      .insert({ company_id: companyId, name, phone: newCust.phone.trim() || null, email: newCust.email.trim() || null })
+      .select('*').single()
+    setSaving(false)
+    if (error || !created) { toast(error?.message ?? 'Failed to create customer', 'error'); return }
+    onCreated({ ...(created as Customer), customer_sites: [] })
+    setCreating(false); setOpen(false)
+    setNewCust({ name: '', phone: '', email: '' })
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -190,8 +220,15 @@ function CustomerCombobox({ customers, value, onChange }: {
         onFocus={() => { setOpen(true); setQuery('') }}
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
       />
-      {open && (
+      {open && !creating && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+          <button
+            type="button"
+            className="w-full text-left px-3 py-2 text-sm font-medium text-[var(--accent,#f97316)] hover:bg-orange-50 border-b border-gray-100 flex items-center gap-1.5"
+            onMouseDown={e => { e.preventDefault(); setNewCust(c => ({ ...c, name: query })); setCreating(true) }}
+          >
+            <Plus className="h-4 w-4" /> New customer{query ? ` “${query}”` : ''}
+          </button>
           {filtered.length === 0 ? (
             <p className="text-sm text-gray-400 px-3 py-2">No customers found</p>
           ) : (
@@ -211,6 +248,17 @@ function CustomerCombobox({ customers, value, onChange }: {
           )}
         </div>
       )}
+      {open && creating && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2">
+          <Input autoFocus placeholder="Customer name *" value={newCust.name} onChange={e => setNewCust(c => ({ ...c, name: e.target.value }))} />
+          <Input placeholder="Phone" value={newCust.phone} onChange={e => setNewCust(c => ({ ...c, phone: e.target.value }))} />
+          <Input placeholder="Email" value={newCust.email} onChange={e => setNewCust(c => ({ ...c, email: e.target.value }))} />
+          <div className="flex gap-2">
+            <Button type="button" size="sm" loading={saving} onClick={createCustomer}>Create</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -224,6 +272,8 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const supabase = createClient()
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
+  // Stateful so inline "new customer" (in CustomerCombobox) can be added and selected.
+  const [customerList, setCustomerList] = useState(customers)
   const [addItemOpen, setAddItemOpen] = useState<{ sectionId: string; mode: 'items' | 'kits' } | null>(null)
   const [priceSearch, setPriceSearch] = useState('')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main']))
@@ -295,7 +345,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const [docDiscountType, setDocDiscountType] = useState<DiscountType>((editQuote?.discount_type as DiscountType) ?? null)
   const [docDiscountValue, setDocDiscountValue] = useState<number>(Number(editQuote?.discount_value ?? 0))
 
-  const selectedCustomer = customers.find(c => c.id === meta.customerId)
+  const selectedCustomer = customerList.find(c => c.id === meta.customerId)
 
   function updateMeta(k: string, v: string) { setMeta(m => ({ ...m, [k]: v })) }
 
@@ -517,9 +567,11 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
             <div>
               <Label>Customer <span className="text-red-400">*</span></Label>
               <CustomerCombobox
-                customers={customers}
+                customers={customerList}
                 value={meta.customerId}
                 onChange={id => { updateMeta('customerId', id); updateMeta('siteId', '') }}
+                companyId={companyId}
+                onCreated={c => { setCustomerList(prev => [...prev, c]); updateMeta('customerId', c.id); updateMeta('siteId', '') }}
               />
             </div>
             <div>

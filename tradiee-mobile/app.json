@@ -30,7 +30,7 @@
       }
     },
     "android": {
-      "package": "com.industryforms.app",
+      "package": "com.industryforms",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
