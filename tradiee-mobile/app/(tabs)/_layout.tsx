@@ -5,6 +5,7 @@ import { Icon, type IconName } from '@/lib/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '@/lib/supabase'
 import { AUTO_CHECKIN_NOTICE_KEY, type AutoCheckinNotice } from '@/lib/location/tracking'
+import { TAP_TO_PAY_SPLASH_KEY } from '@/lib/tap-to-pay'
 
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
@@ -234,6 +235,7 @@ export default function TabLayout() {
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadInbox, setUnreadInbox] = useState(0)
   const [isStaff, setIsStaff] = useState(false)
+  const [showTapToPaySplash, setShowTapToPaySplash] = useState(false)
 
   useEffect(() => {
     let inboxPoll: ReturnType<typeof setInterval> | null = null
@@ -246,6 +248,11 @@ export default function TabLayout() {
       if (!profile?.company_id) return
       const staff = profile.role === 'staff'
       setIsStaff(staff)
+
+      // Apple Tap to Pay review requirements 3.2/6.2: an in-app "hero" splash
+      // must be shown to all eligible users at least once.
+      const splashSeen = await AsyncStorage.getItem(TAP_TO_PAY_SPLASH_KEY)
+      if (!splashSeen) setShowTapToPaySplash(true)
       const { count } = await supabase
         .from('job_invitations')
         .select('id', { count: 'exact', head: true })
@@ -315,9 +322,69 @@ export default function TabLayout() {
       <Tabs.Screen name="quotes" options={{ href: null }} />
     </Tabs>
     <AutoTimerNotice />
+    <TapToPaySplash
+      visible={showTapToPaySplash}
+      onDismiss={async () => {
+        await AsyncStorage.setItem(TAP_TO_PAY_SPLASH_KEY, '1')
+        setShowTapToPaySplash(false)
+      }}
+    />
     </>
   )
 }
+
+// Apple Tap to Pay review requirements 3.2/6.2: full-screen "hero" splash
+// shown once to all eligible users.
+//
+// Copy below is Apple's exact pre-approved "Value proposition" wording from the
+// Tap to Pay on iPhone Marketing Guide (Aug 2025, p.27) + Copy Block. Apple's
+// guide forbids writing your own product claims, so DO NOT edit this text.
+//
+// VISUAL STILL TO DO: the guide requires Apple's provided "card to iPhone" hero
+// artwork here and forbids self-made icons depicting Tap to Pay. The placeholder
+// icon below must be swapped for the hero image from the Marketing Toolkit asset
+// pack before submitting. "Terms apply." must link to your product page showing
+// the full legal disclaimer.
+function TapToPaySplash({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
+  return (
+    <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onDismiss}>
+      <View style={splashStyles.container}>
+        <View style={splashStyles.iconWrap}>
+          {/* Placeholder — replace with Apple's card-to-iPhone hero visual. */}
+          <Icon name="credit-card" size={56} color="#f97316" />
+        </View>
+        <Text style={splashStyles.title}>Tap to Pay on iPhone</Text>
+        <Text style={splashStyles.body}>
+          You can accept all types of contactless payments right on your iPhone — from physical
+          debit and credit cards to Apple Pay and other digital wallets. Terms apply.
+        </Text>
+        <TouchableOpacity
+          style={splashStyles.primaryBtn}
+          onPress={() => { onDismiss(); router.push('/pay-now' as never) }}
+        >
+          <Text style={splashStyles.primaryBtnText}>Get started</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={splashStyles.dismissBtn} onPress={onDismiss}>
+          <Text style={splashStyles.dismissBtnText}>Not now</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  )
+}
+
+const splashStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  iconWrap: {
+    width: 96, height: 96, borderRadius: 48, backgroundColor: '#fff7ed',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 28,
+  },
+  title: { fontSize: 24, fontWeight: '800', color: '#111827', textAlign: 'center', marginBottom: 12 },
+  body: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 40 },
+  primaryBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 48, marginBottom: 14 },
+  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  dismissBtn: { padding: 10 },
+  dismissBtnText: { color: '#9ca3af', fontWeight: '600', fontSize: 14 },
+})
 
 const styles = StyleSheet.create({
   header: { backgroundColor: '#ffffff' },

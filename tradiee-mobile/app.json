@@ -26,7 +26,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.industryforms.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiredDeviceCapabilities": [
+          "arm64",
+          "iphone-ipad-minimum-performance-a12"
+        ]
       }
     },
     "android": {
@@ -96,6 +100,9 @@
         {
           "android": {
             "minSdkVersion": 26
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
           }
         }
       ]

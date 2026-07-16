@@ -2,15 +2,25 @@ import { useState, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView } from 'react-native'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
+import { TAP_TO_PAY_EDUCATION_KEY } from '@/lib/tap-to-pay'
 
 
 type MenuItem = {
   icon: IconName
   label: string
-  route: string
+  route?: string
+  onPress?: () => void
   badge?: number
+}
+
+// Apple Tap to Pay review requirement 4.2: education must be shown once
+// before first use. Route through it on the way to /pay-now if unseen.
+async function openTapToPay() {
+  const seen = await AsyncStorage.getItem(TAP_TO_PAY_EDUCATION_KEY)
+  router.push((seen ? '/pay-now' : `/tap-to-pay-help?next=${encodeURIComponent('/pay-now')}`) as never)
 }
 
 export default function MoreScreen() {
@@ -54,7 +64,8 @@ export default function MoreScreen() {
     ...(projectsEnabled ? [{ icon: 'folder' as IconName, label: 'Projects', route: '/projects' }] : []),
     ...(profile?.role !== 'staff' ? [{ icon: 'file-text' as IconName, label: 'Quotes', route: '/quotes' }] : []),
     { icon: 'credit-card', label: 'Invoices',     route: '/invoices' },
-    { icon: 'zap',         label: 'Tap to Pay',   route: '/pay-now' },
+    { icon: 'zap',         label: 'Tap to Pay',   onPress: openTapToPay },
+    { icon: 'help-circle', label: 'Tap to Pay Help', route: '/tap-to-pay-help' },
     { icon: 'clock',       label: 'Time Logs',    route: '/timesheets' },
     { icon: 'map',         label: 'Job Map',      route: '/job-map' },
     { icon: 'check-square',label: 'To-do List',   route: '/todos' },
@@ -70,7 +81,7 @@ export default function MoreScreen() {
     return (
       <TouchableOpacity
         style={s.row}
-        onPress={() => router.push(item.route as never)}
+        onPress={() => item.onPress ? item.onPress() : router.push(item.route as never)}
         activeOpacity={0.6}
       >
         <View style={s.iconWrap}>

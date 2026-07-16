@@ -6,11 +6,13 @@ import {
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
 import { useTimezone } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
+import { TAP_TO_PAY_EDUCATION_KEY } from '@/lib/tap-to-pay'
 
 const STATUS_COLOR: Record<string, string> = {
   draft:          '#6b7280',
@@ -497,7 +499,12 @@ export default function InvoiceDetailScreen() {
           <View style={styles.btnRow}>
             <TouchableOpacity
               style={[styles.tapPayBtn]}
-              onPress={() => router.push(`/pay-now?invoiceId=${id}` as never)}
+              onPress={async () => {
+                // Apple Tap to Pay review requirement 4.2: show education once before first use.
+                const seen = await AsyncStorage.getItem(TAP_TO_PAY_EDUCATION_KEY)
+                const dest = seen ? `/pay-now?invoiceId=${id}` : `/tap-to-pay-help?next=${encodeURIComponent(`/pay-now?invoiceId=${id}`)}`
+                router.push(dest as never)
+              }}
               activeOpacity={0.85}
             >
               <Icon name="credit-card" size={16} color="#fff" />

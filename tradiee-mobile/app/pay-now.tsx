@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Platform,
+  ActivityIndicator, RefreshControl, Platform, Share,
 } from 'react-native'
 import { Stack, useLocalSearchParams, router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -63,6 +63,10 @@ export default function PayNowScreen() {
   const [selected, setSelected] = useState<InvoiceSummary | null>(null)
   const [stage, setStage] = useState<PayStage>(preselectedId ? 'confirm' : 'select')
   const [errorMsg, setErrorMsg] = useState('')
+  const [role, setRole] = useState<string | null>(null)
+  // Apple Tap to Pay review requirement 3.9.1: show configuration progress
+  // (0-100) while the reader is preparing, instead of a bare spinner.
+  const [configProgress, setConfigProgress] = useState<number | null>(null)
   const {
     initialize,
     isInitialized,
@@ -78,13 +82,17 @@ export default function PayNowScreen() {
     onUpdateDiscoveredReaders: readers => {
       discoveredReaders.current = readers
     },
+    onDidReportReaderSoftwareUpdateProgress: progress => {
+      setConfigProgress(Math.round(parseFloat(progress) * 100))
+    },
   })
 
   const fetchInvoices = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: prof } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+    const { data: prof } = await supabase.from('profiles').select('company_id, role').eq('id', user.id).single()
     if (!prof) return
+    setRole(prof.role ?? null)
 
     // If navigating from a specific invoice, fetch it directly (bypasses status filter)
     if (preselectedId) {
@@ -180,6 +188,7 @@ export default function PayNowScreen() {
       }
 
       setStage('connecting')
+      setConfigProgress(null)
       if (!connectedReader) {
         // Per-company Terminal Location (Stripe Connect direct charges) — 409s
         // with a clear message if payouts setup isn't finished yet.
@@ -192,15 +201,25 @@ export default function PayNowScreen() {
         const reader = discoveredReaders.current[0]
         if (!reader) throw new Error('No Tap to Pay reader was discovered on this device.')
 
+        // Apple Tap to Pay review requirement 3.8/3.8.1: only an owner/admin may
+        // accept the Tap to Pay Terms & Conditions. Staff can still take payments
+        // once an admin has enabled it on this iPhone — we just don't let a staff
+        // member be the one who triggers the acceptance prompt.
+        const isAdminOrOwner = role === 'owner' || role === 'admin'
         const connected = await connectReader({
           discoveryMethod: 'tapToPay',
           reader,
           locationId,
           merchantDisplayName: 'IndustryForms',
-          tosAcceptancePermitted: true,
+          tosAcceptancePermitted: isAdminOrOwner,
           autoReconnectOnUnexpectedDisconnect: true,
         })
-        if (connected.error) throw connected.error
+        if (connected.error) {
+          if (!isAdminOrOwner) {
+            throw new Error('Tap to Pay isn’t set up on this iPhone yet. Ask an owner or admin to enable it first.')
+          }
+          throw connected.error
+        }
       }
 
       const paymentIntent = await fetchTerminalPaymentIntent(API_BASE, selected.id)
@@ -232,11 +251,26 @@ export default function PayNowScreen() {
   function reset() {
     setStage(preselectedId ? 'confirm' : 'select')
     setErrorMsg('')
+    setConfigProgress(null)
   }
 
   async function cancelPayment() {
     await cancelCollectPaymentMethod().catch(() => undefined)
     reset()
+  }
+
+  // Apple Tap to Pay review requirement 5.10: must be possible to send a
+  // confidential digital receipt (SMS, email, QR, or Activity views). Native
+  // Share sheet covers "Activity views" with no new dependency.
+  async function shareReceipt() {
+    if (!selected) return
+    try {
+      await Share.share({
+        message: `Payment received — Invoice ${selected.invoice_number}\nAmount: ${fmt(selected.outstanding)}\nThank you for your business.`,
+      })
+    } catch {
+      // user canceled the share sheet — nothing to do
+    }
   }
 
   // ─── Success state ───────────────────────────────────────────────
@@ -252,6 +286,10 @@ export default function PayNowScreen() {
           <Text style={s.successSub}>
             {selected ? `${selected.invoice_number} — ${fmt(selected.outstanding)}` : ''}
           </Text>
+          <TouchableOpacity style={s.receiptBtn} onPress={shareReceipt}>
+            <Icon name="send" size={16} color="#f97316" />
+            <Text style={s.receiptBtnText}>Send receipt</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={s.doneBtn} onPress={() => router.back()}>
             <Text style={s.doneBtnText}>Done</Text>
           </TouchableOpacity>
@@ -284,8 +322,11 @@ export default function PayNowScreen() {
 
   // ─── Processing states ───────────────────────────────────────────
   if (stage === 'connecting' || stage === 'collecting' || stage === 'confirming') {
+    // Apple Tap to Pay review requirement 3.9.1: while the reader is
+    // configuring (only happens the first time), show progress + a note
+    // that Tap to Pay isn't ready yet, instead of a bare "Connecting…" spinner.
     const label =
-      stage === 'connecting' ? 'Connecting reader…' :
+      stage === 'connecting' ? (configProgress !== null ? `Configuring Tap to Pay… ${configProgress}%` : 'Connecting reader…') :
       stage === 'collecting' ? 'Tap card or device to pay' :
       'Confirming payment…'
     const icon: IconName =
@@ -305,6 +346,9 @@ export default function PayNowScreen() {
             <ActivityIndicator size="large" color="#f97316" style={{ marginBottom: 24 }} />
           )}
           <Text style={s.processingLabel}>{label}</Text>
+          {stage === 'connecting' && configProgress !== null && (
+            <Text style={s.processingHint}>Tap to Pay isn’t ready yet — this only happens once on this iPhone.</Text>
+          )}
           {selected && (
             <Text style={s.processingAmount}>{fmt(selected.outstanding)}</Text>
           )}
@@ -457,6 +501,7 @@ const s = StyleSheet.create({
 
   // processing
   processingLabel: { fontSize: 20, fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 8 },
+  processingHint: { fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 16, paddingHorizontal: 12 },
   processingAmount: { fontSize: 36, fontWeight: '800', color: '#f97316', marginBottom: 32 },
   tapCircle: {
     width: 120, height: 120, borderRadius: 60,
@@ -472,7 +517,12 @@ const s = StyleSheet.create({
     backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center', marginBottom: 24,
   },
   successTitle: { fontSize: 26, fontWeight: '800', color: '#111827', marginBottom: 8 },
-  successSub: { fontSize: 15, color: '#6b7280', marginBottom: 32 },
+  successSub: { fontSize: 15, color: '#6b7280', marginBottom: 20 },
+  receiptBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#fed7aa',
+    backgroundColor: '#fff7ed', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 20, marginBottom: 20,
+  },
+  receiptBtnText: { color: '#f97316', fontWeight: '700', fontSize: 14 },
   doneBtn: { backgroundColor: '#22c55e', borderRadius: 14, paddingVertical: 15, paddingHorizontal: 48, marginBottom: 12 },
   doneBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   anotherBtn: { padding: 12 },

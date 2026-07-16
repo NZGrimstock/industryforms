@@ -18,6 +18,16 @@ import { supabase } from '@/lib/supabase'
 
 export const TAP_TO_PAY_READY = true
 
+// Apple Tap to Pay review requirement 4.2: merchant education must be shown
+// once after Terms & Conditions acceptance, before first use. Entry points
+// (More menu, invoice "Tap to Pay" button) check this flag and route through
+// /tap-to-pay-help first if unset.
+export const TAP_TO_PAY_EDUCATION_KEY = 'TRADIEE_TAP_TO_PAY_EDUCATION_SEEN'
+
+// Apple Tap to Pay review requirements 3.2 / 6.2: an in-app "hero" splash
+// must be shown to all eligible users at least once at launch.
+export const TAP_TO_PAY_SPLASH_KEY = 'TRADIEE_TAP_TO_PAY_SPLASH_SEEN'
+
 async function authHeaders() {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.access_token) throw new Error('Sign in again before taking a payment.')

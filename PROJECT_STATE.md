@@ -2,6 +2,62 @@
 
 Last updated: 2026-07-16. Catch-up doc for a fresh session. Read this first.
 
+## Session 2026-07-16 (Claude, pt.2) — invoice-delete lock + Apple Tap to Pay review-checklist compliance
+
+**Invoice delete restricted to drafts**: delete was possible on any invoice
+including sent/paid (audit-trail gap vs. the new unique-numbering). Now:
+UI hides the trash button unless `status === 'draft'`
+(`tradiee-app/app/(dashboard)/invoices/[id]/client.tsx`), the `deleteInvoice()`
+handler guards on it, and RLS enforces it at the DB — migration
+`20260716130000_restrict_invoice_delete_to_draft.sql` splits the old blanket
+"admins write invoices" policy into insert/update/delete, with delete gated on
+`status = 'draft'`. **Applied to remote.**
+
+**Apple "Tap to Pay on iPhone — App Review Requirements Checklist" (v1.6)**:
+user is submitting this to Apple. Reviewed the mobile Tap to Pay integration
+(Stripe Terminal SDK, PSP = Stripe) against every row and built the fixable
+gaps. Team ID `27Y63CNHB6`. Completed checklist saved to the user's Downloads
+as both `.numbers` and `.xlsx` (Windows-editable). Code changes:
+- **Receipt sending (req 5.10)**: "Send receipt" on the pay-now success screen
+  via RN `Share` sheet (satisfies Apple's "Activity views" option).
+- **Admin-only T&Cs acceptance (req 3.8/3.8.1)**: `pay-now.tsx` passes
+  `tosAcceptancePermitted` only when profile role is owner/admin; staff get a
+  "ask an owner/admin to enable it" message.
+- **Merchant education (req 4.2/4.3/etc.)**: new `app/tap-to-pay-help.tsx`,
+  shown once before first use (AsyncStorage-gated from both the More menu and
+  the invoice Tap-to-Pay button) and permanently available as "Tap to Pay Help"
+  in the More menu. Copy uses Apple's approved PIN / PIN-accessibility /
+  no-recording wording from the Marketing Copy Block.
+- **Config progress indicator (req 3.9.1)**: pay-now uses
+  `onDidReportReaderSoftwareUpdateProgress` to show "Configuring Tap to Pay… X%".
+- **Launch splash/hero (req 3.2/6.2)**: one-time full-screen `TapToPaySplash`
+  modal in `app/(tabs)/_layout.tsx`, using Apple's exact approved value-prop
+  copy (Marketing Guide Aug-2025 p.27 — do NOT edit, custom claims are
+  forbidden). **STILL TODO: replace the placeholder card icon with Apple's
+  "card to iPhone" hero image from the Marketing Toolkit asset pack (a separate
+  download, not the guide PDFs); make "Terms apply." link to a full-disclaimer page.**
+- **Launch push (req 6.3)**: super-admin endpoint
+  `tradiee-app/app/api/admin/tap-to-pay-launch/route.ts` sends Apple's approved
+  push copy to eligible owner/admin merchants once each (migration
+  `20260716140000_tap_to_pay_launch_push.sql` adds `profiles.tap_to_pay_launch_push_at`,
+  **applied to remote**). Does not auto-fire; `{dryRun:true}` previews the count.
+  Push tap routes to `/pay-now` (handler added in `app/_layout.tsx`).
+- **iOS deployment target + A12 (req 1.2/1.3)**: `app.json` now sets
+  `expo-build-properties ios.deploymentTarget "16.4"` and
+  `UIRequiredDeviceCapabilities ["arm64","iphone-ipad-minimum-performance-a12"]`.
+  Takes effect on the next NATIVE build, not an OTA update.
+
+**Outstanding for Apple submission** (not code / need a human): Marketing
+Toolkit hero image + email template + product video (separate asset download);
+confirm AU/NZ legal-disclaimer copy (the block the user had was the Singapore
+version — value-prop copy is worldwide-identical, disclaimers differ); actually
+send the launch email + push at go-live; record the New User Flow and Checkout
+Flow videos (req rows 54/56); device-test the sub-1s button timing (5.6) and
+<15-min onboarding (2.3); iOS <17.6 `osVersionNotSupported` handling (req 1.4)
+still shows a generic error, not a specific "update iOS" message; FaceID/TouchID
+login (1.7, Recommended) not built. Details in the completed checklist's
+comments column.
+
 ## Session 2026-07-16 (Claude) — mobile forgot-password, admin set-password, and 8 bug-fix batch
 
 **Forgot password**: mobile login screen now has a "Forgot password?" link

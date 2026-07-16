@@ -345,11 +345,16 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   }
 
   async function deleteInvoice() {
+    // Once sent (or paid), the invoice number is a real document the customer
+    // has seen and/or a real payment record — deleting it would leave a gap in
+    // the numbering audit trail. Only drafts can be deleted (DB also enforces this).
+    if (invoice.status !== 'draft') { toast('Only draft invoices can be deleted', 'error'); return }
     if (!confirm('Delete this invoice?')) return
     setLoading(true)
     await supabase.from('invoice_line_items').delete().eq('invoice_id', invoice.id)
     await supabase.from('payments').delete().eq('invoice_id', invoice.id)
-    await supabase.from('invoices').delete().eq('id', invoice.id)
+    const { error } = await supabase.from('invoices').delete().eq('id', invoice.id)
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
     toast('Invoice deleted')
     router.push('/invoices')
   }
@@ -385,7 +390,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       {isDraft && <Button variant="outline" size="sm" onClick={markSent}><Send className="h-4 w-4" /> Mark sent</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}
       <PrintInvoice data={printData} />
-      <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>
+      {isDraft && <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>}
       {invoice.job_id && <Button variant="ghost" size="sm" onClick={revertToJob}><Undo2 className="h-4 w-4" /> Revert back to job</Button>}
 
       <Dialog open={activeDialog === 'line'} onClose={() => setActiveDialog(null)} title="Add line item">

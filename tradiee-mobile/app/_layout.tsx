@@ -123,6 +123,7 @@ export default function RootLayout() {
 
       if (data?.screen === 'job' && data?.jobId) router.push(`/jobs/${data.jobId}`)
       if (data?.screen === 'invite' && data?.token) router.push(`/invite/${data.token}`)
+      if (data?.screen === 'pay-now') router.push('/pay-now')
 
       if (data?.screen === 'thread' && data?.key) {
         const userText = (response as any).userText as string | undefined
