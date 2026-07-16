@@ -364,3 +364,47 @@ export function reminderEmailHtml({
 </html>`,
   }
 }
+
+// Tap to Pay on iPhone launch announcement — sent FROM IndustryForms to its own
+// merchant users (Apple App Review requirement 6.1: launch email on day one).
+//
+// Copy is Apple's exact pre-approved wording (Marketing Guide Aug 2025) — do NOT
+// edit the product claims. "Tap to Pay on iPhone" must be the first sentence,
+// legal disclaimers are mandatory, and only Apple-provided artwork may be used.
+export function tapToPayLaunchEmailHtml({ recipientName, appUrl }: { recipientName: string; appUrl: string }) {
+  const heroUrl = `${appUrl}/tap-to-pay-hero.png`
+  const ctaUrl = `${appUrl}/login`
+  const regionsUrl = 'https://developer.apple.com/tap-to-pay/regions/'
+  return {
+    subject: 'Now available: Tap to Pay on iPhone',
+    html: `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    <div style="background:#f97316;padding:24px 32px">
+      <img src="${appUrl}/Logo.png" alt="IndustryForms" style="max-height:32px;max-width:200px;display:block" />
+    </div>
+    <div style="padding:32px">
+      <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${recipientName},</p>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">Tap to Pay on iPhone is now available in IndustryForms.</h1>
+      <img src="${heroUrl}" alt="A customer holding a contactless card to a merchant's iPhone to pay." width="320" style="display:block;margin:8px auto 24px;width:320px;max-width:100%;height:auto" />
+      <p style="margin:0 0 24px;color:#6b7280;line-height:1.5">You can accept all types of contactless payments right on your iPhone — from physical debit and credit cards to Apple Pay and other digital wallets. No extra terminals or hardware needed.</p>
+      <div style="text-align:center;margin:0 0 8px">
+        <a href="${ctaUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:10px;font-weight:700;font-size:16px">Get started</a>
+      </div>
+    </div>
+    <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">
+      <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5">
+        <strong>Terms apply.</strong> Tap to Pay on iPhone requires a supported payment app and the latest version of iOS. Update by going to Settings &gt; General &gt; Software Update. Some contactless cards may not be accepted by your payment app. Transaction limits may apply. The Contactless Symbol is a trademark owned by and used with permission of EMVCo, LLC. Tap to Pay on iPhone is not available in all markets. For Tap to Pay on iPhone countries and regions, see <a href="${regionsUrl}" style="color:#9ca3af">${regionsUrl}</a>.
+      </p>
+      <p style="margin:0 0 8px;font-size:11px;color:#9ca3af;line-height:1.5">
+        Apple Pay is a service provided by Apple Payments Services LLC, a subsidiary of Apple Inc. Neither Apple Inc. nor Apple Payments Services LLC is a bank. Any card used in Apple Pay is offered by the card issuer.
+      </p>
+      <p style="margin:0;font-size:12px;color:#9ca3af">Powered by IndustryForms</p>
+    </div>
+  </div>
+</body>
+</html>`,
+  }
+}

@@ -2,6 +2,35 @@
 
 Last updated: 2026-07-16. Catch-up doc for a fresh session. Read this first.
 
+## Session 2026-07-16 (Claude, pt.3) — Tap to Pay hero image + launch email
+
+- **Hero image placed**: Apple's official card-to-iPhone Marketing Toolkit
+  visual now in the launch splash (`tradiee-mobile/assets/tap-to-pay-hero.png`,
+  cropped + downscaled to 1000px transparent PNG). Splash in
+  `app/(tabs)/_layout.tsx` uses it via a contained `<Image>` above the approved
+  copy + Get started / Not now buttons. Ships via OTA (`eas update`) — it's a
+  JS-referenced asset, no native rebuild needed for the splash itself.
+- **Launch email built** (Apple req 6.1), mirroring the launch-push setup:
+  - `tapToPayLaunchEmailHtml()` in `tradiee-app/lib/email.ts` — standalone
+    IndustryForms-branded (NOT merchant-branded) announcement with Apple's exact
+    approved copy, the hero, a "Get started" CTA → `${appUrl}/login`, and the
+    mandatory Tap to Pay + Apple Pay legal disclaimers. Verified rendering in a
+    browser preview.
+  - Email hero hosted at `tradiee-app/public/tap-to-pay-hero.png` →
+    `https://app.industryforms.app/tap-to-pay-hero.png` (white-flattened 640px,
+    served by the same Vercel deploy — no Cloudflare dependency).
+  - Super-admin endpoint `app/api/admin/tap-to-pay-launch-email/route.ts` sends
+    once per eligible owner/admin, stamps `profiles.tap_to_pay_launch_email_at`
+    (migration `20260716150000`, applied to remote), only stamps successful
+    sends so failures retry, `{dryRun:true}` previews count. Does NOT auto-fire.
+- **Go-live checklist for the user**: at launch, POST both
+  `/api/admin/tap-to-pay-launch` (push) and `/api/admin/tap-to-pay-launch-email`
+  as super-admin (try `{dryRun:true}` first). Optionally add the hero to the
+  marketing site (www.industryforms.app, separate `site` git remote / Cloudflare
+  Pages) and build a dedicated Tap to Pay product page for the email/marketing
+  CTA to satisfy the guide's "link to your product page" preference (currently
+  links to the app login).
+
 ## Session 2026-07-16 (Claude, pt.2) — invoice-delete lock + Apple Tap to Pay review-checklist compliance
 
 **Invoice delete restricted to drafts**: delete was possible on any invoice
