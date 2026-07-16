@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Tabs, router } from 'expo-router'
 import { Icon, type IconName } from '@/lib/icons'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -340,47 +340,47 @@ export default function TabLayout() {
 // Tap to Pay on iPhone Marketing Guide (Aug 2025, p.27) + Copy Block. Apple's
 // guide forbids writing your own product claims, so DO NOT edit this text.
 //
-// VISUAL STILL TO DO: the guide requires Apple's provided "card to iPhone" hero
-// artwork here and forbids self-made icons depicting Tap to Pay. The placeholder
-// icon below must be swapped for the hero image from the Marketing Toolkit asset
-// pack before submitting. "Terms apply." must link to your product page showing
-// the full legal disclaimer.
+// Uses Apple's provided "card to iPhone" hero artwork (Marketing Toolkit,
+// assets/tap-to-pay-hero.png). "Terms apply." should link to a page showing
+// the full legal disclaimer before you submit for review.
 function TapToPaySplash({ visible, onDismiss }: { visible: boolean; onDismiss: () => void }) {
   return (
     <Modal visible={visible} animationType="fade" transparent={false} onRequestClose={onDismiss}>
       <View style={splashStyles.container}>
-        <View style={splashStyles.iconWrap}>
-          {/* Placeholder — replace with Apple's card-to-iPhone hero visual. */}
-          <Icon name="credit-card" size={56} color="#f97316" />
+        <Image
+          source={require('../../assets/tap-to-pay-hero.png')}
+          style={splashStyles.hero}
+          resizeMode="contain"
+          accessibilityLabel="A customer holding a contactless card to a merchant's iPhone to pay."
+        />
+        <View style={splashStyles.textBlock}>
+          <Text style={splashStyles.title}>Tap to Pay on iPhone</Text>
+          <Text style={splashStyles.body}>
+            You can accept all types of contactless payments right on your iPhone — from physical
+            debit and credit cards to Apple Pay and other digital wallets. Terms apply.
+          </Text>
+          <TouchableOpacity
+            style={splashStyles.primaryBtn}
+            onPress={() => { onDismiss(); router.push('/pay-now' as never) }}
+          >
+            <Text style={splashStyles.primaryBtnText}>Get started</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={splashStyles.dismissBtn} onPress={onDismiss}>
+            <Text style={splashStyles.dismissBtnText}>Not now</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={splashStyles.title}>Tap to Pay on iPhone</Text>
-        <Text style={splashStyles.body}>
-          You can accept all types of contactless payments right on your iPhone — from physical
-          debit and credit cards to Apple Pay and other digital wallets. Terms apply.
-        </Text>
-        <TouchableOpacity
-          style={splashStyles.primaryBtn}
-          onPress={() => { onDismiss(); router.push('/pay-now' as never) }}
-        >
-          <Text style={splashStyles.primaryBtnText}>Get started</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={splashStyles.dismissBtn} onPress={onDismiss}>
-          <Text style={splashStyles.dismissBtnText}>Not now</Text>
-        </TouchableOpacity>
       </View>
     </Modal>
   )
 }
 
 const splashStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 32 },
-  iconWrap: {
-    width: 96, height: 96, borderRadius: 48, backgroundColor: '#fff7ed',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 28,
-  },
+  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 28, paddingBottom: 44, paddingTop: 24 },
+  hero: { flex: 1, width: '100%', marginBottom: 8 },
+  textBlock: { alignItems: 'center' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', textAlign: 'center', marginBottom: 12 },
-  body: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 40 },
-  primaryBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 48, marginBottom: 14 },
+  body: { fontSize: 15, color: '#6b7280', textAlign: 'center', lineHeight: 22, marginBottom: 28 },
+  primaryBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 48, marginBottom: 12, alignSelf: 'stretch', alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   dismissBtn: { padding: 10 },
   dismissBtnText: { color: '#9ca3af', fontWeight: '600', fontSize: 14 },
