@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { QuoteActions } from './client'
 import { SaveTemplateButton } from './save-template'
+import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import Link from 'next/link'
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,7 +16,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate)').eq('id', user!.id).single()
 
-  const [{ data: quote }, nextJobNumber] = await Promise.all([
+  const [{ data: quote }, nextJobNumber, { data: quoteList }] = await Promise.all([
     supabase
       .from('quotes')
       .select('*, customers(*, customer_sites(*)), quote_sections(*, quote_line_items(*))')
@@ -23,9 +24,14 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
       .eq('company_id', profile!.company_id)
       .single(),
     nextDocNumber(supabase, profile!.company_id, 'job'),
+    supabase.from('quotes').select('id').eq('company_id', profile!.company_id).order('quote_number'),
   ])
 
   if (!quote) notFound()
+
+  const quoteIdx = (quoteList ?? []).findIndex(q => q.id === id)
+  const prevQuoteHref = quoteIdx > 0 ? `/quotes/${quoteList![quoteIdx - 1].id}` : null
+  const nextQuoteHref = quoteIdx >= 0 && quoteIdx < (quoteList?.length ?? 0) - 1 ? `/quotes/${quoteList![quoteIdx + 1].id}` : null
 
   const sections = (quote.quote_sections ?? []).sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
 
@@ -61,6 +67,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <PrevNextNav prevHref={prevQuoteHref} nextHref={nextQuoteHref} />
             <SaveTemplateButton quoteId={quote.id} defaultName={quote.title} />
             <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} />
           </div>

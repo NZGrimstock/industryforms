@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 
 export type EditableTimeEntry = {
-  id: string
+  id: string | null
   job_id: string | null
   job_number: string
   job_title: string
@@ -39,11 +39,13 @@ function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
 interface Props {
   entry: EditableTimeEntry | null
   jobs: Job[]
+  companyId: string | null
   onClose: () => void
   onSaved: () => void
 }
 
-export function TimeEntryEditModal({ entry, jobs, onClose, onSaved }: Props) {
+export function TimeEntryEditModal({ entry, jobs, companyId, onClose, onSaved }: Props) {
+  const isNew = !!entry && !entry.id
   const [job, setJob] = useState<Job | null>(null)
   const [jobSearch, setJobSearch] = useState('')
   const [date, setDate] = useState('')
@@ -81,25 +83,43 @@ export function TimeEntryEditModal({ entry, jobs, onClose, onSaved }: Props) {
       if (end.getTime() <= start.getTime()) { Alert.alert('End must be after start'); return }
     }
     setSaving(true)
-    const { error } = await supabase.from('timesheets').update({
-      job_id: job.id,
-      started_at: start.toISOString(),
-      ended_at: end ? end.toISOString() : null,
-      break_minutes: parseInt(breakMinutes) || 0,
-      notes: notes.trim() || null,
-    }).eq('id', entry.id)
-    setSaving(false)
-    if (error) { Alert.alert('Error', error.message); return }
+    if (entry.id) {
+      const { error } = await supabase.from('timesheets').update({
+        job_id: job.id,
+        started_at: start.toISOString(),
+        ended_at: end ? end.toISOString() : null,
+        break_minutes: parseInt(breakMinutes) || 0,
+        notes: notes.trim() || null,
+      }).eq('id', entry.id)
+      setSaving(false)
+      if (error) { Alert.alert('Error', error.message); return }
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setSaving(false); Alert.alert('Error', 'Not signed in'); return }
+      const { error } = await supabase.from('timesheets').insert({
+        job_id: job.id,
+        company_id: companyId,
+        profile_id: user.id,
+        started_at: start.toISOString(),
+        ended_at: end ? end.toISOString() : null,
+        break_minutes: parseInt(breakMinutes) || 0,
+        notes: notes.trim() || null,
+        is_billable: true,
+      })
+      setSaving(false)
+      if (error) { Alert.alert('Error', error.message); return }
+    }
     onSaved()
   }
 
   function confirmDelete() {
-    if (!entry) return
+    if (!entry?.id) return
+    const entryId = entry.id
     Alert.alert('Delete this time entry?', 'This can\'t be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('timesheets').delete().eq('id', entry.id)
+          const { error } = await supabase.from('timesheets').delete().eq('id', entryId)
           if (error) { Alert.alert('Error', error.message); return }
           onSaved()
         },
@@ -111,7 +131,7 @@ export function TimeEntryEditModal({ entry, jobs, onClose, onSaved }: Props) {
     <Modal visible={entry !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modal}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Edit Time Entry</Text>
+          <Text style={styles.modalTitle}>{isNew ? 'Log Time' : 'Edit Time Entry'}</Text>
           <TouchableOpacity onPress={onClose}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
         </View>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -154,11 +174,13 @@ export function TimeEntryEditModal({ entry, jobs, onClose, onSaved }: Props) {
             <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Notes (optional)</Text>
             <TextInput style={[styles.input, { height: 80 }]} multiline value={notes} onChangeText={setNotes} placeholder="What did you work on?" placeholderTextColor="#6b7280" />
             <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
-              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save changes'}</Text>
+              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : isNew ? 'Save entry' : 'Save changes'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteEntryBtn} onPress={confirmDelete}>
-              <Text style={styles.deleteEntryBtnText}>Delete entry</Text>
-            </TouchableOpacity>
+            {!isNew && (
+              <TouchableOpacity style={styles.deleteEntryBtn} onPress={confirmDelete}>
+                <Text style={styles.deleteEntryBtnText}>Delete entry</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

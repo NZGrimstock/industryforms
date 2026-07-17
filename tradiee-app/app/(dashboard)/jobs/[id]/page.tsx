@@ -22,6 +22,8 @@ import { ComplianceDocs } from '@/components/compliance/ComplianceDocs'
 import { InviteSubcontractorModal } from '@/components/jobs/InviteSubcontractorModal'
 import { SubcontractorStatus } from '@/components/jobs/SubcontractorStatus'
 import { JobAssigneesCard } from './assignees'
+import { VisitsCard } from './visits-card'
+import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { JobSiteSelector } from '@/components/jobs/job-site-selector'
 import { TimesheetTable } from '@/components/timesheets/timesheet-table'
 import Link from 'next/link'
@@ -225,6 +227,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   }
   const timezone = sheetData.timezone
 
+  const jobList = jobsForPickerRes.data ?? []
+  const jobIdx = jobList.findIndex(j => j.id === id)
+  const prevJobHref = jobIdx > 0 ? `/jobs/${jobList[jobIdx - 1].id}` : null
+  const nextJobHref = jobIdx >= 0 && jobIdx < jobList.length - 1 ? `/jobs/${jobList[jobIdx + 1].id}` : null
+
   return (
     <>
       <Header title={`${job.job_number} — ${job.title}`} profile={profile} />
@@ -256,6 +263,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <PrevNextNav prevHref={prevJobHref} nextHref={nextJobHref} />
             <PrintJobSheet data={sheetData} />
             <InviteSubcontractorModal
               jobId={id}
@@ -315,31 +323,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         </Card>
 
         {/* Visits / Schedule */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Scheduled visits</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {(visitsRes.data ?? []).length === 0 ? (
-              <p className="text-sm text-gray-400 px-6 py-4">No visits scheduled yet</p>
-            ) : (
-              <ul className="divide-y divide-gray-50">
-                {(visitsRes.data ?? []).map(v => (
-                  <li key={v.id} className="px-6 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{formatDateTime(v.scheduled_start)}</p>
-                      <p className="text-xs text-gray-400">to {formatDateTime(v.scheduled_end)} · {(v.profiles as {full_name: string} | null)?.full_name ?? 'Unassigned'}</p>
-                      {v.notes && <p className="text-xs text-gray-500 mt-0.5">{v.notes}</p>}
-                    </div>
-                    <StatusBadge status={v.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <VisitsCard
+          visits={(visitsRes.data ?? []).map(v => ({
+            id: v.id,
+            scheduled_start: v.scheduled_start,
+            scheduled_end: v.scheduled_end,
+            status: v.status,
+            notes: v.notes,
+            profiles: v.profiles as { full_name: string } | null,
+          }))}
+        />
 
         {/* Secondary workers */}
         <JobAssigneesCard

@@ -146,7 +146,7 @@ export function FormFill({ jobId, companyId, profileId, templates, existingSubmi
                 {s.submitted_at && <span className="text-xs text-gray-400">{formatDate(s.submitted_at, timezone)}</span>}
               </div>
               <button
-                onClick={() => printSubmission(s, timezone)}
+                onClick={() => printSubmission(s, timezone, templates.find(t => t.name === s.template_name)?.fields ?? [])}
                 className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600"
               >
                 <Printer className="h-3 w-3" /> Print
@@ -295,13 +295,15 @@ function SignaturePad({ fieldId, canvasRef }: { fieldId: string; canvasRef: (el:
   )
 }
 
-function printSubmission(submission: Submission, timezone: string) {
+function printSubmission(submission: Submission, timezone: string, fields: FormField[]) {
   const answers = submission.answers as Record<string, unknown>
+  const labels = Object.fromEntries(fields.map(f => [f.id, f.label]))
   const rows = Object.entries(answers).map(([k, v]) => {
+    const label = labels[k] ?? k
     if (typeof v === 'string' && v.startsWith('data:image')) {
-      return `<tr><td style="padding:8px;font-size:12px;color:#666">${k}</td><td style="padding:8px"><img src="${v}" style="max-width:200px;max-height:150px"></td></tr>`
+      return `<tr><td style="padding:8px;font-size:12px;color:#666">${label}</td><td style="padding:8px"><img src="${v}" style="max-width:200px;max-height:150px"></td></tr>`
     }
-    return `<tr><td style="padding:8px;font-size:12px;color:#666">${k}</td><td style="padding:8px;font-size:13px">${String(v ?? '—')}</td></tr>`
+    return `<tr><td style="padding:8px;font-size:12px;color:#666">${label}</td><td style="padding:8px;font-size:13px">${String(v ?? '—')}</td></tr>`
   }).join('')
 
   const html = `

@@ -31,6 +31,7 @@ export default async function WebsitePage() {
   const { data: photoRows } = await supabase
     .from('job_photos')
     .select('storage_path')
+    .or('caption.is.null,caption.neq.Customer sign-off')
     .order('taken_at', { ascending: false })
     .limit(60)
   const excludedPhotoUrls = (site as { excluded_photo_urls?: string[] } | null)?.excluded_photo_urls ?? []

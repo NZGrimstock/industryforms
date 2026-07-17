@@ -26,7 +26,7 @@ import {
 } from '@/lib/location/tracking'
 import { useTimezone } from '@/lib/profile-context'
 import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
-import { TimeEntryEditModal } from '@/components/timesheets/TimeEntryEditModal'
+import { TimeEntryEditModal, type EditableTimeEntry } from '@/components/timesheets/TimeEntryEditModal'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -74,8 +74,7 @@ export default function TimesheetsScreen() {
   }
   const [tab, setTab] = useState<'time' | 'travel'>(TAB_TIME)
   const [tracking, setTracking] = useState(false)
-  const [showLogModal, setShowLogModal] = useState(false)
-  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
+  const [editingEntry, setEditingEntry] = useState<EditableTimeEntry | null>(null)
   const [showTradingHours, setShowTradingHours] = useState(false)
   const [tradingHours, setTradingHours] = useState<TradingHours>(DEFAULT_TRADING_HOURS)
   const [savingTradingHours, setSavingTradingHours] = useState(false)
@@ -84,11 +83,6 @@ export default function TimesheetsScreen() {
   const [allocLog, setAllocLog] = useState<TravelLog | null>(null)
   const [allocJob, setAllocJob] = useState<Job | null>(null)
   const [allocJobSearch, setAllocJobSearch] = useState('')
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null)
-  const [notes, setNotes] = useState('')
-  const [breakMin, setBreakMin] = useState('0')
-  const [saving, setSaving] = useState(false)
-  const [jobSearch, setJobSearch] = useState('')
   const [tripFollowup, setTripFollowup] = useState<TripFollowup | null>(null)
   const [showStartTimer, setShowStartTimer] = useState(false)
   const [timerJob, setTimerJob] = useState<Job | null>(null)
@@ -214,22 +208,14 @@ export default function TimesheetsScreen() {
     setShowTradingHours(false)
   }
 
-  async function logTime() {
-    if (!selectedJob) { Alert.alert('Select a job'); return }
-    setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
+  function openLogTime() {
     const now = new Date()
     const started = new Date(now.getTime() - 60 * 60 * 1000)
-    const { error } = await supabase.from('timesheets').insert({
-      job_id: selectedJob.id, profile_id: user.id, company_id: companyId,
+    setEditingEntry({
+      id: null, job_id: null, job_number: '', job_title: '',
       started_at: started.toISOString(), ended_at: now.toISOString(),
-      break_minutes: parseInt(breakMin) || 0, notes: notes || null, is_billable: true,
+      break_minutes: 0, notes: null,
     })
-    setSaving(false)
-    if (error) { Alert.alert('Error', error.message); return }
-    setShowLogModal(false); setSelectedJob(null); setNotes(''); setBreakMin('0')
-    fetchAll()
   }
 
   async function dismissFollowup() {
@@ -351,11 +337,6 @@ export default function TimesheetsScreen() {
     ])
   }
 
-  const filteredJobs = activeJobs.filter(j =>
-    j.title.toLowerCase().includes(jobSearch.toLowerCase()) ||
-    j.job_number.toLowerCase().includes(jobSearch.toLowerCase())
-  )
-
   const filteredAllocJobs = activeJobs.filter(j =>
     j.title.toLowerCase().includes(allocJobSearch.toLowerCase()) ||
     j.job_number.toLowerCase().includes(allocJobSearch.toLowerCase())
@@ -433,7 +414,7 @@ export default function TimesheetsScreen() {
       {tab === TAB_TIME ? (
         <>
           <View style={styles.addRow}>
-            <TouchableOpacity style={styles.addBtn} onPress={() => setShowLogModal(true)}>
+            <TouchableOpacity style={styles.addBtn} onPress={openLogTime}>
               <Text style={styles.addBtnText}>+ Log time manually</Text>
             </TouchableOpacity>
           </View>
@@ -672,44 +653,10 @@ export default function TimesheetsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Log time modal */}
-      <Modal visible={showLogModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowLogModal(false)}>
-        <SafeAreaView style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Log Time</Text>
-            <TouchableOpacity onPress={() => setShowLogModal(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-          </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>Job</Text>
-            <TextInput style={styles.input} placeholder="Search jobs…" placeholderTextColor="#6b7280" value={jobSearch} onChangeText={setJobSearch} autoCorrect={false} />
-            {selectedJob && (
-              <TouchableOpacity style={styles.selectedJob} onPress={() => setSelectedJob(null)}>
-                <Text style={styles.selectedJobText}>{selectedJob.job_number} — {selectedJob.title}</Text>
-                <Text style={{ color: '#6b7280', fontSize: 12 }}>Tap to change</Text>
-              </TouchableOpacity>
-            )}
-            {!selectedJob && filteredJobs.slice(0, 30).map(job => (
-              <TouchableOpacity key={job.id} style={styles.jobRow} onPress={() => { setSelectedJob(job); setJobSearch('') }}>
-                <Text style={styles.jobRowNum}>{job.job_number}</Text>
-                <Text style={styles.jobRowTitle} numberOfLines={1}>{job.title}</Text>
-              </TouchableOpacity>
-            ))}
-            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Break (minutes)</Text>
-            <TextInput style={styles.input} value={breakMin} onChangeText={setBreakMin} keyboardType="numeric" placeholderTextColor="#6b7280" />
-            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Notes (optional)</Text>
-            <TextInput style={[styles.input, { height: 80 }]} multiline value={notes} onChangeText={setNotes} placeholder="What did you work on?" placeholderTextColor="#6b7280" />
-            <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={logTime} disabled={saving}>
-              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save entry'}</Text>
-            </TouchableOpacity>
-          </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
-
       <TimeEntryEditModal
         entry={editingEntry}
         jobs={activeJobs}
+        companyId={companyId}
         onClose={() => setEditingEntry(null)}
         onSaved={() => { setEditingEntry(null); fetchAll() }}
       />

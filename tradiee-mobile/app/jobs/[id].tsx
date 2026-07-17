@@ -108,6 +108,7 @@ export default function JobDetailScreen() {
   const [savingNote, setSavingNote] = useState(false)
   const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
   const [savingMaterial, setSavingMaterial] = useState(false)
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
   const [optimisticMaterials, setOptimisticMaterials] = useState<Material[]>([])
   const [kits, setKits] = useState<Kit[]>([])
   const [showKitPicker, setShowKitPicker] = useState(false)
@@ -489,12 +490,50 @@ export default function JobDetailScreen() {
     ])
   }
 
+  function editMaterial(m: Material) {
+    setEditingMaterialId(m.id)
+    setMaterialLine({
+      price_list_item_id: null,
+      description: m.description,
+      quantity: String(m.quantity),
+      unit: m.unit ?? 'ea',
+      unit_cost: '0',
+      unit_price: String(m.unit_price),
+    })
+  }
+
+  function cancelEditMaterial() {
+    setEditingMaterialId(null)
+    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+  }
+
+  function deleteMaterial(m: Material) {
+    Alert.alert('Delete material?', m.description, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          setOptimisticMaterials(prev => prev.filter(x => x.id !== m.id))
+          const { error } = await supabase.from('job_materials').delete().eq('id', m.id)
+          if (error) { Alert.alert('Could not delete material', error.message); return }
+          refreshMaterials?.()
+        },
+      },
+    ])
+  }
+
   async function addMaterial() {
     if (!companyId || !materialLine.description.trim()) return
     const qty = parseFloat(materialLine.quantity) || 1
     const unitCost = parseFloat(materialLine.unit_cost) || 0
     const unitPrice = parseFloat(materialLine.unit_price) || 0
     setSavingMaterial(true)
+    // job_materials has no update RLS policy — "editing" a line deletes the
+    // old row and inserts the new one, same as the web app's own pattern.
+    if (editingMaterialId) {
+      await supabase.from('job_materials').delete().eq('id', editingMaterialId)
+      setOptimisticMaterials(prev => prev.filter(x => x.id !== editingMaterialId))
+    }
     const { data: { user } } = await supabase.auth.getUser()
     const payload = {
       job_id: id,
@@ -525,6 +564,7 @@ export default function JobDetailScreen() {
       },
     ])
     setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    setEditingMaterialId(null)
     refreshMaterials?.()
     hapticSuccess()
   }
@@ -1045,12 +1085,18 @@ export default function JobDetailScreen() {
                 onPress={addMaterial}
                 disabled={!materialLine.description.trim() || savingMaterial}
               >
-                {savingMaterial ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveNoteBtnText}>Add item</Text>}
+                {savingMaterial ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveNoteBtnText}>{editingMaterialId ? 'Save' : 'Add item'}</Text>}
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' })}>
-                <Text style={styles.addLink}>Add sundry</Text>
-              </TouchableOpacity>
-              {kits.length > 0 && (
+              {editingMaterialId ? (
+                <TouchableOpacity onPress={cancelEditMaterial}>
+                  <Text style={styles.addLink}>Cancel</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' })}>
+                  <Text style={styles.addLink}>Add sundry</Text>
+                </TouchableOpacity>
+              )}
+              {kits.length > 0 && !editingMaterialId && (
                 <TouchableOpacity onPress={() => { hapticTap(); setShowKitPicker(true) }}>
                   <Text style={styles.addLink}>Add kit</Text>
                 </TouchableOpacity>
@@ -1064,9 +1110,16 @@ export default function JobDetailScreen() {
             <>
               {displayedMaterials.map(m => (
               <View key={m.id} style={styles.materialRow}>
-                <Text style={styles.materialDesc} numberOfLines={1}>{m.description}</Text>
-                <Text style={styles.materialQty}>{m.quantity}{m.unit ? ` ${m.unit}` : ''}</Text>
-                <Text style={styles.materialPrice}>${(m.quantity * m.unit_price).toFixed(2)}</Text>
+                <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }} onPress={isDone ? undefined : () => editMaterial(m)} activeOpacity={isDone ? 1 : 0.6}>
+                  <Text style={styles.materialDesc} numberOfLines={1}>{m.description}</Text>
+                  <Text style={styles.materialQty}>{m.quantity}{m.unit ? ` ${m.unit}` : ''}</Text>
+                  <Text style={styles.materialPrice}>${(m.quantity * m.unit_price).toFixed(2)}</Text>
+                </TouchableOpacity>
+                {!isDone && (
+                  <TouchableOpacity onPress={() => deleteMaterial(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel={`Delete material ${m.description}`}>
+                    <Icon name="trash-2" size={15} color="#ef4444" />
+                  </TouchableOpacity>
+                )}
               </View>
               ))}
               <View style={styles.materialTotal}>
@@ -1454,6 +1507,7 @@ export default function JobDetailScreen() {
       <TimeEntryEditModal
         entry={editingTimeEntry}
         jobs={pickerJobs ?? []}
+        companyId={companyId}
         onClose={() => setEditingTimeEntry(null)}
         onSaved={() => { setEditingTimeEntry(null); refreshTimesheets?.() }}
       />

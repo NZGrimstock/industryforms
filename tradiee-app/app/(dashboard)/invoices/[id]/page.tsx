@@ -11,6 +11,7 @@ import { SaveInvoiceTemplateButton } from './save-template'
 import { logoDataUri } from '@/lib/pdf-logo'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
+import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import Link from 'next/link'
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,10 +29,15 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   if (!invoice) notFound()
 
-  const [priceItemsRes, kitsRes] = await Promise.all([
+  const [priceItemsRes, kitsRes, { data: invoiceList }] = await Promise.all([
     supabase.from('price_list_items').select('id, code, name, unit, sell_price, cost_price, type, quantity_on_hand, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*, customer_group_prices(customer_group_id, sell_price)))').eq('company_id', profile!.company_id).order('name'),
+    supabase.from('invoices').select('id').eq('company_id', profile!.company_id).order('invoice_number'),
   ])
+
+  const invoiceIdx = (invoiceList ?? []).findIndex(i => i.id === id)
+  const prevInvoiceHref = invoiceIdx > 0 ? `/invoices/${invoiceList![invoiceIdx - 1].id}` : null
+  const nextInvoiceHref = invoiceIdx >= 0 && invoiceIdx < (invoiceList?.length ?? 0) - 1 ? `/invoices/${invoiceList![invoiceIdx + 1].id}` : null
 
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   const co = profile?.companies as unknown as {name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null; logo_url: string | null} | null
@@ -73,16 +79,19 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             {invoice.due_date && <p className="text-sm text-gray-500 mt-0.5">Due {formatDate(invoice.due_date)}</p>}
             {invoice.sent_at && <p className="text-xs text-gray-400 mt-1">Sent {formatDateTime(invoice.sent_at)}{invoice.viewed_at && ` · Viewed ${formatDateTime(invoice.viewed_at)}`}</p>}
           </div>
-          <InvoiceDetailClient
-            invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null; pricing_group_id?: string | null} | null)?.email, customer_phone: (invoice.customers as {phone: string | null} | null)?.phone, pricing_group_id: (invoice.customers as {pricing_group_id?: string | null} | null)?.pricing_group_id ?? null }}
-            companyId={profile!.company_id}
-            gstRate={gstRate}
-            pricesIncludeTax={!!co?.prices_include_tax}
-            xeroConnected={xeroConnected}
-            printData={printData}
-            priceItems={priceItemsRes.data ?? []}
-            kits={kitsRes.data ?? []}
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <PrevNextNav prevHref={prevInvoiceHref} nextHref={nextInvoiceHref} />
+            <InvoiceDetailClient
+              invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null; pricing_group_id?: string | null} | null)?.email, customer_phone: (invoice.customers as {phone: string | null} | null)?.phone, pricing_group_id: (invoice.customers as {pricing_group_id?: string | null} | null)?.pricing_group_id ?? null }}
+              companyId={profile!.company_id}
+              gstRate={gstRate}
+              pricesIncludeTax={!!co?.prices_include_tax}
+              xeroConnected={xeroConnected}
+              printData={printData}
+              priceItems={priceItemsRes.data ?? []}
+              kits={kitsRes.data ?? []}
+            />
+          </div>
           <SaveInvoiceTemplateButton invoiceId={invoice.id} defaultName={invoice.reference || invoice.invoice_number} />
         </div>
 

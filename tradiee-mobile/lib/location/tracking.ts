@@ -198,6 +198,14 @@ async function getSupabase() {
 }
 
 async function endTrip(state: TripState, endLat: number, endLng: number, endTime = new Date().toISOString()): Promise<boolean> {
+  const finalDistance = Math.round(
+    (state.distanceKm + haversineKm(state.lastLat, state.lastLng, endLat, endLng)) * 100
+  ) / 100
+
+  // No real movement happened (e.g. a spurious GPS speed reading started a
+  // "trip" while stationary) — discard rather than logging a 0km trip.
+  if (finalDistance < MIN_MOVING_DISTANCE_KM) return true
+
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
@@ -209,9 +217,6 @@ async function endTrip(state: TripState, endLat: number, endLng: number, endTime
     .single()
   if (!profile?.company_id) return false
 
-  const finalDistance = Math.round(
-    (state.distanceKm + haversineKm(state.lastLat, state.lastLng, endLat, endLng)) * 100
-  ) / 100
   const { error } = await supabase.from('travel_logs').insert({
     id:          state.tripId,
     company_id:  profile.company_id,
