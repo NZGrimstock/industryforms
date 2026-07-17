@@ -12,6 +12,7 @@ import { logoDataUri } from '@/lib/pdf-logo'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
+import { Mail } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -68,6 +69,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             <div className="flex items-center gap-3 mb-1">
               <h2 className="text-lg font-semibold text-gray-900">{invoice.invoice_number}</h2>
               <StatusBadge status={invoice.status} />
+              {invoice.emailed_at && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                  <Mail className="h-3 w-3" /> Emailed
+                </span>
+              )}
             </div>
             <p className="text-sm text-gray-500">
               <Link href={`/customers/${invoice.customer_id}`} className="text-orange-500 hover:underline">
@@ -78,6 +84,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             {invoice.invoice_date && <p className="text-sm text-gray-500 mt-0.5">Invoice date: {formatDate(invoice.invoice_date)}</p>}
             {invoice.due_date && <p className="text-sm text-gray-500 mt-0.5">Due {formatDate(invoice.due_date)}</p>}
             {invoice.sent_at && <p className="text-xs text-gray-400 mt-1">Sent {formatDateTime(invoice.sent_at)}{invoice.viewed_at && ` · Viewed ${formatDateTime(invoice.viewed_at)}`}</p>}
+            {invoice.emailed_at && <p className="text-xs text-gray-400 mt-0.5">Emailed {formatDateTime(invoice.emailed_at)}</p>}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <PrevNextNav prevHref={prevInvoiceHref} nextHref={nextInvoiceHref} />

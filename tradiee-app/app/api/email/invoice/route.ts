@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: emailResult?.error ?? 'Failed to send email' }, { status: 500 })
   }
 
-  await service.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoiceId)
+  const now = new Date().toISOString()
+  await service.from('invoices').update({ status: 'sent', sent_at: now, emailed_at: now }).eq('id', invoiceId)
   await logCommunication(service, {
     companyId: invoice.company_id, customerId: invoice.customer_id, channel: 'email',
     subject: `Invoice ${invoice.invoice_number} sent`, summary: `Emailed to ${customer.email}`,
