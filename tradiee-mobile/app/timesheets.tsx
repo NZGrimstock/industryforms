@@ -663,7 +663,7 @@ export default function TimesheetsScreen() {
 
       {/* Allocate travel modal */}
       <Modal visible={showAllocModal} transparent animationType="slide">
-        <View style={styles.allocOverlay}>
+        <KeyboardAvoidingView style={styles.allocOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.allocSheet}>
             <Text style={styles.allocTitle}>Allocate trip</Text>
             {allocLog && (
@@ -731,7 +731,7 @@ export default function TimesheetsScreen() {
               <Text style={{ color: '#6b7280', fontSize: 16 }}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )
