@@ -80,6 +80,31 @@ elsewhere in `timesheets.tsx`.
   `app/api/stripe/payment-intent/route.ts`), offered to add
   `payment_method_types: ['card']` to drop it. Not yet actioned.
 
+**Stripe Connect platform setup completed by the user** (dashboard.stripe.com/connect),
+which surfaced two more real gaps:
+- Stripe's dashboard no longer has one webhook endpoint with a "listen to
+  connected accounts" checkbox — the user had to create **two separate
+  webhook destinations** pointing at the same
+  `/api/stripe/webhook` URL: one scoped "Your account" (subscription billing)
+  and one scoped "Connected accounts" (payment_intent.succeeded/account.updated
+  from direct-charge invoice/deposit/Tap-to-Pay payments). Each destination
+  has its own signing secret, but the handler only checked one
+  (`STRIPE_WEBHOOK_SECRET`) — the other destination's events would have
+  silently failed signature verification. Fixed in
+  `app/api/stripe/webhook/route.ts`: tries every configured secret
+  (`STRIPE_WEBHOOK_SECRET`, new `STRIPE_WEBHOOK_SECRET_CONNECT`) until one
+  verifies. **⚠️ `STRIPE_WEBHOOK_SECRET_CONNECT` (the connected-accounts
+  destination's signing secret) needs to be added to Vercel env vars** —
+  not yet confirmed done.
+- Explained the end-to-end Tap to Pay payment flow to the user (job → invoice
+  → Terminal Location → connection token → card_present PaymentIntent direct
+  on the connected account → webhook marks invoice paid): all charges are
+  **direct charges on the merchant's own connected account** (`connectOptions()`
+  passes `{stripeAccount: company.stripe_account_id}`), no
+  `application_fee_amount` anywhere, so funds settle straight to the
+  merchant's bank on their own Stripe payout schedule — IndustryForms never
+  touches the money, only finds out via the webhook.
+
 **Email header: white banner instead of orange, across all templates** — the
 `tapToPayLaunchEmailHtml` white-header fix (previous session) was
 launch-email-only; every other template still had `background:#f97316`

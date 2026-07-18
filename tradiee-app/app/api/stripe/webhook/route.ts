@@ -1,10 +1,14 @@
-// ⚠ Stripe Connect requires this endpoint to also be listening to Connect
-// events (Dashboard → Developers → Webhooks → this endpoint → enable "Listen
-// to events on connected accounts"), one-time Dashboard config, not code.
-// Without it, payment_intent.succeeded / account.updated fired on a connected
-// account (i.e. every direct-charge invoice/deposit/Tap-to-Pay payment once a
-// company has completed Connect onboarding) never reaches this handler and
-// invoices silently never get marked paid.
+// ⚠ Stripe Connect requires this endpoint to also receive events from
+// connected accounts. Stripe's dashboard no longer has a single "listen to
+// connected accounts" checkbox on one endpoint — instead it's two separate
+// webhook destinations pointing at this same URL: one scoped "Your account"
+// (subscription billing — customer.subscription.*, lives on the platform
+// account) and one scoped "Connected accounts" (payment_intent.succeeded /
+// account.updated from direct-charge invoice/deposit/Tap-to-Pay payments).
+// Each destination has its OWN signing secret, so we try every configured
+// secret below (STRIPE_WEBHOOK_SECRET + STRIPE_WEBHOOK_SECRET_CONNECT) until
+// one verifies — a single secret would silently reject whichever destination
+// doesn't match it.
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -20,18 +24,26 @@ type InvoicePaymentResult = {
   invoice_amount_paid: number
 }
 
+function webhookSecrets(): string[] {
+  return [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_WEBHOOK_SECRET_CONNECT]
+    .filter((s): s is string => !!s)
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe()
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')!
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
-  let event: Stripe.Event
-  try {
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
-  } catch {
-    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
+  let event: Stripe.Event | null = null
+  for (const secret of webhookSecrets()) {
+    try {
+      event = stripe.webhooks.constructEvent(body, sig, secret)
+      break
+    } catch {
+      // try the next secret
+    }
   }
+  if (!event) return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
 
   const service = createServiceClient()
 
