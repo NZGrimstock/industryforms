@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '@/lib/icons'
 import { requestNeededAndroidPermissions, useStripeTerminal, type Reader } from '@stripe/stripe-terminal-react-native'
 import { supabase } from '@/lib/supabase'
-import { fetchTerminalPaymentIntent, fetchTerminalLocationId } from '@/lib/tap-to-pay'
+import { fetchTerminalPaymentIntent, fetchTerminalLocationId, fetchConnectionToken } from '@/lib/tap-to-pay'
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
 
@@ -172,6 +172,12 @@ export default function PayNowScreen() {
       if (!API_BASE) throw new Error('Missing EXPO_PUBLIC_API_URL.')
 
       if (!isInitialized) {
+        // Preflight the connection token ourselves first — initialize() also
+        // calls the tokenProvider internally, but when that fails the native
+        // SDK swallows our error and replaces it with a generic "Couldn't
+        // fetch connection token. Please check your tokenProvider method",
+        // hiding the actual reason (e.g. Stripe Connect onboarding unfinished).
+        await fetchConnectionToken(API_BASE)
         const init = await initialize()
         if (init.error) throw init.error
       }

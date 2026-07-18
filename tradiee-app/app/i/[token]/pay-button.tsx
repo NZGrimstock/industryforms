@@ -60,9 +60,13 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
 
       // Mount into a div we'll show inline
       setStep('form')
-      // Store for later submission
-      ;(window as Window & { __stripeElements?: typeof elements; __stripeEl?: typeof paymentEl })['__stripeElements'] = elements
-      ;(window as Window & { __stripeElements?: typeof elements; __stripeEl?: typeof paymentEl })['__stripeEl'] = paymentEl
+      // Store for later submission — confirmPayment() must be called on this
+      // same Stripe instance, not a freshly loaded one, or Stripe.js rejects
+      // the elements as belonging to a different instance.
+      const w = window as Window & { __stripe?: typeof stripe; __stripeElements?: typeof elements; __stripeEl?: typeof paymentEl }
+      w.__stripe = stripe
+      w.__stripeElements = elements
+      w.__stripeEl = paymentEl
 
       setTimeout(() => {
         const mount = document.getElementById('stripe-payment-element')
@@ -77,8 +81,8 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
   async function submitPayment() {
     setStep('processing')
     try {
-      const w = window as Window & { __stripeElements?: import('@stripe/stripe-js').StripeElements }
-      const stripe = await (await import('@stripe/stripe-js')).loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+      const w = window as Window & { __stripe?: import('@stripe/stripe-js').Stripe; __stripeElements?: import('@stripe/stripe-js').StripeElements }
+      const stripe = w.__stripe
       if (!stripe || !w.__stripeElements) throw new Error('Payment form not ready')
 
       const { error } = await stripe.confirmPayment({
