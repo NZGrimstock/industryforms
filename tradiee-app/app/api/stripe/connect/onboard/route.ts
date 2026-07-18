@@ -20,9 +20,16 @@ async function startOnboarding(req: NextRequest) {
     .single()
   if (!company) return { error: 'Company not found' as const, status: 404 }
 
-  const accountId = await ensureConnectedAccount(company)
-  const url = await createOnboardingLink(accountId)
-  return { url }
+  // ensureConnectedAccount/createOnboardingLink call the Stripe API directly —
+  // an unhandled throw here (bad params, network error, etc.) would otherwise
+  // reach the client as an empty 500 body ("Unexpected end of JSON input").
+  try {
+    const accountId = await ensureConnectedAccount(company)
+    const url = await createOnboardingLink(accountId)
+    return { url }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Could not start Stripe onboarding', status: 500 as const }
+  }
 }
 
 export async function POST(req: NextRequest) {

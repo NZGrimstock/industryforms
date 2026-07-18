@@ -1,6 +1,113 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-16. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-18. Catch-up doc for a fresh session. Read this first.
+
+## Session 2026-07-18 (Claude) — 7-item bug batch, invoice actions, email headers, Stripe payment fixes
+
+**7-item bug batch** (user-reported list), root-caused:
+1. **Signatures leaking into the website builder photo gallery** —
+   `app/(dashboard)/website/page.tsx` pulled the last 60 `job_photos`
+   company-wide with no filter; customer sign-off signatures (stored as
+   `job_photos` rows, caption `'Customer sign-off'`, see
+   `app/api/storage/signature/route.ts`) were selectable as public marketing
+   images. Now excluded via `.or('caption.is.null,caption.neq.Customer sign-off')`.
+2. **Form print sheet showed raw field ids instead of labels** —
+   `components/ui/form-fill.tsx` `printSubmission()` now maps each answer key
+   to the template field's label.
+3. **Vehicle logbook logged 0.00km trips** — GPS speed noise could start a
+   "trip" with no real movement. `tradiee-mobile/lib/location/tracking.ts`
+   `endTrip()` now discards trips under 25m instead of inserting a
+   `travel_logs` row.
+4. **Mobile: no edit/delete on job materials** — `tradiee-mobile/app/jobs/[id].tsx`
+   materials list now has tap-to-edit + a delete icon. `job_materials` has no
+   `UPDATE` RLS policy (checked all migrations), so "edit" deletes + re-inserts,
+   matching the web app's own delete-only pattern.
+5. **Can't change a visit's scheduled time from the job page** — the
+   `/schedule` page already had a full edit dialog + drag-and-drop; job detail
+   only showed a read-only list. Extracted the dialog into a new
+   `app/(dashboard)/jobs/[id]/visits-card.tsx` client component.
+6. **No prev/next navigation** on job/quote/invoice detail pages — added
+   `components/ui/prev-next-nav.tsx`, ordered by document number. Jobs reuses
+   an already-fetched company job list; quotes/invoices each got one
+   lightweight `id`-only query.
+7. **Mobile manual time log only had a break-minutes field, no way to set
+   actual hours** — `timesheets.tsx` `logTime()` hardcoded exactly
+   `now - 1 hour` to `now`. Removed the bespoke modal/state and reused the
+   existing `TimeEntryEditModal` (already had full date/start/end/break/notes
+   editing for edits) in a new create mode — `EditableTimeEntry.id` is now
+   `string | null`; `null` means insert instead of update. Also wired
+   `companyId` into both call sites (`timesheets.tsx`, `jobs/[id].tsx`).
+
+**Invoice actions relabeled + emailed indicator**: "Mark sent" →
+"Complete invoice" (finalizes without emailing), "Send email" → "Complete and
+send email" (the email API already set `status: 'sent'` server-side — label
+now reflects that). New `invoices.emailed_at` column (migration
+`20260717120000_invoice_emailed_at.sql`, **applied to remote**), set only by
+`app/api/email/invoice/route.ts`, distinct from `sent_at` (which "Complete
+invoice" also sets without emailing). Invoice detail page shows a green
+"Emailed" badge + timestamp when set.
+
+**Mobile: keyboard covered the job search box** in the allocate-trip bottom
+sheet (Timesheets → Travel tab → allocate → "Work — assign to job"). Wrapped
+the sheet in `KeyboardAvoidingView`, matching the pattern already used
+elsewhere in `timesheets.tsx`.
+
+**Stripe payment fixes** (two unrelated bugs, same session):
+- **Web invoice pay page** (`app/i/[token]/pay-button.tsx`): `confirmPayment()`
+  called `loadStripe()` a second time instead of reusing the instance that
+  created the Elements — Stripe rejects this outright ("elements... created
+  by a different Stripe instance"). Now stores and reuses the same `stripe`
+  object alongside `elements`/`paymentEl` on `window`.
+- **Mobile Tap to Pay** (`tradiee-mobile/app/pay-now.tsx`): `initialize()`
+  calls the `tokenProvider` internally, but the native Stripe Terminal SDK
+  swallows whatever our code threw on failure and replaces it with a generic
+  "Couldn't fetch connection token. Please check your tokenProvider method" —
+  hiding the real reason (most likely Stripe Connect payouts not finished for
+  that company). Now preflights `fetchConnectionToken()` directly before
+  calling `initialize()`, same pattern already used for
+  `fetchTerminalLocationId()`, so our actual error message reaches the user.
+- **Stripe Connect onboarding 500 with empty body** ("Failed to execute
+  'json' on 'Response': Unexpected end of JSON input" on Settings → "Set up
+  payouts"): `app/api/stripe/connect/onboard/route.ts`'s `startOnboarding()`
+  called `ensureConnectedAccount`/`createOnboardingLink` (both hit the Stripe
+  API) with no try/catch — an unhandled throw reached the client as an empty
+  500 body. Now wrapped in try/catch, returns the real Stripe error message as
+  JSON. **Not yet verified against a live failure** — next attempt should
+  show the actual underlying Stripe error instead of the parse error.
+- **Outstanding**: user asked why Klarna shows as a payment option on the web
+  pay page — explained it's Stripe's automatic-payment-methods default
+  (nothing enabled explicitly in code, `payment_method_types` isn't set in
+  `app/api/stripe/payment-intent/route.ts`), offered to add
+  `payment_method_types: ['card']` to drop it. Not yet actioned.
+
+**Email header: white banner instead of orange, across all templates** — the
+`tapToPayLaunchEmailHtml` white-header fix (previous session) was
+launch-email-only; every other template still had `background:#f97316`
+headers where a logo could be unreadable. Fixed the shared `emailBrandHeader()`
+helper in `lib/email.ts` (covers `brandedEmailHtml`, `reviewRequestEmailHtml`,
+`bookingConfirmationEmailHtml`, `bookingRequestedEmailHtml`,
+`reminderEmailHtml`) plus three more instances that had duplicated the header
+markup inline instead of using the helper: `quoteEmailHtml`, `invoiceEmailHtml`
+(now call `emailBrandHeader()` too), `lib/customer-portal.ts`, and
+`app/api/invitations/send/route.ts` (subcontractor job invite). White
+background + `1px solid #e5e7eb` bottom border; no-logo text fallback switched
+from white-on-orange to dark-on-white (`#111827`). Verified by rendering
+actual `quoteEmailHtml()` output in a browser (with and without a logo), not
+just the diff.
+
+**Two APK builds this session** (`eas build --platform android --profile
+preview`, produces an APK per `eas.json`): first included the 7-item batch
+through the manual-time-log fix
+(https://expo.dev/accounts/grimstock/projects/industryforms/builds/cfac1ac4-123d-4996-9ebc-e984c2d10e05);
+second added the keyboard fix + Tap to Pay error-message fix
+(https://expo.dev/accounts/grimstock/projects/industryforms/builds/c1cc2b7d-959f-415e-bf12-afba4d52cc1c).
+Neither build includes the Stripe Connect onboard fix (web-only) or is needed
+for it.
+
+All web/mobile changes verified with `npx tsc --noEmit` (clean on both apps)
+and `npm run build` (web, clean). Docker/local Supabase was not running this
+session, so nothing was exercised against live data beyond what's noted above
+as browser-verified.
 
 ## Session 2026-07-16 (Claude, pt.3) — Tap to Pay hero image + launch email
 
