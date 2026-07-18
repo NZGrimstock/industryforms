@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
     currency: stripeCurrency(company?.country),
+    // Card only — otherwise automatic payment methods surface Klarna/Link.
+    payment_method_types: ['card'],
     metadata: { booking_id: booking.id },
     description: `Booking deposit — ${company?.name ?? ''}`,
   }, connectOptions(company))

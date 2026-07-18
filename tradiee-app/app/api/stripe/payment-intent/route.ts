@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
     currency: stripeCurrency(company?.country),
+    // Card only — the Stripe account's automatic payment methods otherwise
+    // surface Klarna/Link (BNPL) on trade invoices, which we don't want.
+    payment_method_types: ['card'],
     metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number },
     description: `Invoice ${invoice.invoice_number} — ${company?.name ?? ''}`,
   }, connectOptions(company))
