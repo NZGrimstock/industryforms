@@ -200,8 +200,8 @@ function invitationEmailHtml({
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
-    <div style="background:#f97316;padding:24px 32px">
-      <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700">${contractorCompanyName}</p>
+    <div style="background:#ffffff;padding:24px 32px;border-bottom:1px solid #e5e7eb">
+      <p style="margin:0;color:#111827;font-size:20px;font-weight:700">${contractorCompanyName}</p>
     </div>
     <div style="padding:32px">
       <p style="margin:0 0 8px;font-size:16px;color:#374151">You have a new job invitation</p>
