@@ -51,9 +51,24 @@ export type WebsiteSection =
 
 export type WebsiteSectionType = WebsiteSection['type']
 
+// A "style" is a complete, art-directed visual identity (typography, layout,
+// button shape, base palette) — not just a colour swap. `primary` is still the
+// one thing a company can customise within whichever style they pick: it
+// drives buttons/links/small accents, while the style's base palette (e.g.
+// editorial's umber, fresh's sage) stays fixed so the look stays coherent no
+// matter what colour a tradie's logo happens to be.
+export type WebsiteStyle = 'bold' | 'editorial' | 'fresh'
+
+export const WEBSITE_STYLES: { key: WebsiteStyle; label: string; blurb: string; swatch: [string, string, string] }[] = [
+  { key: 'bold', label: 'Bold & Direct', blurb: 'High-contrast and CTA-heavy — built to turn visits into quote requests.', swatch: ['#0f172a', '#bfdbfe', '#111827'] },
+  { key: 'editorial', label: 'Premium Editorial', blurb: 'Moody and photography-led — for high-end residential and renovation work.', swatch: ['#2b2118', '#f3ece2', '#c9a876'] },
+  { key: 'fresh', label: 'Fresh & Organic', blurb: 'Light, natural tones — a fit for landscaping and outdoor trades.', swatch: ['#e8ede1', '#2f4a2c', '#d9f2b4'] },
+]
+
 export type WebsiteTheme = {
   primary: string
   font: 'sans' | 'serif'
+  style: WebsiteStyle
 }
 
 export const SECTION_LABELS: Record<WebsiteSectionType, string> = {
@@ -66,7 +81,7 @@ export const SECTION_LABELS: Record<WebsiteSectionType, string> = {
   booking: 'Book a visit',
 }
 
-export const DEFAULT_THEME: WebsiteTheme = { primary: '#f97316', font: 'sans' }
+export const DEFAULT_THEME: WebsiteTheme = { primary: '#f97316', font: 'sans', style: 'bold' }
 
 // A blank section of a given type, used when the user adds one in the editor.
 export function blankSection(type: WebsiteSectionType): WebsiteSection {

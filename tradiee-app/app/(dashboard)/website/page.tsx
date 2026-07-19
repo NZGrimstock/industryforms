@@ -62,7 +62,9 @@ export default async function WebsitePage() {
         initial={{
           slug: existing?.slug ?? slugify(company.name),
           isPublished: existing?.is_published ?? false,
-          theme: existing?.theme ?? DEFAULT_THEME,
+          // Merge (not just fall back) so sites saved before `style` existed
+          // still get a sensible default instead of an unselected picker.
+          theme: { ...DEFAULT_THEME, ...(existing?.theme ?? {}) },
           sections: existing?.sections ?? defaultSections(company),
           seoTitle: existing?.seo_title ?? company.name,
           seoDescription: existing?.seo_description ?? '',

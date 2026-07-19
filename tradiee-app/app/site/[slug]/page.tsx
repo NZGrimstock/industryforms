@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
-import { SectionBlock } from './sections'
+import { SiteHeader, SiteFooter, SectionBlock, getStyleModule } from './sections'
 import { ContactForm } from './contact-form'
 import { BookingForm } from './booking-form'
 
@@ -94,47 +94,32 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
   }
 
   const theme = { ...DEFAULT_THEME, ...(site.theme ?? {}) }
-  const company = site.companies
-  const fontFamily = theme.font === 'serif' ? 'Georgia, "Times New Roman", serif' : 'system-ui, -apple-system, sans-serif'
+  const company = site.companies ?? { name: 'Welcome', logo_url: null, email: null, phone: null }
   const sections = (site.sections ?? []).filter(s => s.type !== 'booking' || site.bookings_enabled)
+  const styleMod = getStyleModule(theme.style)
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily }}>
+    <div className="min-h-screen bg-white" style={{ fontFamily: styleMod.fontFamily }}>
       {isDraft && (
         <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">
           Draft preview — not published yet, only visible to you
         </div>
       )}
-      {/* Top bar */}
-      <header className="border-b border-gray-100 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            {company?.logo_url
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={company.logo_url} alt={company.name} className="h-8 w-auto" />
-              : <span className="font-bold text-lg text-gray-900">{company?.name}</span>}
-          </div>
-          <div className="text-right text-sm text-gray-500 hidden sm:block">
-            {company?.phone && <a href={`tel:${company.phone}`} className="font-medium" style={{ color: theme.primary }}>{company.phone}</a>}
-          </div>
-        </div>
-      </header>
+
+      <SiteHeader style={theme.style} company={company} primary={theme.primary} />
 
       {sections.map((section, i) => (
         <SectionBlock
           key={i}
+          style={theme.style}
           section={section}
           primary={theme.primary}
-          ContactForm={<ContactForm slug={site.slug} primary={theme.primary} />}
-          BookingForm={<BookingForm slug={site.slug} primary={theme.primary} ctaLabel={section.type === 'booking' ? section.ctaLabel : undefined} />}
+          ContactForm={<ContactForm slug={site.slug} primary={theme.primary} variant={styleMod.formVariant} buttonCls={styleMod.formButtonCls} />}
+          BookingForm={<BookingForm slug={site.slug} primary={theme.primary} ctaLabel={section.type === 'booking' ? section.ctaLabel : undefined} variant={styleMod.formVariant} buttonCls={styleMod.formButtonCls} />}
         />
       ))}
 
-      <footer className="border-t border-gray-100 px-6 py-8 text-center text-sm text-gray-400">
-        <p>© {new Date().getFullYear()} {company?.name}</p>
-        {company?.email && <p className="mt-1">{company.email}</p>}
-        <p className="mt-3 text-xs text-gray-300">Powered by IndustryForms</p>
-      </footer>
+      <SiteFooter style={theme.style} company={company} />
     </div>
   )
 }

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  blankSection, slugify, SECTION_LABELS,
+  blankSection, slugify, SECTION_LABELS, WEBSITE_STYLES,
   type WebsiteSection, type WebsiteSectionType, type WebsiteTheme,
 } from '@/lib/website'
 import {
@@ -557,7 +557,27 @@ function ThemeCard({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Style</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {WEBSITE_STYLES.map(s => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setTheme({ ...theme, style: s.key })}
+              className={`text-left rounded-xl border-2 p-3 transition-colors ${theme.style === s.key ? 'border-gray-900' : 'border-gray-200 hover:border-gray-300'}`}
+            >
+              <div className="flex h-10 overflow-hidden rounded-lg mb-2.5">
+                {s.swatch.map((c, i) => <div key={i} className="flex-1" style={{ background: c }} />)}
+              </div>
+              <p className="text-sm font-semibold text-gray-900">{s.label}</p>
+              <p className="text-xs text-gray-500 mt-0.5 leading-snug">{s.blurb}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-start gap-6">
         {/* Logo preview — also acts as a clickable colour picker */}
         <div>
@@ -627,14 +647,6 @@ function ThemeCard({
               </button>
             )}
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Font</label>
-          <select value={theme.font} onChange={e => setTheme({ ...theme, font: e.target.value as WebsiteTheme['font'] })} className={inputCls}>
-            <option value="sans">Sans-serif (modern)</option>
-            <option value="serif">Serif (classic)</option>
-          </select>
         </div>
       </div>
 
