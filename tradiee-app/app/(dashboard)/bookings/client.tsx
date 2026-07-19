@@ -58,9 +58,14 @@ export function BookingsClient({
 
   // <iframe> snippet a tradie pastes into their own website. Points at the public
   // booking widget, which stays gated server-side by the bookings_website add-on.
+  // The trailing <script> auto-resizes the iframe to the widget's height (posted
+  // by EmbedAutoResize inside it), so the form never clips or double-scrolls.
   function embedCode(pkgId: string) {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    return `<iframe src="${origin}/site/${websiteSlug}/book/${pkgId}" width="100%" height="720" style="border:0;max-width:480px;border-radius:12px" title="Book online" loading="lazy"></iframe>`
+    return `<iframe src="${origin}/site/${websiteSlug}/book/${pkgId}?embed=1" width="100%" height="720" style="border:0;max-width:480px;border-radius:12px" title="Book online" loading="lazy" data-if-booking></iframe>
+<script>
+(function(){if(window.__ifBookingResize)return;window.__ifBookingResize=1;window.addEventListener("message",function(e){if(e.origin!=="${origin}"||!e.data||e.data.type!=="if-booking-height")return;document.querySelectorAll("iframe[data-if-booking]").forEach(function(f){if(f.contentWindow===e.source)f.style.height=e.data.height+"px";});});})();
+</script>`
   }
 
   if (!entitled) {
@@ -297,7 +302,7 @@ export function BookingsClient({
                     readOnly
                     onFocus={e => e.currentTarget.select()}
                     value={embedCode(pkg.id)}
-                    rows={3}
+                    rows={7}
                     className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                   <button

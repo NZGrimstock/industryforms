@@ -2,9 +2,15 @@ import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 import { hasAddon } from '@/lib/billing'
 import { BookingWidget } from './booking-widget'
+import { EmbedAutoResize } from './embed-resize'
 
-export default async function BookPackagePage({ params }: { params: Promise<{ slug: string; packageId: string }> }) {
+export default async function BookPackagePage({ params, searchParams }: {
+  params: Promise<{ slug: string; packageId: string }>
+  searchParams: Promise<{ embed?: string }>
+}) {
   const { slug, packageId } = await params
+  const { embed } = await searchParams
+  const isEmbed = embed === '1'
   const service = createServiceClient()
 
   const { data: site } = await service
@@ -26,7 +32,9 @@ export default async function BookPackagePage({ params }: { params: Promise<{ sl
   if (!pkg || !pkg.is_active) notFound()
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
+    // Embedded: drop min-h-screen + gray page bg so the iframe hugs the content
+    // (min-h-screen would peg the body to the iframe's height and defeat auto-resize).
+    <div id="if-booking-root" className={isEmbed ? 'bg-white p-2' : 'min-h-screen bg-gray-50 py-10 px-4'}>
       <div className="max-w-md mx-auto">
         <div className="mb-6 text-center">
           {company?.logo_url
@@ -40,6 +48,7 @@ export default async function BookPackagePage({ params }: { params: Promise<{ sl
           companyPhone={company?.phone ?? null}
         />
       </div>
+      {isEmbed && <EmbedAutoResize />}
     </div>
   )
 }
