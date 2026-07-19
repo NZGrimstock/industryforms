@@ -5,7 +5,6 @@ import { useSidebar } from './sidebar-context'
 import { accentForPath, hasRouteAccent } from '@/lib/route-accent'
 import { darken } from '@/lib/extract-color'
 import { TestModeBanner } from '@/components/ui/test-mode-banner'
-import { AIAssist } from '@/components/ui/ai-assist'
 
 export function DashboardShell({ children, brandAccent, testMode }: { children: React.ReactNode; brandAccent?: string | null; testMode?: boolean }) {
   const { collapsed } = useSidebar()
@@ -40,7 +39,6 @@ export function DashboardShell({ children, brandAccent, testMode }: { children: 
       )}
     >
       {children}
-      <AIAssist />
       {testMode && <TestModeBanner />}
     </main>
   )
