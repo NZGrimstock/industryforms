@@ -114,7 +114,7 @@ export function JobBoard({ initialJobs, statuses }: { initialJobs: Job[]; status
     <div>
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-3 min-w-max">
-          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <DndContext id="jobs-board" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             {visibleCols.map(col => (
               <BoardColumn key={col.key} column={col} jobs={jobs.filter(j => j.status === col.key)} />
             ))}

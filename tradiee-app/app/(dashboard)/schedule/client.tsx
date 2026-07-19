@@ -300,7 +300,7 @@ export function ScheduleClient({ visits: initialVisits, team = [] }: { visits: V
       </div>
 
       {view === 'week' && (
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DndContext id="schedule-week" sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-7 gap-2">
             {days.map(day => {
               const dayVisits = visitsForDay(day)

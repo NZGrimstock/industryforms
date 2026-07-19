@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/website'
 import { SectionBlock } from './sections'
 import { ContactForm } from './contact-form'
@@ -34,7 +34,9 @@ async function getSite(slug: string): Promise<SiteRow | null> {
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const site = await getSite(slug)
-  if (!site || !site.is_published) return { title: 'Not found' }
+  if (!site) return { title: 'Not found' }
+  // Real visibility gate (published, or owner previewing a draft) lives in the
+  // page component's notFound() below — this just picks the tab title.
 
   const name = site.companies?.name ?? 'Welcome'
   const title = site.seo_title || name
@@ -66,7 +68,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function PublicSitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const site = await getSite(slug)
-  if (!site || !site.is_published) notFound()
+  if (!site) notFound()
+
+  // Unpublished sites are hidden from the public, but the "Preview" button in
+  // the website builder links straight here — let the site's own owner/staff
+  // through so drafts are previewable before they publish.
+  const isDraft = !site.is_published
+  if (isDraft) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = user
+      ? await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+      : { data: null }
+    if (profile?.company_id !== site.company_id) notFound()
+  }
 
   // Direct /site/<slug> access (the in-app Preview link) bypasses proxy.ts's
   // reverse-proxy for custom-hosted sites — redirect to the CDN copy instead.
@@ -85,6 +100,11 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily }}>
+      {isDraft && (
+        <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">
+          Draft preview — not published yet, only visible to you
+        </div>
+      )}
       {/* Top bar */}
       <header className="border-b border-gray-100 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
