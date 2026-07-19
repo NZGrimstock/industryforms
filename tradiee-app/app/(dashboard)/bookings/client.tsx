@@ -54,6 +54,14 @@ export function BookingsClient({
   const [showNewBlackout, setShowNewBlackout] = useState(false)
   const [newBlackout, setNewBlackout] = useState({ starts_at: '', ends_at: '', reason: '' })
   const [saving, setSaving] = useState(false)
+  const [embedId, setEmbedId] = useState<string | null>(null)
+
+  // <iframe> snippet a tradie pastes into their own website. Points at the public
+  // booking widget, which stays gated server-side by the bookings_website add-on.
+  function embedCode(pkgId: string) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return `<iframe src="${origin}/site/${websiteSlug}/book/${pkgId}" width="100%" height="720" style="border:0;max-width:480px;border-radius:12px" title="Book online" loading="lazy"></iframe>`
+  }
 
   if (!entitled) {
     return (
@@ -248,29 +256,57 @@ export function BookingsClient({
       {tab === 'packages' && (
         <div className="space-y-3">
           {packages.map(pkg => (
-            <div key={pkg.id} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-gray-900">{pkg.name}</p>
-                  {!pkg.is_active && <span className="text-[10px] font-semibold uppercase text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">Inactive</span>}
+            <div key={pkg.id} className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">{pkg.name}</p>
+                    {!pkg.is_active && <span className="text-[10px] font-semibold uppercase text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">Inactive</span>}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{pkg.duration_minutes} min · ${Number(pkg.price).toFixed(2)}</p>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{pkg.duration_minutes} min · ${Number(pkg.price).toFixed(2)}</p>
+                <div className="flex items-center gap-3">
+                  {websiteSlug && pkg.is_active && (
+                    <>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/site/${websiteSlug}/book/${pkg.id}`)
+                          toast('Booking link copied')
+                        }}
+                        className="text-xs font-medium text-[var(--accent,#f97316)] hover:underline"
+                      >Copy link</button>
+                      <button
+                        onClick={() => setEmbedId(id => id === pkg.id ? null : pkg.id)}
+                        className="text-xs font-medium text-[var(--accent,#f97316)] hover:underline"
+                      >{embedId === pkg.id ? 'Hide embed' : 'Embed'}</button>
+                    </>
+                  )}
+                  <button onClick={() => togglePackageActive(pkg)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
+                    {pkg.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button onClick={() => deletePackage(pkg.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                {websiteSlug && pkg.is_active && (
+
+              {embedId === pkg.id && websiteSlug && (
+                <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3 space-y-2">
+                  <p className="text-xs text-gray-600">
+                    Paste this into your own website to embed the booking form. It keeps working as long as your Bookings subscription is active.
+                  </p>
+                  <textarea
+                    readOnly
+                    onFocus={e => e.currentTarget.select()}
+                    value={embedCode(pkg.id)}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/site/${websiteSlug}/book/${pkg.id}`)
-                      toast('Booking link copied')
-                    }}
-                    className="text-xs font-medium text-[var(--accent,#f97316)] hover:underline"
-                  >Copy link</button>
-                )}
-                <button onClick={() => togglePackageActive(pkg)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
-                  {pkg.is_active ? 'Deactivate' : 'Activate'}
-                </button>
-                <button onClick={() => deletePackage(pkg.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
-              </div>
+                    onClick={() => { navigator.clipboard.writeText(embedCode(pkg.id)); toast('Embed code copied') }}
+                    className="rounded-lg bg-[var(--accent,#f97316)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                  >Copy code</button>
+                  <p className="text-[11px] text-gray-400">Tip: adjust <span className="font-mono">height</span> if the form is cut off, or <span className="font-mono">max-width</span> to change how wide it sits.</p>
+                </div>
+              )}
             </div>
           ))}
 
