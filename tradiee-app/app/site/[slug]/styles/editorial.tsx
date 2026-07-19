@@ -40,8 +40,8 @@ export function Footer({ company }: { company: Company }) {
 
 const ghostBtn = 'inline-block border border-white/50 px-8 py-3 text-xs font-medium uppercase tracking-[0.2em] text-white transition-colors hover:border-white hover:bg-white/10'
 
-export function Section({ section, primary, ContactForm, BookingForm }: {
-  section: WebsiteSection; primary: string; ContactForm: React.ReactNode; BookingForm: React.ReactNode
+export function Section({ section, primary, businessName, ContactForm, BookingForm }: {
+  section: WebsiteSection; primary: string; businessName?: string; ContactForm: React.ReactNode; BookingForm: React.ReactNode
 }) {
   switch (section.type) {
     case 'hero':
@@ -100,7 +100,7 @@ export function Section({ section, primary, ContactForm, BookingForm }: {
           <div className="grid grid-cols-2">
             {section.images.map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={src} alt="" className="aspect-square w-full object-cover" />
+              <img key={i} src={src} alt={`${businessName ?? section.heading} — recent work ${i + 1}`} loading="lazy" className="aspect-square w-full object-cover" />
             ))}
           </div>
         </section>

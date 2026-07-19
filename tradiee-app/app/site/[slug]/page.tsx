@@ -5,6 +5,7 @@ import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/web
 import { SiteHeader, SiteFooter, SectionBlock, getStyleModule } from './sections'
 import { ContactForm } from './contact-form'
 import { BookingForm } from './booking-form'
+import { siteBaseUrl, siteDescription, buildJsonLd, areaFromAddress, type SeoCompany } from '@/lib/website-seo'
 
 type SiteRow = {
   company_id: string
@@ -18,50 +19,69 @@ type SiteRow = {
   site_mode: 'builder' | 'custom'
   custom_site_key: string | null
   custom_site_status: string
-  companies: { name: string; logo_url: string | null; email: string | null; phone: string | null } | null
+  custom_domain: string | null
+  companies: SeoCompany | null
 }
 
 async function getSite(slug: string): Promise<SiteRow | null> {
   const service = createServiceClient()
   const { data } = await service
     .from('company_websites')
-    .select('company_id, slug, is_published, theme, sections, seo_title, seo_description, bookings_enabled, site_mode, custom_site_key, custom_site_status, companies(name, logo_url, email, phone)')
+    .select('company_id, slug, is_published, theme, sections, seo_title, seo_description, bookings_enabled, site_mode, custom_site_key, custom_site_status, custom_domain, companies(name, logo_url, email, phone, address, trade_type, country)')
     .eq('slug', slug)
     .single()
   return (data as unknown as SiteRow) ?? null
 }
+
+const EMPTY_COMPANY: SeoCompany = { name: 'Welcome', logo_url: null, email: null, phone: null, address: null, trade_type: null, country: null }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const site = await getSite(slug)
   if (!site) return { title: 'Not found' }
   // Real visibility gate (published, or owner previewing a draft) lives in the
-  // page component's notFound() below — this just picks the tab title.
+  // page component's notFound() below — this just fills tags for the crawler.
 
-  const name = site.companies?.name ?? 'Welcome'
-  const title = site.seo_title || name
-  // Pull a description: explicit SEO field → first about/hero subheading → null.
-  const fallbackDesc = (() => {
-    for (const s of site.sections ?? []) {
-      if (s.type === 'about' && s.body) return s.body.slice(0, 160)
-      if (s.type === 'hero' && s.subheading) return s.subheading.slice(0, 160)
-    }
-    return undefined
-  })()
-  const description = site.seo_description || fallbackDesc
-  const logo = site.companies?.logo_url ?? undefined
+  const company = site.companies ?? EMPTY_COMPANY
+  const url = siteBaseUrl(slug, site.custom_domain)
+  const title = site.seo_title || company.name
+  const description = siteDescription(company, site.sections ?? [], site.seo_description)
+
+  // Prefer a hero photo for the share card (large, on-brand); fall back to logo.
+  const heroImg = site.sections?.find(s => s.type === 'hero' && s.imageUrl)
+  const ogImage = (heroImg && heroImg.type === 'hero' ? heroImg.imageUrl : null) ?? company.logo_url ?? undefined
+
+  const trade = company.trade_type?.trim()
+  const area = areaFromAddress(company.address)
+  const keywords = [trade, area, trade && area ? `${trade} ${area}` : null, company.name]
+    .filter(Boolean) as string[]
+
+  // Guard new URL(): a malformed custom domain (or an IP-based dev origin) must
+  // never 500 the page. Canonical/OG URLs are already absolute, so metadataBase
+  // is only a nicety — safe to omit if the base won't parse.
+  let metadataBase: URL | undefined
+  try { metadataBase = new URL(url) } catch { metadataBase = undefined }
 
   return {
+    ...(metadataBase ? { metadataBase } : {}),
     title,
     description,
+    keywords: keywords.length ? keywords : undefined,
+    alternates: { canonical: url },
+    // Published sites are indexable; drafts are hidden from search entirely.
+    robots: site.is_published
+      ? { index: true, follow: true, googleBot: { index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1 } }
+      : { index: false, follow: false },
     openGraph: {
-      title, description,
-      siteName: name,
-      images: logo ? [{ url: logo }] : undefined,
+      title, description, url,
+      siteName: company.name,
+      images: ogImage ? [{ url: ogImage }] : undefined,
       type: 'website',
+      locale: company.country === 'AU' ? 'en_AU' : 'en_NZ',
     },
-    twitter: { card: 'summary', title, description, images: logo ? [logo] : undefined },
-    icons: logo ? { icon: logo } : undefined,
+    twitter: { card: ogImage ? 'summary_large_image' : 'summary', title, description, images: ogImage ? [ogImage] : undefined },
+    icons: company.logo_url ? { icon: company.logo_url } : undefined,
+    ...(area ? { other: { 'geo.region': company.country === 'AU' ? 'AU' : 'NZ', 'geo.placename': area } } : {}),
   }
 }
 
@@ -94,12 +114,21 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
   }
 
   const theme = { ...DEFAULT_THEME, ...(site.theme ?? {}) }
-  const company = site.companies ?? { name: 'Welcome', logo_url: null, email: null, phone: null }
+  const company = site.companies ?? EMPTY_COMPANY
   const sections = (site.sections ?? []).filter(s => s.type !== 'booking' || site.bookings_enabled)
   const styleMod = getStyleModule(theme.style)
 
+  const url = siteBaseUrl(slug, site.custom_domain)
+  const description = siteDescription(company, site.sections ?? [], site.seo_description)
+  // LocalBusiness + WebSite + Service structured data — the GEO/AEO/AIO payload.
+  // Only emitted for the real published site (not owner drafts).
+  const jsonLd = !isDraft ? buildJsonLd({ company, url, sections: site.sections ?? [], description }) : null
+
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: styleMod.fontFamily }}>
+      {jsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      )}
       {isDraft && (
         <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">
           Draft preview — not published yet, only visible to you
@@ -113,6 +142,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
           key={i}
           style={theme.style}
           section={section}
+          businessName={company.name}
           primary={theme.primary}
           ContactForm={<ContactForm slug={site.slug} primary={theme.primary} variant={styleMod.formVariant} buttonCls={styleMod.formButtonCls} />}
           BookingForm={<BookingForm slug={site.slug} primary={theme.primary} ctaLabel={section.type === 'booking' ? section.ctaLabel : undefined} variant={styleMod.formVariant} buttonCls={styleMod.formButtonCls} />}

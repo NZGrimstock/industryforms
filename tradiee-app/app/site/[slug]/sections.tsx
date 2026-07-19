@@ -31,14 +31,15 @@ export function SiteFooter({ style, company }: { style: WebsiteStyle; company: C
 }
 
 export function SectionBlock({
-  style, section, primary, ContactForm, BookingForm,
+  style, section, primary, businessName, ContactForm, BookingForm,
 }: {
   style: WebsiteStyle
   section: WebsiteSection
   primary: string
+  businessName?: string
   ContactForm: React.ReactNode
   BookingForm: React.ReactNode
 }) {
   const mod = getStyleModule(style)
-  return <mod.Section section={section} primary={primary} ContactForm={ContactForm} BookingForm={BookingForm} />
+  return <mod.Section section={section} primary={primary} businessName={businessName} ContactForm={ContactForm} BookingForm={BookingForm} />
 }
