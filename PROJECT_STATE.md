@@ -2,6 +2,35 @@
 
 Last updated: 2026-07-20. Catch-up doc for a fresh session. Read this first.
 
+## Session 2026-07-20 (Claude) — website SEO/GEO/AEO/AIO layer
+
+Added the structured-data + answer-engine layer the Instant Websites were
+missing (they already had sitemap/robots/basic OG). New `lib/website-seo.ts`
+holds shared helpers (`siteBaseUrl`, `schemaTypeForTrade`, `areaFromAddress`,
+`siteDescription`, `buildJsonLd`), all auto-derived from the company profile +
+site content:
+- **JSON-LD** injected in `app/site/[slug]/page.tsx`: `LocalBusiness` typed by
+  trade (Electrician/Plumber/RoofingContractor/HVACBusiness/HousePainter/
+  Locksmith/GeneralContractor/HomeAndConstructionBusiness) with full NAP,
+  PostalAddress, `areaServed` + `WebSite` + one `Service` per listed service.
+  Only emitted for published sites (not owner drafts).
+- **Metadata**: canonical, explicit robots (index for published / noindex for
+  drafts, googleBot max-image-preview:large), keywords, `geo.region`/
+  `geo.placename`, `og:locale` (en_NZ/en_AU), `og:image` prefers a hero photo
+  over logo. `new URL(metadataBase)` is try/catch-guarded so a bad custom
+  domain (or IP dev origin) can't 500 the page.
+- **`app/site/[slug]/llms.txt/route.ts`** (new, llmstxt.org convention) — plain
+  -text business summary for AI answer engines; same subdomain reverse-proxy
+  handling as robots/sitemap.
+- **sitemap.xml** now lists live booking-package pages (gated by the same
+  bookings add-on check), drops fragment anchors, adds `<priority>`.
+- Gallery/hero images: descriptive `alt` + `loading="lazy"` (threaded
+  `businessName` through `SectionBlock` → each style's `Section`).
+
+Verified end-to-end against a local sandbox (seeded published electrician site,
+never touched production): JSON-LD graph, all head meta, llms.txt, sitemap,
+robots all correct. Sandbox torn down, prod `.env.local` restored, seed deleted.
+
 ## Session 2026-07-20 (Claude) — 3 art-directed website styles replace the generic theme
 
 The Instant Website builder previously only had a colour picker + sans/serif
