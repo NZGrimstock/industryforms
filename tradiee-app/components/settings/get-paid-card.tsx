@@ -78,6 +78,13 @@ export function GetPaidCard() {
         )}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <p className="text-xs text-gray-400">
+          Not sure what to expect?{' '}
+          <a href="/settings/help/tap-to-pay" className="font-medium text-[var(--accent,#f97316)] hover:underline">
+            Read the step-by-step setup guide →
+          </a>
+        </p>
       </CardContent>
     </Card>
   )

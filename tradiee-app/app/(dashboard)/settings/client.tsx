@@ -34,11 +34,11 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const searchParams = useSearchParams()
   const mfaRequired = searchParams.get('mfa_required') === '1'
   const requestedTab = searchParams.get('tab')
-  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'developer'].includes(requestedTab)
-    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer'
+  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'developer', 'help'].includes(requestedTab)
+    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer' | 'help'
     : 'business'
   const { toast } = useToast()
-  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer'>(mfaRequired ? 'profile' : initialTab)
+  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer' | 'help'>(mfaRequired ? 'profile' : initialTab)
   const [testMode, setTestMode] = useState<boolean>(!!(company as Company & { test_mode?: boolean }).test_mode)
   const [testToggling, setTestToggling] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -381,6 +381,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
           { key: 'integrations', label: 'Integrations' },
           { key: 'subscription', label: 'Subscription' },
           { key: 'developer',    label: 'Test Mode' },
+          { key: 'help',         label: 'Help' },
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === t.key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             {t.label}
@@ -395,6 +396,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         {tab === 'integrations' && 'Connect external services — accounting, calendar and data import.'}
         {tab === 'developer'    && 'Load demo data to explore the system without touching real records.'}
         {tab === 'subscription' && 'Your plan, billing history and seat usage.'}
+        {tab === 'help'         && 'Step-by-step guides for getting set up.'}
       </p>
 
       {tab === 'business' && (
@@ -861,6 +863,27 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
           <GetPaidCard />
           <BillingTab company={company} />
         </div>
+      )}
+
+      {tab === 'help' && (
+        <Card className="max-w-2xl">
+          <CardHeader><CardTitle>Guides</CardTitle></CardHeader>
+          <CardContent className="p-0 pb-2">
+            <Link
+              href="/settings/help/tap-to-pay"
+              className="flex items-start gap-3 px-6 py-4 hover:bg-orange-50/50 transition-colors"
+            >
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[var(--accent,#f97316)] text-lg">💳</span>
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">Getting paid by card — Stripe setup for Tap to Pay</span>
+                <span className="block text-xs text-gray-500 mt-0.5">
+                  Every step, every button, every choice — from &quot;Set up payouts&quot; through to your first
+                  Tap to Pay payment on iPhone. Printable.
+                </span>
+              </span>
+            </Link>
+          </CardContent>
+        </Card>
       )}
 
       {tab === 'developer' && (
