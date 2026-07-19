@@ -2,6 +2,29 @@
 
 Last updated: 2026-07-20. Catch-up doc for a fresh session. Read this first.
 
+## Open follow-ups (carry-forward — nothing blocking)
+
+Optional next steps flagged during recent sessions; none are in-progress:
+- **Local-pack GEO**: `companies` has no lat/lng, so website JSON-LD includes
+  address + areaServed but not precise `geo` coordinates. Adding a geocoded
+  lat/lng field (on address save) is the upgrade for max local-pack strength.
+- **Website FAQ section + FAQPage schema**: high-value AEO win; there's no FAQ
+  section type yet. Would need a new `WebsiteSection` variant + JSON-LD.
+- **Per-section layout variants** (e.g. image-left vs image-right hero): the 3
+  styles share the same fixed section building blocks; layout variants would be
+  a larger builder feature, not a reskin.
+- **Help Guide screenshots**: phone **Inbox** and **My Profile** still use the
+  dashed placeholder (no clean screenshot existed). Drop
+  `phone-inbox.webp`/`phone-profile.webp` into `public/help/` and add their ids
+  to `HELP_SCREENSHOTS` in `components/help/help-content.ts`.
+- **Embeddable booking iframe**: works with `postMessage` auto-resize; no known
+  issues. `next.config.ts` scopes `frame-ancestors *` to `/site/*/book/*` only.
+- **Stripe items only the account owner can do** (can't be done from code):
+  confirm the "Your account" webhook destination includes `customer.subscription.*`
+  events; verify Terminal/Tap-to-Pay enabled for the platform; get the first
+  merchant through payouts onboarding (0 connected accounts exist as of the
+  2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
+
 ## Session 2026-07-20 (Claude) — website SEO/GEO/AEO/AIO layer
 
 Added the structured-data + answer-engine layer the Instant Websites were
