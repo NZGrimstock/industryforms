@@ -1,6 +1,71 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-18. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-19. Catch-up doc for a fresh session. Read this first.
+
+## Session 2026-07-19 (Claude) — Help Guide, trial banner, embeddable booking widget, load test + bug fixes
+
+**In-app Help Guide** — new bottom-right "Help" button opens a slide-in side
+panel (`components/help/help-panel.tsx`) with two tabs: **Guide** (searchable
+screen-by-screen walkthrough, `components/help/help-content.ts`, 21 web +
+15 phone screens, auto-scrolls to the section matching the current route) and
+**Ask AI** (the assistant that used to have its own separate floating button —
+merged in, `components/ui/ai-assist.tsx` deleted). Added a **Feedback**
+button next to the panel's close X (mailto to support@industryforms.app).
+21 web screenshots + 13 phone screenshots added to `public/help/`, all
+compressed to WebP (5.13 MB → 0.61 MB total). Two phone screens (Inbox, My
+Profile) still show the placeholder — no clean screenshot existed. The
+existing Stripe Tap-to-Pay onboarding guide is linked from the Settings
+section entry.
+
+**Free trial banner** — during an active trial, the header now shows a purple
+`FREE TRIAL — N days left. Subscribe now` line left of the search box
+(`components/layout/header.tsx`), hidden once paid or expired. New
+`SubscriptionProvider` context (`components/providers/subscription-provider.tsx`,
+mirrors the existing Timezone/CountryProvider pattern) feeds this to Header
+without threading props through 40+ page files. Settings → Subscription also
+gained a matching "Subscribe now" button that jumps to the plan grid. Login
+page states "28 day Free Trial — No credit card required!" under the sign-up
+link.
+
+**Embeddable booking widget** — Bookings → Packages → **Embed** button reveals
+a copy-paste `<iframe>` snippet so a tradie with an existing website can drop
+the booking form straight into it, no code. `next.config.ts`'s app-wide
+anti-framing headers (`X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`)
+now exclude `/site/<slug>/book/<pkg>`, which gets `frame-ancestors *` instead —
+scoped narrowly so the rest of the app (dashboard, login, public site root)
+stays locked to same-origin framing. Payment can't be circumvented: the page
+is still gated server-side by `hasAddon(company, 'bookings_website')`, so an
+embed on an unsubscribed/lapsed account 404s (verified live). The iframe
+auto-resizes to fit its content — new `EmbedAutoResize` component
+(`app/site/[slug]/book/[packageId]/embed-resize.tsx`, only mounted in
+`?embed=1` mode) posts the real content height to the parent via
+`postMessage` on load/step-change/reflow (measuring the `#if-booking-root`
+wrapper, not `documentElement`, which is clamped to the current iframe
+viewport and can never shrink); the embed snippet includes a small
+origin-validated listener that resizes the iframe. Verified end-to-end in a
+genuinely cross-origin iframe (separate throwaway port): 720px fallback
+correctly shrank to fit the slot picker, then tracked the taller details step.
+
+**35-employee load test** — spun up local Supabase (Docker was down at
+session start; `npx supabase start`), swapped `tradiee-app/.env.local` to
+point at it (backed up first, restored after — **never touched production
+data**), seeded 1 company / 35 staff (1 owner, 3 admin, 31 staff) / 18
+customers / 70 jobs / 150 schedule visits via a throwaway Node script. Team
+tab, job-assignment dropdown, Schedule week/list, Jobs board/list, and Job
+Map all handled the volume fine — no truncation, no slow queries. Found and
+fixed one real (not actually scale-specific, just caught here) bug: **Jobs
+Board and Schedule week view both hydration-mismatched on every load** —
+`@dnd-kit`'s internal `aria-describedby` id counter isn't deterministic
+across server/client renders in Next.js. Fixed with the documented solution:
+a stable `id` prop on both `DndContext` instances
+(`app/(dashboard)/jobs/board.tsx`, `app/(dashboard)/schedule/client.tsx`).
+Also found/fixed: **website builder's Preview button 404'd** — `/site/[slug]`
+unconditionally blocked unpublished sites, but Preview links straight there
+before first publish. Now the site's own owner/staff can preview a draft
+(amber "Draft preview" banner), everyone else still gets a real 404
+(verified: anonymous curl → 404, owner session → 200 + banner). All seed data
+deleted, local Supabase stopped, `.env.local` restored from backup, backup
+file removed — confirmed clean afterward.
 
 ## Session 2026-07-18 (Claude) — 7-item bug batch, invoice actions, email headers, Stripe payment fixes
 
