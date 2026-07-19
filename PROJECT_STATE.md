@@ -1,6 +1,37 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-19. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-07-20. Catch-up doc for a fresh session. Read this first.
+
+## Session 2026-07-20 (Claude) — 3 art-directed website styles replace the generic theme
+
+The Instant Website builder previously only had a colour picker + sans/serif
+toggle — every site rendered with the same generic gray-card layout. Modeled
+3 fully art-directed styles on real trade-site references (Wix templates
+wh-1052/1078/1324) and rebuilt the public-site renderer around them:
+- **Bold & Direct** — high-contrast, CTA-heavy (dual header buttons, black
+  pill CTAs, bordered service cards, floating white contact card).
+- **Premium Editorial** — dark umber canvas, light serif type, ghost-outline
+  buttons, hairline-divider service list, edge-to-edge photo grid.
+- **Fresh & Organic** — sage + lime two-tone, rounded pill nav button,
+  rounded photo/card treatment, signature lime accent block for
+  contact/booking forms.
+
+New `WebsiteStyle` field on `lib/website.ts`'s `WebsiteTheme`, defaulting to
+`'bold'` via the existing `DEFAULT_THEME` merge — every already-published
+site is upgraded automatically, no user action needed. `primary` (the
+existing brand-colour picker) still drives buttons/links/accents within
+whichever style is chosen. Dropped the now-dead sans/serif Font dropdown
+(each style owns its own typography); added a 3-card Style picker with mini
+palette swatches in `app/(dashboard)/website/client.tsx`'s Theme card.
+
+Implementation: `app/site/[slug]/styles/{bold,editorial,fresh}.tsx` each
+export `Header`/`Footer`/`Section` + `fontFamily`; `sections.tsx` dispatches
+on `theme.style`. `ContactForm`/`BookingForm` gained a `variant`
+(`'light' | 'dark'`) and `buttonCls` prop so editorial's dark canvas and
+fresh's lime block get correctly-contrasted inputs instead of the default
+white-card styling. Verified all 3 styles + both form variants end-to-end
+against mock data via a throwaway `/style-preview` route (deleted before
+commit) — never touched a real company or site.
 
 ## Session 2026-07-19 (Claude) — Help Guide, trial banner, embeddable booking widget, load test + bug fixes
 
