@@ -11,6 +11,7 @@ import { TimezoneProvider } from '@/components/providers/timezone-provider'
 import { CountryProvider } from '@/components/providers/country-provider'
 import { SyncStatusBar } from '@/components/ui/sync-status-bar'
 import { WelcomeTutorial } from '@/components/ui/welcome-tutorial'
+import { HelpPanel } from '@/components/help/help-panel'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -46,6 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <SyncStatusBar />
               {children}
               <WelcomeTutorial initiallyOpen={!profile?.welcome_tutorial_seen_at} />
+              <HelpPanel />
             </DashboardShell>
           </div>
           <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />
