@@ -1327,7 +1327,7 @@ function BillingTab({ company }: { company: Company }) {
                 <p className="text-sm text-red-600 font-medium mt-1">Trial expired — choose a plan below to continue</p>
               )}
             </div>
-            {currentPlan !== 'trial' && (
+            {currentPlan !== 'trial' ? (
               <Button
                 size="sm"
                 loading={loading === 'portal'}
@@ -1336,6 +1336,13 @@ function BillingTab({ company }: { company: Company }) {
               >
                 Manage billing
               </Button>
+            ) : (
+              <a
+                href="#plans"
+                className="inline-flex items-center justify-center gap-2 rounded-lg h-8 px-3 text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+              >
+                Subscribe now
+              </a>
             )}
           </div>
           <label className="mt-4 flex items-start gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3 text-sm text-gray-700">
@@ -1386,7 +1393,7 @@ function BillingTab({ company }: { company: Company }) {
       </Card>
 
       {/* Plan grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5">
+      <div id="plans" className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5 scroll-mt-20">
         {PLAN_DETAILS.map((plan) => {
           const isCurrent = plan.key === currentPlan
           const isUpgrade = PLAN_ORDER.indexOf(plan.key) > currentIdx

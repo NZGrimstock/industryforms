@@ -132,6 +132,9 @@ export default function LoginPage() {
           No account?{' '}
           <Link href="/signup" className="text-orange-500 hover:text-orange-600 font-medium">Get started free</Link>
         </p>
+        <p className="text-center text-sm font-medium text-gray-700 mt-1">
+          28 day Free Trial &mdash; No credit card required!
+        </p>
       </div>
     </div>
   )

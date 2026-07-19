@@ -9,6 +9,7 @@ import { SidebarProvider } from '@/components/layout/sidebar-context'
 import { PowerSyncProvider } from '@/components/providers/powersync-provider'
 import { TimezoneProvider } from '@/components/providers/timezone-provider'
 import { CountryProvider } from '@/components/providers/country-provider'
+import { SubscriptionProvider } from '@/components/providers/subscription-provider'
 import { SyncStatusBar } from '@/components/ui/sync-status-bar'
 import { WelcomeTutorial } from '@/components/ui/welcome-tutorial'
 import { HelpPanel } from '@/components/help/help-panel'
@@ -36,9 +37,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Messages nav badge (owner/admin only — staff don't get the Messages tab).
   const unreadMessages = isStaff ? 0 : (await getConversations(supabase)).filter(c => c.unread).length
 
+  const subscriptionInfo = {
+    plan: company?.subscription_plan ?? null,
+    status: company?.subscription_status ?? null,
+    trialEndsAt: company?.trial_ends_at ?? null,
+    billingExempt: company?.billing_exempt ?? false,
+  }
+
   return (
     <TimezoneProvider timezone={profile?.timezone}>
      <CountryProvider country={company?.country}>
+     <SubscriptionProvider info={subscriptionInfo}>
       <PowerSyncProvider>
         <SidebarProvider>
           <div className="flex h-full">
@@ -53,6 +62,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />
         </SidebarProvider>
       </PowerSyncProvider>
+     </SubscriptionProvider>
      </CountryProvider>
     </TimezoneProvider>
   )
