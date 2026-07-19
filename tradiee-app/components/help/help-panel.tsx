@@ -181,7 +181,7 @@ export function HelpPanel() {
                             {HELP_SCREENSHOTS.has(s.id) ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
-                                src={`/help/${s.id}.png`}
+                                src={`/help/${s.id}.webp`}
                                 alt={s.screenshot}
                                 loading="lazy"
                                 className="mt-2 w-full rounded-lg border border-gray-200"

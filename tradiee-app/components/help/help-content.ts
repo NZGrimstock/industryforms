@@ -16,14 +16,17 @@ export type HelpSection = {
 export type HelpGroup = { label: string; sections: HelpSection[] }
 export type HelpPart = { id: string; label: string; groups: HelpGroup[] }
 
-// Section ids that have a real screenshot at /public/help/{id}.png. Sections not
-// listed here fall back to the dashed "[Screenshot: …]" placeholder (e.g. the
-// phone screens and Bills, which weren't captured yet).
+// Section ids that have a real screenshot at /public/help/{id}.webp. Sections not
+// listed here fall back to the dashed "[Screenshot: …]" placeholder — Bills, plus
+// the phone Inbox (only captured mid-error) and My Profile screens.
 export const HELP_SCREENSHOTS = new Set([
   'web-dashboard', 'web-projects', 'web-messages', 'web-enquiries', 'web-customers',
   'web-quotes', 'web-jobs', 'web-job-map', 'web-schedule', 'web-time-logs', 'web-logbook',
   'web-invoices', 'web-forms', 'web-todo', 'web-purchase-orders', 'web-suppliers',
   'web-price-list', 'web-reports', 'web-website', 'web-bookings', 'web-settings',
+  'phone-home', 'phone-jobs', 'phone-schedule', 'phone-customers', 'phone-quotes',
+  'phone-invoices', 'phone-tap-to-pay', 'phone-tap-to-pay-help', 'phone-time-logs',
+  'phone-job-map', 'phone-todo', 'phone-invitations', 'phone-notifications',
 ])
 
 export const HELP_GUIDE: HelpPart[] = [
