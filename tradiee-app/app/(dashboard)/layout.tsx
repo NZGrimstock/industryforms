@@ -13,6 +13,8 @@ import { SubscriptionProvider } from '@/components/providers/subscription-provid
 import { SyncStatusBar } from '@/components/ui/sync-status-bar'
 import { WelcomeTutorial } from '@/components/ui/welcome-tutorial'
 import { HelpPanel } from '@/components/help/help-panel'
+import { TermsGate } from '@/components/legal/terms-gate'
+import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -23,11 +25,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // billing-exempt review accounts bypass this).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, is_super_admin, welcome_tutorial_seen_at, timezone, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode, country)')
+    .select('role, is_super_admin, welcome_tutorial_seen_at, timezone, terms_version, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode, country)')
     .eq('id', user.id)
     .single()
   const company = (profile?.companies ?? null) as (BillingCompany & { theme_accent?: string | null; test_mode?: boolean | null; country?: string | null }) | null
   if (!hasAccess(!!profile?.is_super_admin, company)) redirect('/upgrade')
+
+  // Must accept the current Terms before using the app (super admins exempt so
+  // we can't lock ourselves out). Blocking overlay until accepted.
+  const needsTerms = !profile?.is_super_admin && profile?.terms_version !== CURRENT_TERMS_VERSION
   const brandAccent = company?.theme_accent ?? null
   const testMode = company?.test_mode ?? false
 
@@ -57,6 +63,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {children}
               <WelcomeTutorial initiallyOpen={!profile?.welcome_tutorial_seen_at} />
               <HelpPanel />
+              {needsTerms && <TermsGate />}
             </DashboardShell>
           </div>
           <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />

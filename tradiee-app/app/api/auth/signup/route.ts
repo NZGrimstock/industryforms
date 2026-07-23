@@ -2,13 +2,17 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
+import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 export async function POST(request: Request) {
   try {
-    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone } = await request.json()
+    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms } = await request.json()
 
     if (!fullName || !email || !password || !companyName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+    if (!acceptedTerms) {
+      return NextResponse.json({ error: 'You must accept the Terms of Service' }, { status: 400 })
     }
     if (!isPasswordValid(password)) {
       return NextResponse.json({ error: PASSWORD_POLICY_MESSAGE }, { status: 400 })
@@ -64,6 +68,8 @@ export async function POST(request: Request) {
         email,
         phone: phone || null,
         role: 'owner',
+        terms_accepted_at: new Date().toISOString(),
+        terms_version: CURRENT_TERMS_VERSION,
       })
     if (profileError) {
       await rollbackSignup(userId, company.id)

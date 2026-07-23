@@ -18,6 +18,7 @@ export default function SignupPage() {
   const [companyAddress, setCompanyAddress] = useState('')
   const [tradeType, setTradeType] = useState('')
   const [country, setCountry] = useState('NZ')
+  const [agreed, setAgreed] = useState(false)
 
   const TRADE_TYPES = [
     'Builder / General contractor',
@@ -50,6 +51,10 @@ export default function SignupPage() {
       setError('Please fill in all required fields, including phone number and trade.')
       return
     }
+    if (!agreed) {
+      setError('Please accept the Terms of Service to continue.')
+      return
+    }
     if (!isPasswordValid(password)) {
       setError(PASSWORD_POLICY_MESSAGE)
       return
@@ -60,7 +65,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone }),
+        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms: agreed }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Signup failed')
@@ -141,11 +146,26 @@ export default function SignupPage() {
               </select>
             </div>
 
+            <label className="flex items-start gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              />
+              <span>
+                I agree to the{' '}
+                <Link href="/terms" target="_blank" className="text-orange-500 hover:text-orange-600 underline">Terms of Service</Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" className="text-orange-500 hover:text-orange-600 underline">Privacy Policy</Link>.
+              </span>
+            </label>
+
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreed}
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors"
             >
               {loading ? 'Creating account…' : 'Create account'}

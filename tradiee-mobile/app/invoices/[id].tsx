@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Icon, type IconName } from '@/lib/icons'
 import { supabase } from '@/lib/supabase'
-import { useTimezone } from '@/lib/profile-context'
+import { useTimezone, useCanTakePayments } from '@/lib/profile-context'
 import { formatDate as formatDateTz } from '@/lib/datetime'
 import { PriceListDescriptionInput, type PriceListLookupItem } from '@/components/PriceListDescriptionInput'
 import { TAP_TO_PAY_EDUCATION_KEY } from '@/lib/tap-to-pay'
@@ -84,6 +84,7 @@ function discountAmount(base: number, type: 'amount' | 'percent' | null, value: 
 
 export default function InvoiceDetailScreen() {
   const timezone = useTimezone()
+  const canTakePayments = useCanTakePayments()
   const formatDate = (iso: string | null) => {
     if (!iso) return '—'
     return formatDateTz(iso, timezone, { month: 'short', day: 'numeric', year: 'numeric' })
@@ -498,8 +499,17 @@ export default function InvoiceDetailScreen() {
         ) : (
           <View style={styles.btnRow}>
             <TouchableOpacity
-              style={[styles.tapPayBtn]}
+              style={[styles.tapPayBtn, !canTakePayments && styles.tapPayBtnDisabled]}
               onPress={async () => {
+                // Card-present is a paid-plan feature (server also enforces it).
+                if (!canTakePayments) {
+                  Alert.alert(
+                    'Subscribe to use Tap to Pay',
+                    'Tap to Pay is available on a paid plan. Subscribe in Settings to take card payments in person.',
+                    [{ text: 'OK' }]
+                  )
+                  return
+                }
                 // Apple Tap to Pay review requirement 4.2: show education once before first use.
                 const seen = await AsyncStorage.getItem(TAP_TO_PAY_EDUCATION_KEY)
                 const dest = seen ? `/pay-now?invoiceId=${id}` : `/tap-to-pay-help?next=${encodeURIComponent(`/pay-now?invoiceId=${id}`)}`
@@ -711,6 +721,7 @@ const styles = StyleSheet.create({
   payBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   btnRow: { flexDirection: 'row', gap: 10 },
   tapPayBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#22c55e', borderRadius: 14, paddingVertical: 16 },
+  tapPayBtnDisabled: { backgroundColor: '#9ca3af', opacity: 0.6 },
   tapPayBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   manualBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6', borderRadius: 14, paddingVertical: 16 },
   manualBtnText: { color: '#374151', fontSize: 14, fontWeight: '600' },

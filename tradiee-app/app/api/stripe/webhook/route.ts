@@ -14,6 +14,8 @@ import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 import { getStripe } from '@/lib/stripe'
 import { maybeSendReviewRequest } from '@/lib/review-request'
+import { notify } from '@/lib/notify'
+import { sendEmail } from '@/lib/email'
 import { BILLING_ADDONS, type BillingAddonSlug, setAddonActive } from '@/lib/billing'
 import { createJobFromBooking } from '@/lib/bookings/fulfill'
 import { sendBookingConfirmationEmail } from '@/lib/bookings/notify'
@@ -76,6 +78,18 @@ export async function POST(req: NextRequest) {
       if (settledPayment?.applied && settledPayment.invoice_status === 'paid') {
         await maybeSendReviewRequest(service, invoiceId)
       }
+      break
+    }
+
+    case 'charge.dispute.created': {
+      // A dispute is the canonical loss signal for a connected account. The
+      // platform is liable for the resulting negative balance, so surface it
+      // loudly: alert the operator (who decides any risk action) and notify the
+      // merchant. Deliberately NOT auto-freezing — a single dispute is often
+      // spurious, and auto-actioning a legit tradie is its own (unfair-contract)
+      // risk. Escalation (pause card-present for this company) would go here.
+      const dispute = event.data.object as Stripe.Dispute
+      await handleDisputeCreated(service, event.account, dispute)
       break
     }
 
@@ -150,6 +164,53 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+// Dispute on a connected account. `accountId` is the connected account the
+// event fired on (present on the "Connected accounts" webhook destination).
+async function handleDisputeCreated(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  service: any,
+  accountId: string | undefined,
+  dispute: Stripe.Dispute
+) {
+  const { data: company } = accountId
+    ? await service.from('companies').select('id, name, email').eq('stripe_account_id', accountId).maybeSingle()
+    : { data: null }
+
+  const amount = (dispute.amount ?? 0) / 100
+  const currency = (dispute.currency ?? 'nzd').toUpperCase()
+  const line = `Dispute ${dispute.id} — ${currency} ${amount.toFixed(2)}, reason "${dispute.reason}", status "${dispute.status}".`
+
+  // Operator alert (the platform is on the hook for the negative balance).
+  const alertTo = process.env.PLATFORM_ALERT_EMAIL ?? 'support@industryforms.app'
+  await sendEmail({
+    to: alertTo,
+    subject: `⚠ Card dispute — ${company?.name ?? accountId ?? 'unknown account'}`,
+    html: `<p>A card dispute was opened on a connected account.</p>
+      <p><strong>Merchant:</strong> ${company?.name ?? '—'} (${company?.id ?? accountId ?? 'unknown'})<br/>
+      <strong>${line}</strong></p>
+      <p>Respond in the Stripe Dashboard. The platform is liable for any resulting negative balance.</p>`,
+  })
+
+  // Seller communication (Stripe Connect risk obligation) + logs to
+  // automation_events. Only if we resolved the merchant and have an email.
+  if (company?.email) {
+    await notify({
+      service,
+      companyId: company.id,
+      eventType: 'stripe_dispute',
+      email: {
+        to: company.email,
+        subject: `A customer disputed a payment (${currency} ${amount.toFixed(2)})`,
+        html: `<p>A customer has disputed a card payment on your account.</p>
+          <p><strong>${line}</strong></p>
+          <p>Stripe will email you the details and next steps. Respond promptly with evidence
+          (invoice, job records, proof of work) in your Stripe Dashboard, or the amount may be
+          reversed. Reply to this email if you need help.</p>`,
+      },
+    })
+  }
 }
 
 function isBillingAddon(slug: string | undefined): slug is BillingAddonSlug {

@@ -48,6 +48,20 @@ export function hasAccess(isSuperAdmin: boolean, company: BillingCompany | null)
 }
 
 /**
+ * Stricter than hasAccess: a *paid* plan, NOT a free trial. Used to gate
+ * card-present (Tap to Pay) collection — a fraudster won't pay a monthly
+ * subscription and wait, so requiring a real paid plan (or a comped/review
+ * account) shrinks the population that can ever take a card payment. Mirrors
+ * the `notOnFreeTrial` check already used in app/api/site/custom/upload.
+ */
+export function hasPaidPlan(isSuperAdmin: boolean, company: Pick<BillingCompany, 'subscription_status' | 'billing_exempt'> | null): boolean {
+  if (isSuperAdmin) return true
+  if (!company) return false
+  if (company.billing_exempt) return true
+  return company.subscription_status === 'active'
+}
+
+/**
  * Whether the company has a given paid add-on active. Super-admins and
  * billing-exempt review accounts get every add-on for free. Add-ons are stored
  * on `companies.addons` as `{ "<slug>": { "active": true } }` — flipped by the
