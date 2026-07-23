@@ -102,6 +102,7 @@ export interface PriceListItem {
   sell_price: number
   default_markup_pct: number | null
   supplier_name: string | null
+  supplier_id: string | null
   quantity_on_hand: number | null
   low_stock_threshold: number | null
   is_active: boolean

@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/ui/dialog'
-import { Send, CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2 } from 'lucide-react'
+import { Send, CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2, ShoppingCart } from 'lucide-react'
 import Link from 'next/link'
 
 interface Props {
@@ -31,6 +31,23 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
   const [loading, setLoading] = useState('')
   const [acceptOpen, setAcceptOpen] = useState(false)
   const [jobDescription, setJobDescription] = useState('')
+
+  async function orderParts() {
+    setLoading('order')
+    try {
+      const res = await fetch('/api/purchase-orders/from-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quote_id: quote.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not create purchase orders')
+      router.push(`/purchase-orders/from-quote/${quote.id}`)
+    } catch (e: any) {
+      toast(e.message ?? 'Could not create purchase orders', 'error')
+      setLoading('')
+    }
+  }
 
   async function markAccepted() {
     setLoading('accepted')
@@ -138,6 +155,11 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
         <Link href={`/jobs/${quote.converted_to_job_id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-green-200 rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
           <Briefcase className="h-4 w-4" /> View job
         </Link>
+      )}
+      {quote.status === 'accepted' && (
+        <Button variant="secondary" size="sm" loading={loading === 'order'} onClick={orderParts}>
+          <ShoppingCart className="h-4 w-4" /> Order parts
+        </Button>
       )}
       {canDelete && (
         <Button variant="ghost" size="sm" loading={loading === 'delete'} onClick={deleteQuote}>

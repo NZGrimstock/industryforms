@@ -22,11 +22,12 @@ interface Props {
   items: PriceListItem[]
   kits: Kit[]
   customerGroups: { id: string; name: string }[]
+  suppliers: { id: string; name: string }[]
 }
 
 type CsvRow = { name: string; code: string; type: string; unit: string; cost_price: string; sell_price: string }
 
-export function PriceListClient({ companyId, standardMarkupEnabled, standardMarkupPct, items, kits, customerGroups }: Props) {
+export function PriceListClient({ companyId, standardMarkupEnabled, standardMarkupPct, items, kits, customerGroups, suppliers }: Props) {
   const [tab, setTab] = useState<'items' | 'kits' | 'groups'>('items')
   const [itemDialog, setItemDialog] = useState<PriceListItem | null | 'new'>(null)
   const [kitDialog, setKitDialog] = useState<Kit | null | 'new'>(null)
@@ -381,6 +382,7 @@ export function PriceListClient({ companyId, standardMarkupEnabled, standardMark
             standardMarkupEnabled={standardMarkupEnabled}
             standardMarkupPct={standardMarkupPct}
             customerGroups={groups}
+            suppliers={suppliers}
             onSuccess={() => { setItemDialog(null); router.refresh() }}
           />
         )}
@@ -402,7 +404,7 @@ export function PriceListClient({ companyId, standardMarkupEnabled, standardMark
   )
 }
 
-function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupPct, customerGroups, onSuccess }: { companyId: string; item?: PriceListItem; standardMarkupEnabled: boolean; standardMarkupPct: number; customerGroups: { id: string; name: string }[]; onSuccess: () => void }) {
+function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupPct, customerGroups, suppliers, onSuccess }: { companyId: string; item?: PriceListItem; standardMarkupEnabled: boolean; standardMarkupPct: number; customerGroups: { id: string; name: string }[]; suppliers: { id: string; name: string }[]; onSuccess: () => void }) {
   const supabase = createClient()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -418,7 +420,7 @@ function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupP
     unit: item?.unit ?? 'each',
     cost_price: item?.cost_price?.toString() ?? '0',
     sell_price: item?.sell_price?.toString() ?? '0',
-    supplier_name: item?.supplier_name ?? '',
+    supplier_id: item?.supplier_id ?? '',
     quantity_on_hand: item?.quantity_on_hand?.toString() ?? '',
     low_stock_threshold: item?.low_stock_threshold?.toString() ?? '',
     is_active: item?.is_active ?? true,
@@ -451,7 +453,9 @@ function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupP
       unit: form.unit,
       cost_price: parseFloat(form.cost_price) || 0,
       sell_price: parseFloat(form.sell_price) || (standardMarkupEnabled ? Number(((parseFloat(form.cost_price) || 0) * (1 + standardMarkupPct / 100)).toFixed(2)) : 0),
-      supplier_name: form.supplier_name || null,
+      supplier_id: form.supplier_id || null,
+      // keep the legacy free-text field in sync for display/back-compat
+      supplier_name: suppliers.find(s => s.id === form.supplier_id)?.name ?? null,
       quantity_on_hand: form.quantity_on_hand !== '' ? parseFloat(form.quantity_on_hand) : null,
       low_stock_threshold: form.low_stock_threshold !== '' ? parseFloat(form.low_stock_threshold) : null,
       is_active: form.is_active,
@@ -545,7 +549,10 @@ function PriceItemForm({ companyId, item, standardMarkupEnabled, standardMarkupP
       )}
       <div>
         <Label>Supplier</Label>
-        <Input value={form.supplier_name} onChange={e => set('supplier_name', e.target.value)} />
+        <Select value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)}
+          placeholder="No supplier"
+          options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
+        <p className="mt-1 text-xs text-gray-400">Sets who to order this part from — powers one-click &ldquo;Order parts&rdquo; on accepted quotes.</p>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
