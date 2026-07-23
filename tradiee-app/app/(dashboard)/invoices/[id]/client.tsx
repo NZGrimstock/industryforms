@@ -10,9 +10,9 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer } from 'lucide-react'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer, FileText } from 'lucide-react'
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
-import { PrintInvoice } from '@/components/pdf/print-invoice'
+import { PrintInvoice, viewInvoicePdf } from '@/components/pdf/print-invoice'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { priceForCustomerGroup } from '@/lib/customer-pricing'
 
@@ -366,6 +366,14 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     router.refresh()
   }
 
+  async function completeAndPdf() {
+    setLoading(true)
+    if (isDraft) await supabase.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoice.id)
+    await viewInvoicePdf(printData)
+    router.refresh()
+    setLoading(false)
+  }
+
   const isDraft = invoice.status === 'draft'
   const canSendEmail = ['draft', 'sent', 'overdue'].includes(invoice.status) && !!invoice.customer_email
   const canSendText = ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoice.status) && !!invoice.customer_phone
@@ -397,6 +405,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
         <div className="ml-auto">
           <Dropdown label="Complete Invoice" icon={<CheckCircle2 className="h-4 w-4" />} variant="primary" align="right">
             {isDraft && <DropdownItem icon={<Send />} onClick={markSent}>Complete invoice</DropdownItem>}
+            <DropdownItem icon={<FileText />} disabled={loading} onClick={completeAndPdf}>Complete and PDF</DropdownItem>
             {canSendEmail && <DropdownItem icon={<Mail />} onClick={sendEmail}>Complete and email</DropdownItem>}
             {canSendText && <DropdownItem icon={<MessageSquare />} onClick={completeAndSms}>Complete and SMS</DropdownItem>}
           </Dropdown>
