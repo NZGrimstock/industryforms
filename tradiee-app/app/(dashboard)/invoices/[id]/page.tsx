@@ -12,6 +12,7 @@ import { logoDataUri } from '@/lib/pdf-logo'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
+import { RevertToJobButton } from '@/components/invoices/revert-to-job-button'
 import { Mail } from 'lucide-react'
 import Link from 'next/link'
 
@@ -88,6 +89,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <PrevNextNav prevHref={prevInvoiceHref} nextHref={nextInvoiceHref} />
+            <RevertToJobButton invoiceId={invoice.id} jobId={invoice.job_id} status={invoice.status} amountPaid={Number(invoice.amount_paid)} />
             <InvoiceDetailClient
               invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null; pricing_group_id?: string | null} | null)?.email, customer_phone: (invoice.customers as {phone: string | null} | null)?.phone, pricing_group_id: (invoice.customers as {pricing_group_id?: string | null} | null)?.pricing_group_id ?? null }}
               companyId={profile!.company_id}

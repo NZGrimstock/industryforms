@@ -12,14 +12,12 @@ import { formatDateTime, formatCurrency } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { JobDetailClient } from './client'
 import { JobMaterials } from './materials'
-import { PrintJobSheet } from '@/components/pdf/print-job-sheet'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
 import { ProfitabilityBadge } from '@/components/ui/profitability-badge'
 import { SupplierInvoiceParser } from '@/components/ui/supplier-invoice-parser'
 import { FormFill } from '@/components/ui/form-fill'
 import { ProgressClaims } from '@/components/ui/progress-claims'
 import { ComplianceDocs } from '@/components/compliance/ComplianceDocs'
-import { InviteSubcontractorModal } from '@/components/jobs/InviteSubcontractorModal'
 import { SubcontractorStatus } from '@/components/jobs/SubcontractorStatus'
 import { JobAssigneesCard } from './assignees'
 import { VisitsCard } from './visits-card'
@@ -264,17 +262,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <PrevNextNav prevHref={prevJobHref} nextHref={nextJobHref} />
-            <PrintJobSheet data={sheetData} />
-            <InviteSubcontractorModal
-              jobId={id}
-              jobTitle={job.title}
-              projectAddress={(job.customer_sites as { address: string } | null)?.address ?? null}
-            />
             <JobDetailClient
               job={job}
               companyId={profile!.company_id}
               profileId={user!.id}
               team={teamRes.data ?? []}
+              assignees={normalizedJobAssignees}
+              projectAddress={(job.customer_sites as { address: string } | null)?.address ?? null}
+              sheetData={sheetData}
               gstRate={gstRate}
               nextInvoiceNumber={nextInvoiceNumber}
               jobTotal={estimatedSubtotal}

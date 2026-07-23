@@ -1,13 +1,15 @@
 'use client'
-import { useState, Suspense } from 'react'
+import { useState } from 'react'
 import { Printer, FileDown } from 'lucide-react'
 import type { JobSheetData } from './job-sheet-pdf'
+import { DropdownItem } from '@/components/ui/dropdown'
 
 interface Props {
   data: JobSheetData
+  asMenuItems?: boolean
 }
 
-export function PrintJobSheet({ data }: Props) {
+export function PrintJobSheet({ data, asMenuItems }: Props) {
   const [printing, setPrinting] = useState(false)
 
   async function handlePrint() {
@@ -44,6 +46,15 @@ export function PrintJobSheet({ data }: Props) {
     } finally {
       setPrinting(false)
     }
+  }
+
+  if (asMenuItems) {
+    return (
+      <>
+        <DropdownItem icon={<Printer />} disabled={printing} onClick={handlePrint}>Print job</DropdownItem>
+        <DropdownItem icon={<FileDown />} disabled={printing} onClick={handleDownload}>Create PDF</DropdownItem>
+      </>
+    )
   }
 
   return (

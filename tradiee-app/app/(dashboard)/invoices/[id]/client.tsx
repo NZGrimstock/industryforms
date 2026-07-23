@@ -10,7 +10,8 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Undo2, Briefcase, Search } from 'lucide-react'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer } from 'lucide-react'
+import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
 import { PrintInvoice } from '@/components/pdf/print-invoice'
 import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { priceForCustomerGroup } from '@/lib/customer-pricing'
@@ -359,18 +360,10 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     router.push('/invoices')
   }
 
-  async function revertToJob() {
-    if (!invoice.job_id) { toast('This invoice is not linked to a job', 'error'); return }
-    if (invoice.status !== 'draft' || invoice.amount_paid > 0) {
-      toast('Only unpaid draft invoices can be reverted to the job', 'error')
-      return
-    }
-    if (!confirm('Revert back to the job? This will delete the draft invoice and keep the job.')) return
-    setLoading(true)
-    await supabase.from('invoice_line_items').delete().eq('invoice_id', invoice.id)
-    await supabase.from('invoices').delete().eq('id', invoice.id)
-    toast('Invoice reverted back to job')
-    router.push(`/jobs/${invoice.job_id}`)
+  async function completeAndSms() {
+    if (isDraft) await supabase.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoice.id)
+    await sendText()
+    router.refresh()
   }
 
   const isDraft = invoice.status === 'draft'
@@ -378,20 +371,37 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   const canSendText = ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoice.status) && !!invoice.customer_phone
   const canPay = ['sent', 'partially_paid', 'overdue'].includes(invoice.status)
 
+  const canComplete = isDraft || canSendEmail || canSendText
+
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={() => setActiveDialog('line')}><Plus className="h-4 w-4" /> Add line</Button>
-      <Button variant="outline" size="sm" onClick={addSundries}><Plus className="h-4 w-4" /> Add sundries</Button>
-      <Button variant="outline" size="sm" onClick={createFromJob} disabled={!invoice.job_id}><Briefcase className="h-4 w-4" /> Create from job</Button>
-      <Button variant="outline" size="sm" onClick={() => setActiveDialog('discount')}><Tag className="h-4 w-4" /> {invoice.discount_amount > 0 ? 'Edit discount' : 'Add discount'}</Button>
-      {canSendEmail && <Button size="sm" loading={loading} onClick={sendEmail}><Mail className="h-4 w-4" /> Complete and send email</Button>}
-      {canSendText && <Button variant="outline" size="sm" loading={loading} onClick={sendText}><MessageSquare className="h-4 w-4" /> Text</Button>}
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Add */}
+      <Dropdown label="Add" icon={<Plus className="h-4 w-4" />}>
+        <DropdownItem icon={<Plus />} onClick={() => setActiveDialog('line')}>Line</DropdownItem>
+        <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>
+        <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('discount')}>{invoice.discount_amount > 0 ? 'Edit discount' : 'Discount'}</DropdownItem>
+        <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>
+      </Dropdown>
+
+      {/* Print */}
+      <Dropdown label="Print" icon={<Printer className="h-4 w-4" />}>
+        <PrintInvoice data={printData} asMenuItems />
+      </Dropdown>
+
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
-      {isDraft && <Button variant="outline" size="sm" onClick={markSent}><Send className="h-4 w-4" /> Complete invoice</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}
-      <PrintInvoice data={printData} />
       {isDraft && <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>}
-      {invoice.job_id && <Button variant="ghost" size="sm" onClick={revertToJob}><Undo2 className="h-4 w-4" /> Revert back to job</Button>}
+
+      {/* Complete Invoice (green, right-aligned) */}
+      {canComplete && (
+        <div className="ml-auto">
+          <Dropdown label="Complete Invoice" icon={<CheckCircle2 className="h-4 w-4" />} variant="primary" align="right">
+            {isDraft && <DropdownItem icon={<Send />} onClick={markSent}>Complete invoice</DropdownItem>}
+            {canSendEmail && <DropdownItem icon={<Mail />} onClick={sendEmail}>Complete and email</DropdownItem>}
+            {canSendText && <DropdownItem icon={<MessageSquare />} onClick={completeAndSms}>Complete and SMS</DropdownItem>}
+          </Dropdown>
+        </div>
+      )}
 
       <Dialog open={activeDialog === 'line'} onClose={() => setActiveDialog(null)} title="Add line item">
         {(priceItems.length > 0 || kits.length > 0) && (

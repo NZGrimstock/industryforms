@@ -2,8 +2,9 @@
 import { useState } from 'react'
 import { FileDown, Printer } from 'lucide-react'
 import type { InvoicePdfData } from './invoice-pdf'
+import { DropdownItem } from '@/components/ui/dropdown'
 
-export function PrintInvoice({ data }: { data: InvoicePdfData }) {
+export function PrintInvoice({ data, asMenuItems }: { data: InvoicePdfData; asMenuItems?: boolean }) {
   const [busy, setBusy] = useState(false)
 
   async function makeBlob() {
@@ -38,6 +39,15 @@ export function PrintInvoice({ data }: { data: InvoicePdfData }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  if (asMenuItems) {
+    return (
+      <>
+        <DropdownItem icon={<Printer />} disabled={busy} onClick={print}>Print invoice</DropdownItem>
+        <DropdownItem icon={<FileDown />} disabled={busy} onClick={download}>Create PDF</DropdownItem>
+      </>
+    )
   }
 
   return (

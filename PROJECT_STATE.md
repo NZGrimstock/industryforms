@@ -25,6 +25,169 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
+## Session 2026-07-23 (Claude, pt.3) — tidy job & invoice action buttons into dropdowns
+
+Consolidated the sprawling, status-dependent action buttons on the job- and
+invoice-detail screens into a small set of labelled dropdowns that stay put.
+New reusable primitive `components/ui/dropdown.tsx` (`Dropdown` + `DropdownItem`,
+outside-click/Esc close, `variant='primary'` green trigger, `align='right'`).
+
+**Jobs** (`app/(dashboard)/jobs/[id]/client.tsx`, one row):
+- **Schedule & Assign** ▾ — Schedule and assign / Schedule only / Assign only.
+  Assign uses a **tickbox list of the team** (first ticked = primary
+  `jobs.assigned_to`, the rest → `job_assignees`); reuses the existing
+  job_assignees table. "Schedule and assign" opens a combined dialog.
+- **Add** ▾ — Note / Time log / Worker (opens the assign tickboxes) /
+  Subcontractor (drives the now-controllable `InviteSubcontractorModal`).
+- **Print** ▾ — Print job / Create PDF (`PrintJobSheet` gained an `asMenuItems`
+  mode; same for `PrintInvoice`).
+- **Status** ▾ — every status as a click-to-set item (no dialog).
+- **Invoice** ▾ (green, right-aligned) — Invoice from quote / Invoice from
+  actuals (both **mark the job complete first**, preserving old "Complete &
+  invoice") / Progress claim (reveals an inline % slider + amount, does NOT
+  complete the job since it's mid-flight). Over-invoice `confirm()` safeguards
+  kept. `PrintJobSheet` + `InviteSubcontractorModal` moved off `page.tsx` into
+  the client (page now passes `sheetData`, `projectAddress`, `assignees`).
+
+**Invoices** (`app/(dashboard)/invoices/[id]/client.tsx`, one row):
+- **Add** ▾ — Line / Sundries / Discount / From job.
+- **Print** ▾ — Print invoice / Create PDF.
+- Record payment, Sync to Xero, Delete kept as **separate buttons** (user's
+  call — payment is the primary payable action).
+- **Complete Invoice** ▾ (green, right-aligned) — Complete invoice (mark sent) /
+  Complete and email / **Complete and SMS** (per user: SMS moved here as a
+  "Complete and…" option, not into Add). Only rendered when an option applies.
+- **Revert back to job** moved out of the action row to sit **next to the
+  prev/next arrows** on `page.tsx` (new `components/invoices/revert-to-job-button.tsx`).
+
+No schema change (multi-worker already existed via `job_assignees`). `tsc`,
+`eslint` clean on all touched files. **Not exercised in a running browser** this
+session (needs local Supabase + auth + a seeded job/invoice) — static-verified
+only; user is testing live after deploy.
+
+## Session 2026-07-23 (Claude, pt.2) — 2-click "Order parts" (quote → per-supplier POs)
+
+When a quote is accepted the tradie now has a one-flow way to order the parts.
+**Root blocker found + fixed**: materials had no structured supplier link
+(`price_list_items.supplier_name` was free text; quote lines can be ad-hoc with
+no `price_list_item_id`), so there was nothing to group POs by.
+
+- **Migration `20260723130000_po_from_quote.sql`** (✅ applied to remote via
+  `supabase db push` 2026-07-23): adds `price_list_items.supplier_id` (FK) +
+  `purchase_orders.quote_id` (FK) + indexes, and best-effort backfills
+  `supplier_id` from any `supplier_name` that matches a supplier by name.
+- **`POST /api/purchase-orders/from-quote`** — takes the quote's `material`
+  line items, groups by each item's `supplier_id`, creates one DRAFT PO per
+  supplier (materials with no supplier → one "unassigned" PO shown last),
+  copies qty/unit_cost, links `job_id` (from `converted_to_job_id`) + `quote_id`.
+  **Idempotent** (returns existing if any PO already tagged with this quote).
+  po_number: passes distinct previews via `nextDocNumber` so it's correct
+  whether or not the atomic-numbering trigger (migration 20260716120000) is live.
+  Only `type = 'material'` lines are ordered (labour/service excluded; didn't
+  widen the enum filter without confirming valid labels).
+- **Review screen** `app/(dashboard)/purchase-orders/from-quote/[quoteId]` +
+  `components/purchase-orders/order-parts-review.tsx` — the generated POs shown
+  back-to-back, line items populated, each with an inline supplier picker for
+  any unassigned PO and an edit link to the full PO builder. **"Send all"** loops
+  the existing `POST /api/email/purchase-order` per PO. Assigning a supplier to
+  an unassigned PO also backfills `supplier_id` onto those price-list items
+  (only where null) — the system "learns", so the next quote is truly 2-click.
+- **"Order parts" button** on the accepted-quote actions
+  (`app/(dashboard)/quotes/[id]/client.tsx`, shows when `status === 'accepted'`)
+  → POSTs from-quote → routes to the review screen. So the 2 clicks are:
+  **Order parts** → **Send all orders**.
+- **Price-list item editor** (`app/(dashboard)/price-list/client.tsx`): the
+  free-text Supplier field is now a **dropdown** of supplier records (sets
+  `supplier_id`, keeps `supplier_name` in sync for back-compat). `page.tsx`
+  fetches suppliers; `lib/types.ts` `PriceListItem` gained `supplier_id`.
+
+Reused the existing PurchaseOrderBuilder + email-PO route + draft PO status
+end-to-end — no supplier ordering API (no NZ/AU merchant offers one to a small
+SaaS; email PO is the real channel). `npx tsc --noEmit` clean. **Not exercised
+against a live DB** (needs local Supabase + the migration + a seeded accepted
+quote) — verify after `supabase db push`. No mobile involvement.
+
+## Session 2026-07-23 (Claude) — Connect platform risk controls + ToS/MSA + Terms acceptance gate
+
+User is completing Stripe's "negative balance liability" + "ongoing seller
+compliance" acknowledgements (required because we're an Express + direct-charge
+Connect platform, so **the platform is liable for connected-account negative
+balances**). Advised on real-world risk and built the mitigations.
+
+**Risk advice (non-code, for the user)**: the single biggest lever is the
+Connect liability *config* — ask Stripe whether we can run a model where Stripe
+/ the connected account bears loss liability (Standard accounts, or controller
+`losses.payments = stripe`) instead of the platform; that dwarfs any ToS clause.
+Also ask what reserve Stripe holds on the platform account. A ToS only gives a
+*right to recover* from the tradie — worthless if they're insolvent/gone — so
+the preventive controls below are the real shield.
+
+**Three code controls (all `tsc`-clean, web + mobile):**
+1. **Tap to Pay = paid subscribers only.** New `hasPaidPlan()` in
+   `tradiee-app/lib/billing.ts` (super-admin / billing_exempt / `subscription_status
+   === 'active'` — trial does NOT count; mirrors the existing `notOnFreeTrial`
+   check). Enforced server-side in
+   `app/api/stripe/terminal/payment-intent/route.ts` (403 before any
+   PaymentIntent). Mobile mirrors it: `useCanTakePayments()` in
+   `tradiee-mobile/lib/profile-context.tsx`, and the invoice-screen Tap to Pay
+   button (`tradiee-mobile/app/invoices/[id].tsx`) is greyed out + shows a
+   "Subscribe to use Tap to Pay" alert for trial users.
+2. **Per-transaction + daily caps** in the same terminal route. Defaults
+   $10k/charge, $25k/company/UTC-day; override via env `TAP_TO_PAY_MAX_SINGLE`
+   / `TAP_TO_PAY_DAILY_CAP`. Daily total sums settled `payments` (method
+   'stripe') today. Flat, not tiered — 0 connected accounts exist, tiers are
+   premature (ponytail).
+3. **Dispute detection**: `charge.dispute.created` case in
+   `app/api/stripe/webhook/route.ts` → emails the operator
+   (`PLATFORM_ALERT_EMAIL`, falls back to support@industryforms.app) + the
+   merchant, logs to automation_events. Deliberately does NOT auto-freeze (a
+   single dispute is often spurious; auto-actioning a legit tradie is its own
+   unfair-contract risk). Escalation point is commented for later.
+
+**Full ToS/MSA**: folded a complete **Section 4 (Payment Processing and
+Merchant Services)** + a new mobile/app-store Section 6 into
+`tradiee-app/app/terms/page.tsx` (single authoritative Terms, covers web +
+mobile + payments). Covers Stripe-as-processor, Connected Account Agreement,
+Tap to Pay/Apple terms, chargeback + negative-balance liability, indemnity,
+recovery-of-funds, reserves/limits/holds, prohibited use, risk actions, seller
+obligations. Wrote risk clauses **reasonable** (notice-where-practicable, "to
+the extent permitted by law", preserves non-excludable CGA/ACL rights) rather
+than the user's aggressive "sole discretion / debit any account" draft — that
+raw wording is the most likely thing to be struck as an **unfair contract term**
+in NZ/AU (AU has civil penalties since Nov 2023). Dropped the DIY bank-debit
+promise (no mechanism; recovery routes through Stripe + right to pursue the
+shortfall as a debt). **⚠ Still needs a NZ/AU commercial lawyer's UCT review
+before it's relied on** — but per user's instruction it is NOT labelled a draft
+anywhere; treat as live-pending-review.
+
+**Terms acceptance gate** (user: "users must accept before using the
+platform"):
+- Migration `supabase/migrations/20260723120000_terms_acceptance.sql` adds
+  `profiles.terms_accepted_at` + `terms_version`. **✅ applied to remote via
+  `supabase db push` 2026-07-23** (required because `app/(dashboard)/layout.tsx`
+  now `.select()`s `terms_version`).
+- `lib/legal.ts` holds `CURRENT_TERMS_VERSION = '2026-07'` (bump when
+  `/terms` changes materially → re-prompts users).
+- Signup (`app/signup/page.tsx`) now has a required "I agree to the Terms /
+  Privacy" checkbox; `app/api/auth/signup/route.ts` rejects without it and
+  stamps `terms_accepted_at`/`terms_version` on the owner profile.
+- Existing users: blocking overlay `components/legal/terms-gate.tsx` (no
+  dismiss) renders in the dashboard when `terms_version !== CURRENT_TERMS_VERSION`
+  (super-admins exempt so we can't lock ourselves out); "I agree" POSTs
+  `app/api/legal/accept/route.ts` then `router.refresh()`.
+
+Not exercised against a running build/DB this session (would need local
+Supabase + the migration applied) — verified via `npx tsc --noEmit` clean on
+both apps. No mobile rebuild yet: the greyed Tap to Pay button + acceptance
+work ships in the next APK/OTA; the server-side paid gate + caps + dispute
+webhook are web-side and live on deploy (after the migration).
+
+**Carry-forward for next session**: (1) apply the terms migration to remote
+before deploying; (2) get the ToS Section 4 lawyer-reviewed for NZ/AU UCT; (3)
+settle the Connect loss-liability config with Stripe; (4) confirm
+`STRIPE_WEBHOOK_SECRET_CONNECT` + optional `PLATFORM_ALERT_EMAIL` in Vercel or
+disputes won't be received.
+
 ## Session 2026-07-20 (Claude) — website SEO/GEO/AEO/AIO layer
 
 Added the structured-data + answer-engine layer the Instant Websites were

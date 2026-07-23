@@ -12,6 +12,10 @@ interface Props {
   jobId: string
   jobTitle: string
   projectAddress: string | null
+  // When controlled (open/onOpenChange supplied), the built-in trigger button is
+  // hidden — used when opened from the job's "Add" dropdown instead.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 interface SendResponse {
@@ -20,9 +24,12 @@ interface SendResponse {
   onPlatform: boolean
 }
 
-export function InviteSubcontractorModal({ jobId, jobTitle, projectAddress }: Props) {
+export function InviteSubcontractorModal({ jobId, jobTitle, projectAddress, open: controlledOpen, onOpenChange }: Props) {
   const { toast } = useToast()
-  const [open, setOpen] = useState(false)
+  const controlled = controlledOpen !== undefined
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlled ? controlledOpen : uncontrolledOpen
+  const setOpen = (v: boolean) => { if (controlled) onOpenChange?.(v); else setUncontrolledOpen(v) }
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     subcontractorEmail: '',
@@ -86,10 +93,12 @@ export function InviteSubcontractorModal({ jobId, jobTitle, projectAddress }: Pr
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <UserPlus className="h-4 w-4" />
-        Invite subcontractor
-      </Button>
+      {!controlled && (
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          <UserPlus className="h-4 w-4" />
+          Invite subcontractor
+        </Button>
+      )}
 
       <Dialog open={open} onClose={() => { setOpen(false); resetForm() }} title="Invite subcontractor">
         <form onSubmit={handleSubmit} className="space-y-4">
