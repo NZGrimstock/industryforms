@@ -14,6 +14,8 @@ import {
   stopTracking,
   isTracking,
   requestPermissions,
+  hasLocationDisclosureConsent,
+  setLocationDisclosureConsent,
   TRIP_FOLLOWUP_KEY,
   AUTO_CHECKIN_NOTICE_KEY,
   TRADING_HOURS_KEY,
@@ -27,6 +29,7 @@ import {
 import { useTimezone } from '@/lib/profile-context'
 import { formatTime as formatTimeTz, formatDate as formatDateTz } from '@/lib/datetime'
 import { TimeEntryEditModal, type EditableTimeEntry } from '@/components/timesheets/TimeEntryEditModal'
+import { LocationDisclosureModal } from '@/components/LocationDisclosureModal'
 
 const ACTIVE_JOB_KEY = 'TRADIEE_ACTIVE_JOB'
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -85,6 +88,8 @@ export default function TimesheetsScreen() {
   const [allocJobSearch, setAllocJobSearch] = useState('')
   const [tripFollowup, setTripFollowup] = useState<TripFollowup | null>(null)
   const [showStartTimer, setShowStartTimer] = useState(false)
+  const [showLocationDisclosure, setShowLocationDisclosure] = useState(false)
+  const [pendingLocationAction, setPendingLocationAction] = useState<'toggle' | 'schedule' | null>(null)
   const [timerJob, setTimerJob] = useState<Job | null>(null)
   const [timerJobSearch, setTimerJobSearch] = useState('')
   const [startingTimer, setStartingTimer] = useState(false)
@@ -192,17 +197,42 @@ export default function TimesheetsScreen() {
         Alert.alert('Trip not saved yet', 'We could not save the active trip, so tracking is staying on to avoid losing this logbook entry. Check your connection and try again.')
       }
     } else {
-      const ok = await requestPermissions()
-      if (!ok) { Alert.alert('Permission required', 'Location permission is needed to auto-track travel.'); return }
-      await startTracking()
-      setTracking(true)
+      // Google Play prominent disclosure must precede the background-location
+      // request. Show it the first time; once accepted we go straight to the
+      // OS permission prompt.
+      if (!(await hasLocationDisclosureConsent())) { setPendingLocationAction('toggle'); setShowLocationDisclosure(true); return }
+      await enableTracking()
     }
+  }
+
+  async function enableTracking() {
+    const ok = await requestPermissions()
+    if (!ok) { Alert.alert('Permission required', 'Location permission is needed to auto-track travel.'); return }
+    await startTracking()
+    setTracking(true)
+  }
+
+  async function acceptLocationDisclosure() {
+    setShowLocationDisclosure(false)
+    await setLocationDisclosureConsent()
+    if (pendingLocationAction === 'schedule') await syncTrackingToSchedule().then(setTracking)
+    else await enableTracking()
+    setPendingLocationAction(null)
   }
 
   async function saveTradingHours(hours: TradingHours) {
     setSavingTradingHours(true)
     await AsyncStorage.setItem(TRADING_HOURS_KEY, JSON.stringify(hours))
     setTradingHours(hours)
+    // Enabling scheduled auto-tracking also drives background location, so it
+    // needs the prominent disclosure before it can start.
+    if (hours.enabled && !(await hasLocationDisclosureConsent())) {
+      setSavingTradingHours(false)
+      setShowTradingHours(false)
+      setPendingLocationAction('schedule')
+      setShowLocationDisclosure(true)
+      return
+    }
     await syncTrackingToSchedule().then(setTracking)
     setSavingTradingHours(false)
     setShowTradingHours(false)
@@ -659,6 +689,12 @@ export default function TimesheetsScreen() {
         companyId={companyId}
         onClose={() => setEditingEntry(null)}
         onSaved={() => { setEditingEntry(null); fetchAll() }}
+      />
+
+      <LocationDisclosureModal
+        visible={showLocationDisclosure}
+        onAllow={acceptLocationDisclosure}
+        onDeny={() => setShowLocationDisclosure(false)}
       />
 
       {/* Allocate travel modal */}

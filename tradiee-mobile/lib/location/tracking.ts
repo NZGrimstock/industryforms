@@ -619,7 +619,24 @@ TaskManager.defineTask(LOCATION_TASK, async ({ data, error }: any) => {
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
+// Google Play Prominent Disclosure gate. We must show an in-app disclosure and
+// get affirmative consent BEFORE requesting background location (the OS prompt
+// alone doesn't satisfy the policy). The UI sets this flag only after the user
+// taps "Allow" on the disclosure; requestPermissions refuses to ask for
+// background location until it's set.
+export const LOCATION_DISCLOSURE_KEY = 'location_bg_disclosure_accepted'
+
+export async function hasLocationDisclosureConsent(): Promise<boolean> {
+  return (await AsyncStorage.getItem(LOCATION_DISCLOSURE_KEY)) === 'true'
+}
+
+export async function setLocationDisclosureConsent(): Promise<void> {
+  await AsyncStorage.setItem(LOCATION_DISCLOSURE_KEY, 'true')
+}
+
 export async function requestPermissions(): Promise<boolean> {
+  // Never request background location without the prominent-disclosure consent.
+  if (!(await hasLocationDisclosureConsent())) return false
   const { status: fg } = await Location.requestForegroundPermissionsAsync()
   if (fg !== 'granted') return false
   const { status: bg } = await Location.requestBackgroundPermissionsAsync()
