@@ -25,6 +25,33 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
+## Session 2026-07-24 (Claude) — Google Play compliance: privacy policy + background-location prominent disclosure
+
+**Play rejection (Missing Prominent Disclosure)**: Google rejected the app —
+`BACKGROUND_LOCATION` was requested with no in-app prominent disclosure (the OS
+prompt + privacy policy alone don't satisfy the User Data policy). Fixed:
+- New `tradiee-mobile/components/LocationDisclosureModal.tsx` — in-app modal
+  naming the data (location, **"even when the app is closed or not in use"**),
+  purpose (vehicle logbook + job map), with an affirmative **Allow** / Not now.
+- `lib/location/tracking.ts`: `requestPermissions()` now **hard-refuses**
+  background location until a stored consent flag (`LOCATION_DISCLOSURE_KEY`) is
+  set — so neither the manual toggle nor the trading-hours auto-track path can
+  reach the background request without the disclosure first. Helpers
+  `hasLocationDisclosureConsent()` / `setLocationDisclosureConsent()`.
+- `app/timesheets.tsx`: toggle and "save trading hours" both show the disclosure
+  first (pending-action state resumes the right action on Allow).
+- `tsc` clean. **User must `eas build --platform android --profile production`
+  (versionCode auto-increments via `appVersionSource: remote` + `autoIncrement`),
+  upload, and resubmit for review** — no appeal needed, this is the required fix.
+
+**Privacy policy pass** (`tradiee-app/app/privacy/page.tsx`, deployed): added an
+**AI Features** section (OpenAI/Anthropic, "not used to train their models"),
+expanded payments for Tap to Pay/Stripe customer-card metadata, disclosed
+**background** location, added photos/signatures + voice + named sub-processors.
+Also produced a Data safety form reconciliation checklist for the user (not in
+repo). Open item: privacy contact is `privacy@industryforms.co.nz` vs the
+`industryforms.app` used elsewhere — flagged, not changed.
+
 ## Session 2026-07-23 (Claude, pt.3) — tidy job & invoice action buttons into dropdowns
 
 Consolidated the sprawling, status-dependent action buttons on the job- and
