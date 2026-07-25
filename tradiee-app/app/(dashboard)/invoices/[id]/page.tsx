@@ -4,7 +4,6 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
-import { discountLabel } from '@/lib/pricing'
 import { InvoiceDetailClient } from './client'
 import { RecurringInvoiceCard } from './recurring-card'
 import { SaveInvoiceTemplateButton } from './save-template'
@@ -13,6 +12,7 @@ import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { RevertToJobButton } from '@/components/invoices/revert-to-job-button'
+import { InvoiceLinesProvider, InvoiceLinesCard, type InvoiceLine } from '@/components/invoices/invoice-lines'
 import { Mail } from 'lucide-react'
 import Link from 'next/link'
 
@@ -64,6 +64,18 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   return (
     <>
       <Header title={invoice.invoice_number} profile={profile} />
+      <InvoiceLinesProvider
+        initialLines={lines as unknown as InvoiceLine[]}
+        initialTotals={{
+          subtotal: Number(invoice.subtotal),
+          discount_amount: Number(invoice.discount_amount),
+          discount_type: invoice.discount_type,
+          discount_value: Number(invoice.discount_value),
+          gst_amount: Number(invoice.gst_amount),
+          total: Number(invoice.total),
+          amount_paid: Number(invoice.amount_paid),
+        }}
+      >
       <div className="p-6 space-y-6 max-w-4xl">
         <div className="flex flex-wrap items-start gap-4 justify-between">
           <div>
@@ -105,66 +117,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         </div>
 
         {/* Line items */}
-        <Card className="overflow-hidden">
-          {lines.length === 0 ? (
-            <CardContent className="py-8 text-center text-sm text-gray-400">No line items — add them below</CardContent>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-400">
-                  <th className="text-left px-6 py-2 font-medium">Description</th>
-                  <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
-                  <th className="text-right px-3 py-2 font-medium w-28">Unit price</th>
-                  <th className="text-right px-3 py-2 font-medium w-20">Disc.</th>
-                  <th className="text-right px-6 py-2 font-medium w-28">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map(l => (
-                  <tr key={l.id} className="border-b border-gray-50 last:border-0">
-                    <td className="px-6 py-3 text-gray-700">{l.description}</td>
-                    <td className="px-3 py-3 text-right text-gray-500">{l.quantity} {l.unit}</td>
-                    <td className="px-3 py-3 text-right text-gray-500">{formatCurrency(l.unit_price)}</td>
-                    <td className="px-3 py-3 text-right text-gray-400">{discountLabel(l.discount_type, Number(l.discount_value)) || '—'}</td>
-                    <td className="px-6 py-3 text-right font-medium text-gray-900">{formatCurrency(l.line_total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t border-gray-100">
-                <tr>
-                  <td colSpan={4} className="px-6 py-3 text-right text-sm text-gray-600">Subtotal</td>
-                  <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(invoice.subtotal)}</td>
-                </tr>
-                {Number(invoice.discount_amount) > 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-2 text-right text-sm text-green-600">Discount{invoice.discount_type === 'percent' ? ` (${Number(invoice.discount_value)}%)` : ''}</td>
-                    <td className="px-6 py-2 text-right text-sm text-green-600">−{formatCurrency(invoice.discount_amount)}</td>
-                  </tr>
-                )}
-                <tr>
-                  <td colSpan={4} className="px-6 py-2 text-right text-sm text-gray-600">GST</td>
-                  <td className="px-6 py-2 text-right text-sm font-medium text-gray-900">{formatCurrency(invoice.gst_amount)}</td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <td colSpan={4} className="px-6 py-3 text-right font-semibold text-gray-900">Total</td>
-                  <td className="px-6 py-3 text-right font-bold text-gray-900 text-base">{formatCurrency(invoice.total)}</td>
-                </tr>
-                {invoice.amount_paid > 0 && (
-                  <>
-                    <tr>
-                      <td colSpan={4} className="px-6 py-2 text-right text-sm text-green-600">Paid</td>
-                      <td className="px-6 py-2 text-right text-sm text-green-600">-{formatCurrency(invoice.amount_paid)}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={4} className="px-6 py-2 text-right font-semibold text-gray-900">Balance due</td>
-                      <td className="px-6 py-2 text-right font-bold text-gray-900">{formatCurrency(invoice.total - invoice.amount_paid)}</td>
-                    </tr>
-                  </>
-                )}
-              </tfoot>
-            </table>
-          )}
-        </Card>
+        <InvoiceLinesCard />
 
         {/* Recurring */}
         <RecurringInvoiceCard
@@ -204,6 +157,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
       </div>
+      </InvoiceLinesProvider>
     </>
   )
 }
