@@ -25,6 +25,45 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
+## Session 2026-07-26 (Claude) — Supabase migrated Singapore → Sydney
+
+Moved the database from `cfltbpwrojtlpkjvresd` (ap-southeast-1, Singapore) to
+**`quidcdrnzjwarrqdpyao` (ap-southeast-2, Sydney)** to cut round-trip latency for
+NZ/AU users. Test data only, so no maintenance window was needed.
+
+**What was migrated** — schema via `supabase db push` (all 83 migrations applied
+clean), then data via `pg_dump`/`psql` (Docker, since no local Postgres tools).
+Storage schema was **excluded**: 2 bucket rows, **0 objects** (files live in
+Cloudflare R2), and the buckets already existed on Sydney from the migrations.
+**Reconciled 87/87 tables, 1597 rows expected = 1597 loaded.** Verified after:
+6 auth users with password hashes intact (so existing passwords still work),
+6 profiles all linked to auth users, 0 orphans, RLS enabled on all 65 public
+tables, and real data served over REST with both anon and service-role keys.
+
+**Two gotchas worth remembering:**
+1. **New Supabase projects reject IPv4 on the `db.<ref>.supabase.co` direct
+   host** — you must use the pooler (`postgres.<ref>@aws-0-ap-southeast-2.pooler.supabase.com:5432`).
+   The direct host answers and then fails auth, which looks exactly like a wrong
+   password. `supabase link` fetches the correct pooler URL from the API.
+2. **A `$` in the DB password gets shell-expanded** when sourcing an env file —
+   `.migration.env` values are now single-quoted. Symptom is identical to a wrong
+   password. Verify credentials by reading the file with Python, not bash.
+
+**Config updated**: `tradiee-app/.env.local` (URL + publishable + secret key;
+backup at `.env.local.bak-presydney`) and `tradiee-mobile/eas.json` (both build
+profiles). Dumps are in `.migration-work/` (gitignored — contains auth password
+hashes; delete once Sydney is confirmed good).
+
+**⚠ Still outstanding (dashboard/CLI actions, not code):**
+- **Vercel** env vars + redeploy — until then production web still uses Singapore.
+- **PowerSync** — repoint Postgres connection at Sydney (direct/pooler, needs
+  replication rights) and set JWKS to
+  `https://quidcdrnzjwarrqdpyao.supabase.co/auth/v1/.well-known/jwks.json`.
+  Until done, mobile sync is still bound to Singapore.
+- **Mobile OTA** (`eas update --branch production`) so installed apps repoint;
+  the committed `eas.json` only affects *new* builds.
+- **Do not delete the Singapore project** until all of the above are verified.
+
 ## Session 2026-07-24 (Claude) — Google Play compliance: privacy policy + background-location prominent disclosure
 
 **Play rejection (Missing Prominent Disclosure)**: Google rejected the app —
