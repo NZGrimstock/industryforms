@@ -18,8 +18,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://cfltbpwrojtlpkjvresd.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_r6oE2gTIFjwpQ5ZfYUglng_-HSytJOY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://quidcdrnzjwarrqdpyao.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_7hMgY07A63FFLqHHhK6zPg_41xJicda",
         "EXPO_PUBLIC_POWERSYNC_URL": "https://6a33b406deeddd0df605d498.powersync.journeyapps.com",
         "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app",
@@ -33,8 +33,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://cfltbpwrojtlpkjvresd.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_r6oE2gTIFjwpQ5ZfYUglng_-HSytJOY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://quidcdrnzjwarrqdpyao.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_7hMgY07A63FFLqHHhK6zPg_41xJicda",
         "EXPO_PUBLIC_POWERSYNC_URL": "https://6a33b406deeddd0df605d498.powersync.journeyapps.com",
         "EXPO_PUBLIC_API_URL": "https://app.industryforms.app",
         "EXPO_PUBLIC_R2_PUBLIC_BASE_URL": "https://cdn.industryforms.app",

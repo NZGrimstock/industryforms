@@ -69,3 +69,7 @@ capable-droplet-*.json
 # Store build artifacts
 *.aab
 tradiee-mobile/store-artifacts/
+
+# Local-only DB migration credentials
+.migration.env
+.migration-work/
