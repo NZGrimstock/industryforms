@@ -73,3 +73,4 @@ tradiee-mobile/store-artifacts/
 # Local-only DB migration credentials
 .migration.env
 .migration-work/
+tradiee-mobile/.eas-update.env
