@@ -4,6 +4,31 @@ import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
+// Tells the business admin console (admin.industryforms.co.nz) about a new trial signup
+// so sales/support can see and follow up with them well before day 28, when Stripe would
+// otherwise be the first and only signal. Never allowed to fail the signup itself — the
+// caller fires this without awaiting and swallows any error.
+async function notifyAdminConsole(input: { fullName: string; email: string; phone?: string; companyName: string }) {
+  const url = process.env.ADMIN_CONSOLE_URL
+  const ingestKey = process.env.ADMIN_CONSOLE_INGEST_KEY
+  if (!url || !ingestKey) return // not configured (e.g. local dev) — skip silently
+
+  const response = await fetch(`${url.replace(/\/$/, '')}/api/signup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      ingestKey,
+      name: input.fullName,
+      email: input.email,
+      phone: input.phone || undefined,
+      company: input.companyName,
+      source: 'Trial signup',
+    }),
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!response.ok) throw new Error(`admin console responded ${response.status}`)
+}
+
 export async function POST(request: Request) {
   try {
     const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms } = await request.json()
@@ -93,6 +118,10 @@ export async function POST(request: Request) {
     }
 
     console.log(`[signup] ${companyName} (${company.id}) — trade: ${tradeType || 'not specified'}`)
+
+    notifyAdminConsole({ fullName, email, phone, companyName }).catch((err) =>
+      console.error('[signup] admin console notify failed (non-fatal):', err)
+    )
 
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
