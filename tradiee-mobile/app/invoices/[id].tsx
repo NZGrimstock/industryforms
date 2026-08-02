@@ -142,6 +142,18 @@ export default function InvoiceDetailScreen() {
   )
   const invoice = invoices?.[0]
 
+  // Distinguishes "still syncing" from "genuinely doesn't exist" when the row
+  // isn't in the local DB yet (see the !invoice render branch below).
+  const [serverExists, setServerExists] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (invoice) { setServerExists(true); return }
+    if (isLoading) return
+    let cancelled = false
+    supabase.from('invoices').select('id').eq('id', id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setServerExists(!!data) })
+    return () => { cancelled = true }
+  }, [invoice, isLoading, id])
+
   const { data: lineItems, refresh: refreshLineItems } = useQuery<LineItem>(
     `SELECT id, description, quantity, unit, unit_price, line_total, sort_order
      FROM invoice_line_items
@@ -349,6 +361,26 @@ export default function InvoiceDetailScreen() {
   }
 
   if (!invoice) {
+    // Not in the local PowerSync DB (yet). Invoices are created server-side via
+    // /api/invoices, so a freshly-created one exists in Supabase before it syncs
+    // down — showing "not found" here was just a race. Confirm against the server
+    // and wait for sync instead; useQuery is reactive so the screen fills in by
+    // itself once the row arrives.
+    if (serverExists === null) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color="#f97316" />
+        </View>
+      )
+    }
+    if (serverExists) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
+          <ActivityIndicator color="#f97316" />
+          <Text style={{ color: '#6b7280', textAlign: 'center' }}>Syncing invoice…</Text>
+        </View>
+      )
+    }
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: '#6b7280' }}>Invoice not found</Text>

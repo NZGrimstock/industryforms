@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView, Linking,
 } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '@/lib/supabase'
@@ -14,6 +14,7 @@ export default function SignupScreen() {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
   function set(k: keyof typeof form, v: string) {
     setForm(f => ({ ...f, [k]: v }))
@@ -29,12 +30,17 @@ export default function SignupScreen() {
       Alert.alert('Password too short', 'Password must be at least 8 characters.')
       return
     }
+    if (!agreed) {
+      Alert.alert('Accept the terms', 'Please accept the Terms of Service to continue.')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch(`${API_URL}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        // acceptedTerms is required by the API — signup 400s without it.
+        body: JSON.stringify({ ...form, acceptedTerms: agreed }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Signup failed')
@@ -101,7 +107,26 @@ export default function SignupScreen() {
             ))}
           </View>
 
-          <TouchableOpacity style={[styles.button, loading && { opacity: 0.7 }]} onPress={handleSignup} disabled={loading}>
+          <TouchableOpacity
+            style={styles.termsRow}
+            onPress={() => setAgreed(v => !v)}
+            activeOpacity={0.7}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreed }}
+            accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
+          >
+            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+              {agreed && <Text style={styles.checkboxTick}>✓</Text>}
+            </View>
+            <Text style={styles.termsText}>
+              I agree to the{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL(`${API_URL}/terms`)}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={styles.termsLink} onPress={() => Linking.openURL(`${API_URL}/privacy`)}>Privacy Policy</Text>.
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.button, (loading || !agreed) && { opacity: 0.5 }]} onPress={handleSignup} disabled={loading || !agreed}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create account</Text>}
           </TouchableOpacity>
 
@@ -135,6 +160,12 @@ const styles = StyleSheet.create({
   countryBtnActive: { borderColor: '#f97316', backgroundColor: '#fff7ed' },
   countryBtnText: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
   countryBtnTextActive: { color: '#f97316', fontWeight: '700' },
+  termsRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 18, gap: 10 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#d1d5db', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  checkboxChecked: { backgroundColor: '#f97316', borderColor: '#f97316' },
+  checkboxTick: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  termsText: { flex: 1, fontSize: 13, lineHeight: 19, color: '#6b7280' },
+  termsLink: { color: '#f97316', fontWeight: '600', textDecorationLine: 'underline' },
   button: { backgroundColor: '#f97316', borderRadius: 12, padding: 15, alignItems: 'center', marginBottom: 16 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   loginLink: { alignItems: 'center' },

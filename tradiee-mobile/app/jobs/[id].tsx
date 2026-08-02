@@ -707,55 +707,6 @@ export default function JobDetailScreen() {
     }
   }
 
-  function promptCompleteAndInvoice() {
-    if ((photos ?? []).length === 0) {
-      Alert.alert(
-        'No photos yet',
-        'Would you like to add photos before completing?',
-        [
-          { text: 'Add photos', onPress: promptPhotoSource },
-          { text: 'Skip & continue', onPress: () => completeAndInvoice() },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      )
-    } else {
-      completeAndInvoice()
-    }
-  }
-
-  async function completeAndInvoice() {
-    setCompleting(true)
-    try {
-      const doneKey = (statuses.find(s => s.is_terminal && s.key !== 'cancelled') ?? statuses.find(s => s.key === 'completed'))?.key
-      if (doneKey) {
-        const { error } = await supabase.from('jobs').update({ status: doneKey }).eq('id', id)
-        if (error) throw new Error(error.message)
-      }
-      if (activeJob) await stopJob()
-      refreshJob?.()
-
-      // Create draft invoice via API
-      const { data: { session } } = await supabase.auth.getSession()
-      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
-      const res = await fetch(`${apiBase}/api/invoices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ job_id: id }),
-      })
-      const inv = await res.json()
-      if (!res.ok) throw new Error(inv.error ?? 'Could not create invoice')
-
-      hapticSuccess()
-      Alert.alert('Invoice created', `Draft invoice ${inv.invoice_number} created.`, [
-        { text: 'View invoice', onPress: () => router.push(`/invoices/${inv.id}`) },
-        { text: 'OK' },
-      ])
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not complete job')
-    } finally {
-      setCompleting(false)
-    }
-  }
 
   async function createInvoice(force = false) {
     const payload: Record<string, unknown> = { job_id: id, force }
@@ -905,20 +856,25 @@ export default function JobDetailScreen() {
             <Text style={styles.metaValue}>{formatDate(job.created_at)}</Text>
           </View>
 
-          {doneStatus && !isDone && (
-            <View style={{ gap: 8, marginTop: 12 }}>
+          {/* Sign-off only applies while the job is still open, but Invoice stays
+              available after completion — invoicing no longer changes status, so
+              gating it on !isDone would strand anyone who signs off first. */}
+          <View style={{ gap: 8, marginTop: 12 }}>
+            {doneStatus && !isDone && (
               <TouchableOpacity style={styles.completeBtn} onPress={promptCompleteWithSignoff} activeOpacity={0.85}>
                 <Text style={styles.completeBtnText}>✓ Complete &amp; get sign-off</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.completeBtn, { backgroundColor: '#f97316' }]}
-                onPress={promptCompleteAndInvoice}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.completeBtnText}>✓ Complete &amp; Invoice</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+            )}
+            <TouchableOpacity
+              style={[styles.completeBtn, { backgroundColor: '#f97316' }]}
+              onPress={() => { hapticTap(); setShowInvoice(true) }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Create an invoice for this job"
+            >
+              <Text style={styles.completeBtnText}>Invoice</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Status stepper — visualises the lifecycle at a glance (finding #9) */}
@@ -1419,7 +1375,7 @@ export default function JobDetailScreen() {
           <TouchableOpacity activeOpacity={1} style={styles.picker}>
             <Text style={styles.pickerTitle}>Invoice this job</Text>
             <View style={styles.invModeRow}>
-              {([['full', 'Full'], ['actuals', 'Actuals'], ['deposit', 'Deposit'], ['progress', 'Progress']] as const).map(([mode, label]) => (
+              {([['full', 'Quoted'], ['actuals', 'Actuals'], ['deposit', 'Deposit'], ['progress', 'Progress']] as const).map(([mode, label]) => (
                 <TouchableOpacity
                   key={mode}
                   style={[styles.invModeBtn, invMode === mode && styles.invModeBtnActive]}
