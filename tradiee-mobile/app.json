@@ -12,7 +12,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/915226c0-d94f-4554-a829-a17fe93c5748"
+      "url": "https://u.expo.dev/915226c0-d94f-4554-a829-a17fe93c5748",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "splash": {
       "image": "./assets/splash-icon.png",
