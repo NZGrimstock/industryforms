@@ -25,6 +25,47 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
+## Session 2026-08-02 (Claude) — ⚠ PowerSync publication gap after the Sydney migration
+
+**Symptom**: invoices created on mobile showed "Invoice not found" (later an
+endless "Syncing invoice…"), while the same invoice appeared fine on web. Jobs
+synced normally, so PowerSync looked healthy.
+
+**Root cause**: the `powersync` **Postgres publication** on the new Sydney
+project was recreated with only 18 of the 23 tables the sync rules reference.
+**`profiles` was missing.** Every `admin_company` stream query JOINs `profiles`
+for the `role = 'owner' OR 'admin'` check, so with `profiles` unpublished the
+whole stream silently returned nothing — invoices, quotes, customers,
+enquiries, customer_messages all stopped syncing to mobile. `staff_jobs` kept
+working because it joins `job_assignees` (published) and has no role check,
+which is why *jobs* still synced and masked the real fault.
+
+**Fix**: added `profiles`, `enquiries`, `customer_messages`, `projects`,
+`project_stages` to the publication (18 → 23 tables).
+
+**⚠ This will recur on any future Supabase project move.** The publication is
+database-level state and is NOT recreated by `supabase db push`. New checked-in
+script **`supabase/powersync-publication.sql`** is idempotent and adds any
+missing table — run it after any migration/restore. Its table list is derived
+from `sync-rules.yaml` and must be updated when those rules change. Note the
+list includes tables that only appear in a **JOIN** (e.g. `profiles`), not just
+those in a `SELECT` — that's exactly the class of table that was missed.
+
+Also this session (all pushed, `tsc` clean, OTA `c25b4450` published):
+- **Invoice screen now falls back to reading from Supabase** when the row isn't
+  in the local PowerSync DB, instead of spinning forever. Kept as
+  belt-and-braces after the publication fix — it makes that screen resilient to
+  this whole class of failure. Deliberately NOT extended to other screens.
+- **Labour/sundries can no longer be added as job materials** (neither picker
+  filtered by `type`, so a PO raised from the job would try to order labour from
+  a supplier). Web + mobile pickers now exclude `labour`/`misc`, the mobile
+  PowerSync schema maps the `type` column so it can filter, and PO generation
+  filters defensively for rows created before the fix.
+- Two extra tables (`companies`, `job_statuses`) were briefly added to the
+  publication before I confirmed the sync rules don't reference them. Harmless
+  (unused tables just add a little WAL overhead) and left in place; the script's
+  list is the accurate 23.
+
 ## Session 2026-07-26 (Claude) — Supabase migrated Singapore → Sydney
 
 Moved the database from `cfltbpwrojtlpkjvresd` (ap-southeast-1, Singapore) to
