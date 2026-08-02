@@ -12,6 +12,7 @@ import { formatDateTime, formatCurrency } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { JobDetailClient } from './client'
 import { JobMaterials } from './materials'
+import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
 import { ProfitabilityBadge } from '@/components/ui/profitability-badge'
 import { SupplierInvoiceParser } from '@/components/ui/supplier-invoice-parser'
@@ -48,7 +49,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // result, so it all runs as one parallel wave instead of the previous
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
-    customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
+    customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
     jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
@@ -58,6 +59,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, subtotal').eq('job_id', id),
     supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
     supabase.from('job_materials').select('*').eq('job_id', id).order('created_at'),
+    supabase.from('purchase_orders').select('id, po_number, status').eq('job_id', id).order('po_number'),
     supabase.from('price_list_items').select('id, code, name, unit, sell_price, cost_price, type, quantity_on_hand').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('job_photos').select('id, storage_path, caption, created_at').eq('job_id', id).order('created_at'),
@@ -88,6 +90,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         })
     )
   }
+
+  const jobPurchaseOrders = purchaseOrdersRes.data ?? []
 
   const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
   const normalizedJobAssignees = (jobAssigneesRes.data ?? []).map(a => {
@@ -295,7 +299,24 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         {/* Materials */}
         <Card>
-          <CardHeader><CardTitle>Materials & parts</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>Materials &amp; parts</CardTitle>
+              <OrderMaterialsButton jobId={id} disabled={(materialsRes.data ?? []).length === 0} />
+            </div>
+            {jobPurchaseOrders.length > 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                Purchase orders:{' '}
+                {jobPurchaseOrders.map((po, i) => (
+                  <span key={po.id}>
+                    {i > 0 && ', '}
+                    <Link href={`/purchase-orders/${po.id}`} className="text-orange-600 hover:underline">{po.po_number}</Link>
+                    <span className="text-gray-400"> ({po.status})</span>
+                  </span>
+                ))}
+              </p>
+            )}
+          </CardHeader>
           <CardContent className="p-0">
             <JobMaterials
               jobId={id}

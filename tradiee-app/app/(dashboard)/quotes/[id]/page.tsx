@@ -60,6 +60,16 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
               {quote.expires_at && <> · Expires {formatDate(quote.expires_at)}</>}
             </p>
             {quote.sent_at && <p className="text-xs text-gray-400 mt-1">Sent {formatDateTime(quote.sent_at)}{quote.viewed_at && ` · Viewed ${formatDateTime(quote.viewed_at)}`}</p>}
+            {quote.signature_url && (
+              <div className="mt-3 inline-block rounded-lg border border-green-200 bg-green-50 p-3">
+                <p className="text-xs font-medium text-green-800">
+                  Signed by {quote.signed_by_name}
+                  {quote.signed_at && <span className="font-normal text-green-700"> · {formatDateTime(quote.signed_at)}</span>}
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={quote.signature_url} alt={`Signature of ${quote.signed_by_name ?? 'customer'}`} className="mt-1.5 h-16 bg-white rounded border border-green-100" />
+              </div>
+            )}
             {quote.converted_to_job_id && (
               <Link href={`/jobs/${quote.converted_to_job_id}`} className="text-xs text-green-600 hover:underline mt-1 block">
                 ✓ Converted to job
