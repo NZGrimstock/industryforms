@@ -60,7 +60,10 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
     supabase.from('job_materials').select('*').eq('job_id', id).order('created_at'),
     supabase.from('purchase_orders').select('id, po_number, status').eq('job_id', id).order('po_number'),
-    supabase.from('price_list_items').select('id, code, name, unit, sell_price, cost_price, type, quantity_on_hand').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
+    // Materials picker only — labour and sundries/misc are tracked via timesheets
+    // and invoice lines, and must never end up in job_materials (they'd then be
+    // ordered from a supplier on a PO).
+    supabase.from('price_list_items').select('id, code, name, unit, sell_price, cost_price, type, quantity_on_hand').eq('company_id', profile!.company_id).eq('is_active', true).not('type', 'in', '("labour","misc")').order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('job_photos').select('id, storage_path, caption, created_at').eq('job_id', id).order('created_at'),
     supabase.from('form_templates').select('id, name, fields').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),

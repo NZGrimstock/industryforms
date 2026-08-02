@@ -21,8 +21,14 @@ type Material = {
   unit: string
   unit_cost: number
   price_list_item_id: string | null
-  price_list_items: { supplier_id: string | null } | null
+  price_list_items: { supplier_id: string | null; type: string | null } | null
 }
+
+// Labour and sundries are never ordered from a supplier. The pickers now
+// exclude them, but rows added before that fix (or via import) can still be
+// labour, so filter defensively here too. Ad-hoc rows with no price-list link
+// have no type and are treated as materials.
+const NON_ORDERABLE = new Set(['labour', 'misc'])
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -54,10 +60,11 @@ export async function POST(req: NextRequest) {
 
   const { data: rawMaterials } = await service
     .from('job_materials')
-    .select('description, quantity, unit, unit_cost, price_list_item_id, price_list_items(supplier_id)')
+    .select('description, quantity, unit, unit_cost, price_list_item_id, price_list_items(supplier_id, type)')
     .eq('job_id', job.id)
     .order('created_at')
-  const materials = (rawMaterials ?? []) as unknown as Material[]
+  const materials = ((rawMaterials ?? []) as unknown as Material[])
+    .filter(m => !NON_ORDERABLE.has((m.price_list_items?.type ?? '').toLowerCase()))
   if (materials.length === 0) {
     return NextResponse.json({ error: 'This job has no materials to order.' }, { status: 400 })
   }

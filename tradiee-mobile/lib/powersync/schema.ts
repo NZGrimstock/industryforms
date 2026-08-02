@@ -107,6 +107,8 @@ const price_list_items = new Table({
   sell_price: column.real,
   cost_price: column.real,
   category: column.text,
+  // Needed so the materials picker can exclude labour/sundries.
+  type: column.text,
   is_active: column.integer,
 })
 

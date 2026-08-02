@@ -347,9 +347,12 @@ export default function JobDetailScreen() {
   )
 
   const { data: priceItems } = useQuery<PriceListLookupItem>(
+    // Materials only — labour and sundries must never become job_materials rows,
+    // or they'd be ordered from a supplier when raising POs from the job.
     `SELECT id, name, unit, sell_price, cost_price, category
      FROM price_list_items
      WHERE company_id = ? AND is_active = 1
+       AND (type IS NULL OR type NOT IN ('labour', 'misc'))
      ORDER BY name ASC`,
     [companyId ?? '']
   )

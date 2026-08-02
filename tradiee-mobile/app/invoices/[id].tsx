@@ -140,27 +140,51 @@ export default function InvoiceDetailScreen() {
      WHERE i.id = ?`,
     [id]
   )
-  const invoice = invoices?.[0]
+  const localInvoice = invoices?.[0]
 
-  // Distinguishes "still syncing" from "genuinely doesn't exist" when the row
-  // isn't in the local DB yet (see the !invoice render branch below).
-  const [serverExists, setServerExists] = useState<boolean | null>(null)
+  // PowerSync is the fast path, but it can't be the only path: invoices are
+  // created server-side via /api/invoices, and if replication is lagging (or
+  // down) the row may never reach the local DB. Rather than spin forever, fetch
+  // the invoice straight from Supabase and render that. `null` = confirmed
+  // absent, `undefined` = still checking.
+  const [remoteInvoice, setRemoteInvoice] = useState<Invoice | null | undefined>(undefined)
+  const [remoteLines, setRemoteLines] = useState<LineItem[]>([])
   useEffect(() => {
-    if (invoice) { setServerExists(true); return }
-    if (isLoading) return
+    if (localInvoice || isLoading) return
     let cancelled = false
-    supabase.from('invoices').select('id').eq('id', id).maybeSingle()
-      .then(({ data }) => { if (!cancelled) setServerExists(!!data) })
+    ;(async () => {
+      const { data } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, status, subtotal, gst_amount, total, amount_paid, due_date, invoice_date, notes, paid_at, discount_type, discount_value, discount_amount, is_recurring, recurrence_rule, recurrence_next, recurrence_end, jobs(title), customers(name)')
+        .eq('id', id)
+        .maybeSingle()
+      if (cancelled) return
+      if (!data) { setRemoteInvoice(null); return }
+      const job = data.jobs as unknown as { title: string } | null
+      const cust = data.customers as unknown as { name: string } | null
+      setRemoteInvoice({ ...data, job_title: job?.title ?? null, customer_name: cust?.name ?? null } as unknown as Invoice)
+      const { data: lines } = await supabase
+        .from('invoice_line_items')
+        .select('id, description, quantity, unit, unit_price, line_total, sort_order')
+        .eq('invoice_id', id)
+        .order('sort_order')
+      if (!cancelled) setRemoteLines((lines ?? []) as LineItem[])
+    })()
     return () => { cancelled = true }
-  }, [invoice, isLoading, id])
+  }, [localInvoice, isLoading, id])
 
-  const { data: lineItems, refresh: refreshLineItems } = useQuery<LineItem>(
+  const invoice = localInvoice ?? remoteInvoice ?? undefined
+
+  const { data: localLineItems, refresh: refreshLineItems } = useQuery<LineItem>(
     `SELECT id, description, quantity, unit, unit_price, line_total, sort_order
      FROM invoice_line_items
      WHERE invoice_id = ?
      ORDER BY sort_order ASC`,
     [id]
   )
+  // When the invoice itself came from Supabase (not synced locally), its lines
+  // won't be in the local DB either — use the ones fetched alongside it.
+  const lineItems = localInvoice ? localLineItems : remoteLines
 
   // Recompute subtotal/gst/total from current line items + the invoice's
   // document-level discount. Mirrors tradiee-app's recompute() but flattened
@@ -361,23 +385,12 @@ export default function InvoiceDetailScreen() {
   }
 
   if (!invoice) {
-    // Not in the local PowerSync DB (yet). Invoices are created server-side via
-    // /api/invoices, so a freshly-created one exists in Supabase before it syncs
-    // down — showing "not found" here was just a race. Confirm against the server
-    // and wait for sync instead; useQuery is reactive so the screen fills in by
-    // itself once the row arrives.
-    if (serverExists === null) {
+    // remoteInvoice === undefined means the Supabase lookup is still in flight;
+    // null means it genuinely doesn't exist anywhere.
+    if (remoteInvoice === undefined) {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color="#f97316" />
-        </View>
-      )
-    }
-    if (serverExists) {
-      return (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
-          <ActivityIndicator color="#f97316" />
-          <Text style={{ color: '#6b7280', textAlign: 'center' }}>Syncing invoice…</Text>
         </View>
       )
     }
