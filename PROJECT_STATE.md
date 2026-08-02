@@ -1,10 +1,35 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-07-20. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-02. Catch-up doc for a fresh session. Read this first.
+Start with **Current app/release state** below — it has the live facts (store,
+signing, build process, database) that the dated session logs can contradict.
+
+## Action items (needs a human — not code)
+
+- **Promote v7 from Internal testing → Production** in Play Console. A
+  versionCode can only be uploaded once app-wide, so this is *Promote release*,
+  not a re-upload.
+- **Back up `tradiee-mobile/@grimstock__industryforms.jks`** (+ its password,
+  currently only in `.migration.env`/EAS). Losing the upload key again means
+  another Play key-reset round trip.
+- **Delete the Singapore Supabase project** once fully satisfied with Sydney,
+  and delete `.migration-work/` locally (it contains auth password hashes).
+- **Lawyer review of ToS Section 4** (payment/merchant terms) for the NZ/AU
+  unfair-contract-terms regime — live but unreviewed.
+- **Settle the Stripe Connect loss-liability config** (see 2026-07-23 entry);
+  bigger lever than any ToS wording.
+- Confirm `STRIPE_WEBHOOK_SECRET_CONNECT` (+ optional `PLATFORM_ALERT_EMAIL`)
+  are set in Vercel, or connected-account disputes never arrive.
 
 ## Open follow-ups (carry-forward — nothing blocking)
 
 Optional next steps flagged during recent sessions; none are in-progress:
+- **Mobile screens still PowerSync-only**: the invoice *detail* screen falls
+  back to Supabase when a row hasn't synced; nothing else does. Deliberate — the
+  real fix was the publication bug, not more fallbacks. Revisit only if sync
+  proves flaky again.
+- **`.easignore` doesn't trim enough**: EAS uploads a ~704 MB archive (~12 min).
+  Only matters if you go back to cloud builds; local Gradle builds are unaffected.
 - **Local-pack GEO**: `companies` has no lat/lng, so website JSON-LD includes
   address + areaServed but not precise `geo` coordinates. Adding a geocoded
   lat/lng field (on address save) is the upgrade for max local-pack strength.
@@ -25,6 +50,38 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
+## Current app/release state (as at 2026-08-02)
+
+- **Android is LIVE on Google Play** (`com.industryforms`). Upload key was reset
+  (old key lost); Play's registered upload cert is now SHA1
+  `62:C5:84:16:A5:26:8D:58:3F:88:CE:76:7F:3C:A6:23:4D:91:B4:FC`, which is the
+  keystore EAS already holds — so EAS/local builds sign correctly with no extra
+  setup. Keystore also downloaded to `tradiee-mobile/@grimstock__industryforms.jks`
+  (gitignored) — **back this up**, losing it again means another key reset.
+- **Builds are done LOCALLY with Gradle** (`cd android && ./gradlew.bat
+  bundleRelease` for AAB, `assembleRelease` for APK), signed via
+  `android/keystore.properties` (gitignored). versionCode lives in
+  `android/app/build.gradle` and must be bumped manually — EAS's remote
+  auto-increment does not apply to local builds. **v7 is uploaded to Internal
+  testing.** A versionCode can only be uploaded once app-wide, so moving it to
+  production is **Promote release**, not a re-upload.
+- **⚠ EAS Build injects the update channel; raw Gradle does NOT.** The first
+  local build shipped with `EXPO_UPDATE_URL` but no channel, so it could never
+  receive an OTA — both updates published against it were silently unreachable.
+  Fixed by declaring `updates.requestHeaders.expo-channel-name = "production"`
+  in `app.json` (survives prebuild) plus the matching
+  `expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY` meta-data in
+  `AndroidManifest.xml`. **Verify the channel is in the manifest on every local
+  build** (`bundletool dump manifest`), not just signing/package/versionCode.
+- **Verifying JS inside a build**: the bundle is Hermes bytecode, and Hermes
+  stores any string containing a non-ASCII char (e.g. `…`) as **UTF-16**. Search
+  both `utf-8` and `utf-16-le` or you'll get false "missing" results.
+- **Database is Sydney** (`quidcdrnzjwarrqdpyao`, ap-southeast-2). Singapore
+  (`cfltbpwrojtlpkjvresd`) was still alive as a rollback at time of writing —
+  delete once fully satisfied. Local creds for both are in `.migration.env`
+  (gitignored); note new Supabase projects reject IPv4 on the `db.<ref>` direct
+  host, so use the **pooler** host.
+
 ## Session 2026-08-02 (Claude) — ⚠ PowerSync publication gap after the Sydney migration
 
 **Symptom**: invoices created on mobile showed "Invoice not found" (later an
@@ -40,16 +97,32 @@ enquiries, customer_messages all stopped syncing to mobile. `staff_jobs` kept
 working because it joins `job_assignees` (published) and has no role check,
 which is why *jobs* still synced and masked the real fault.
 
-**Fix**: added `profiles`, `enquiries`, `customer_messages`, `projects`,
-`project_stages` to the publication (18 → 23 tables).
+**Fix — TWO steps, and the second is the one that's easy to miss:**
+1. Added `profiles`, `enquiries`, `customer_messages`, `projects`,
+   `project_stages` to the publication (18 → 23 tables). **This alone did not
+   fix it.**
+2. **Adding a table to a publication does NOT backfill its existing rows** —
+   logical replication only streams changes from that point on, so PowerSync
+   held an *empty* copy of `profiles` and the JOIN still matched nothing. Forced
+   the rows into the WAL with a no-op `update profiles set id = id`, run with
+   `session_replication_role = 'replica'` so the `updated_at` triggers didn't
+   falsely bump timestamps (verified: 0 rows had `updated_at` changed).
+   **Confirmed working** — customers, quotes and invoices now sync to mobile.
+
+**Diagnostic trap worth remembering**: invoices started appearing on mobile
+*before* the real fix, which looked like success. That was only the Supabase
+fallback on the invoice detail screen. **Customers/quotes were the honest
+signal** because they have no fallback. When checking whether sync is alive, use
+a screen with no fallback — e.g. the invoices *list*, not a single invoice.
 
 **⚠ This will recur on any future Supabase project move.** The publication is
 database-level state and is NOT recreated by `supabase db push`. New checked-in
-script **`supabase/powersync-publication.sql`** is idempotent and adds any
-missing table — run it after any migration/restore. Its table list is derived
-from `sync-rules.yaml` and must be updated when those rules change. Note the
-list includes tables that only appear in a **JOIN** (e.g. `profiles`), not just
-those in a `SELECT` — that's exactly the class of table that was missed.
+script **`supabase/powersync-publication.sql`** is idempotent, adds any missing
+table **and backfills only the ones it just added**. Run it after any
+migration/restore. Its table list is derived from `sync-rules.yaml` and must be
+updated when those rules change. Note the list includes tables that only appear
+in a **JOIN** (e.g. `profiles`), not just those in a `SELECT` — exactly the class
+of table that was missed.
 
 Also this session (all pushed, `tsc` clean, OTA `c25b4450` published):
 - **Invoice screen now falls back to reading from Supabase** when the row isn't
