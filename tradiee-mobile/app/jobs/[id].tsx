@@ -750,6 +750,21 @@ export default function JobDetailScreen() {
         return
       }
       if (!res.ok) throw new Error(inv.error ?? 'Could not create invoice')
+
+      // Billing the quoted total or the actuals means the work is finished, so
+      // the job is completed too. A deposit or progress claim is mid-job, so it
+      // deliberately leaves the status alone. Done only after the invoice
+      // succeeds — a failed or cancelled invoice must not complete the job.
+      if (invMode === 'full' || invMode === 'actuals') {
+        const doneKey = (statuses.find(s => s.is_terminal && s.key !== 'cancelled') ?? statuses.find(s => s.key === 'completed'))?.key
+        if (doneKey && job?.status !== doneKey) {
+          const { error: statusErr } = await supabase.from('jobs').update({ status: doneKey }).eq('id', id)
+          if (statusErr) Alert.alert('Invoice created', `The invoice was created, but the job status could not be updated: ${statusErr.message}`)
+        }
+        if (activeJob) await stopJob()
+        refreshJob?.()
+      }
+
       hapticSuccess()
       setShowInvoice(false)
       refreshInvoices?.()
