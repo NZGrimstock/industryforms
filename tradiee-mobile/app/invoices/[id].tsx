@@ -211,7 +211,7 @@ export default function InvoiceDetailScreen() {
 
   async function addLine() {
     if (!invoice || !newLine.description.trim()) return
-    if (invoice.status === 'paid') { Alert.alert('Invoice paid', 'Line items are locked on a paid invoice.'); return }
+    if (invoice.status !== 'draft') { Alert.alert('Invoice completed', 'Line items are locked once an invoice is no longer a draft.'); return }
     const qty = parseFloat(newLine.quantity) || 1
     const price = parseFloat(newLine.unit_price) || 0
     setSavingLine(true)
@@ -236,6 +236,7 @@ export default function InvoiceDetailScreen() {
   }
 
   function confirmDeleteLine(item: LineItem) {
+    if (invoice && invoice.status !== 'draft') { Alert.alert('Invoice completed', 'Line items are locked once an invoice is no longer a draft.'); return }
     Alert.alert('Remove this line?', item.description, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -403,6 +404,7 @@ export default function InvoiceDetailScreen() {
 
   const color = STATUS_COLOR[invoice.status] ?? '#9ca3af'
   const isPaid = invoice.status === 'paid'
+  const isDraft = invoice.status === 'draft'
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
@@ -473,19 +475,21 @@ export default function InvoiceDetailScreen() {
           {(lineItems ?? []).length === 0 ? (
             <Text style={{ fontSize: 13, color: '#9ca3af', paddingVertical: 6 }}>No line items yet</Text>
           ) : (lineItems ?? []).map(item => (
-            <TouchableOpacity key={item.id} style={styles.lineRow} onLongPress={() => confirmDeleteLine(item)} activeOpacity={0.6}>
+            <TouchableOpacity key={item.id} style={styles.lineRow} onLongPress={isDraft ? () => confirmDeleteLine(item) : undefined} activeOpacity={0.6}>
               <Text style={styles.lineDesc} numberOfLines={2}>{item.description}</Text>
               <Text style={styles.lineQty}>{item.quantity} {item.unit}</Text>
               <Text style={styles.lineTotal}>{formatAmount(item.line_total ?? 0)}</Text>
-              <TouchableOpacity onPress={() => confirmDeleteLine(item)} hitSlop={8} accessibilityLabel={`Remove ${item.description}`}>
-                <Icon name="x" size={16} color="#9ca3af" />
-              </TouchableOpacity>
+              {isDraft && (
+                <TouchableOpacity onPress={() => confirmDeleteLine(item)} hitSlop={8} accessibilityLabel={`Remove ${item.description}`}>
+                  <Icon name="x" size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
           ))}
 
-          {/* Add line — locked once the invoice is fully paid */}
-          {isPaid ? (
-            <Text style={{ fontSize: 13, color: '#9ca3af', paddingTop: 12 }}>Invoice paid — line items are locked.</Text>
+          {/* Add line — locked once the invoice is no longer a draft */}
+          {!isDraft ? (
+            <Text style={{ fontSize: 13, color: '#9ca3af', paddingTop: 12 }}>{isPaid ? 'Invoice paid' : 'Invoice completed'} — line items are locked.</Text>
           ) : (
           <View style={[styles.lineRow, { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingTop: 12 }]}>
             <PriceListDescriptionInput

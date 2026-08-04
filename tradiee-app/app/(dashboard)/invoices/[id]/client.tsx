@@ -94,6 +94,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
 
   async function addLine(e: React.FormEvent) {
     e.preventDefault()
+    if (invoice.status !== 'draft') { toast('Only draft invoices can have items added', 'error'); return }
     const qty = parseFloat(lineForm.quantity) || 1
     const item = priceItems.find(p => p.id === lineForm.price_list_item_id)
     if (item && !confirmStock(item, qty)) return
@@ -146,6 +147,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   }
 
   async function addKit(kit: Kit) {
+    if (invoice.status !== 'draft') { toast('Only draft invoices can have items added', 'error'); return }
     const components = kit.kit_items.filter(ki => ki.price_list_items)
     for (const component of components) {
       if (!confirmStock(component.price_list_items!, Number(component.quantity))) return
@@ -183,6 +185,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   // line can be swapped/removed on its own. Each line is priced at its
   // standard sell (or customer-group price) and taxed like any other item.
   async function addKitAsItems(kit: Kit) {
+    if (invoice.status !== 'draft') { toast('Only draft invoices can have items added', 'error'); return }
     const components = kit.kit_items.filter(ki => ki.price_list_items)
     if (components.length === 0) return
     for (const c of components) {
@@ -218,6 +221,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   }
 
   async function addSundries() {
+    if (invoice.status !== 'draft') { toast('Only draft invoices can have items added', 'error'); return }
     const amountText = prompt('Sundries price')
     if (amountText == null) return
     const price = parseFloat(amountText) || 0
@@ -242,6 +246,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   }
 
   async function createFromJob() {
+    if (invoice.status !== 'draft') { toast('Only draft invoices can have items added', 'error'); return }
     if (!invoice.job_id) { toast('This invoice is not linked to a job', 'error'); return }
     if (!confirm('Pull materials from the linked job into this invoice? Existing invoice lines will be kept.')) return
     setLoading(true)
@@ -396,12 +401,14 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Add */}
+      {/* Add — line items are locked once the invoice leaves draft (audit
+          trail: the customer may already have seen or paid it). Discount
+          stays editable regardless of status, same as before. */}
       <Dropdown label="Add" icon={<Plus className="h-4 w-4" />}>
-        <DropdownItem icon={<Plus />} onClick={() => setActiveDialog('line')}>Line</DropdownItem>
-        <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>
+        {isDraft && <DropdownItem icon={<Plus />} onClick={() => setActiveDialog('line')}>Line</DropdownItem>}
+        {isDraft && <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>}
         <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('discount')}>{invoice.discount_amount > 0 ? 'Edit discount' : 'Discount'}</DropdownItem>
-        <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>
+        {isDraft && <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>}
       </Dropdown>
 
       {/* Print */}
