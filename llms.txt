@@ -15,6 +15,7 @@ Industry Forms is built specifically for NZ and AU trade businesses (plumbers, e
 
 - [Home](https://www.industryforms.app/): product overview, pricing, FAQ.
 - [Blog](https://www.industryforms.app/blog.html): trade-specific guides on quoting, invoicing, scheduling, and compliance.
+- Trade pages: [Plumbers](https://www.industryforms.app/trades/plumbers.html), [Electricians](https://www.industryforms.app/trades/electricians.html), [Builders](https://www.industryforms.app/trades/builders.html), [HVAC](https://www.industryforms.app/trades/hvac.html), [Painters](https://www.industryforms.app/trades/painters.html), [Roofers](https://www.industryforms.app/trades/roofers.html), [Handyman](https://www.industryforms.app/trades/handyman.html), [Garden Care](https://www.industryforms.app/trades/garden-care.html).
 - [Privacy](https://www.industryforms.app/privacy.html)
 - [Terms](https://www.industryforms.app/terms.html)
 
