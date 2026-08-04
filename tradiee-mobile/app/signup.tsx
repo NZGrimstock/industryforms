@@ -66,7 +66,7 @@ export default function SignupScreen() {
           </View>
 
           <Text style={styles.title}>Create your account</Text>
-          <Text style={styles.subtitle}>Free 30-day trial, no credit card required.</Text>
+          <Text style={styles.subtitle}>Free 28-day trial, no credit card required.</Text>
 
           <Text style={styles.label}>Your name</Text>
           <TextInput style={styles.input} value={form.fullName} onChangeText={v => set('fullName', v)}

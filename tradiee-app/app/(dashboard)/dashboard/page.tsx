@@ -253,12 +253,16 @@ export default async function DashboardPage() {
         <OnboardingChecklist steps={onboardingSteps} />
 
         {/* Trial banner */}
-        {profile?.companies && (profile.companies as {subscription_plan: string}).subscription_plan === 'trial' && (
-          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
-            <span>You&apos;re on a free trial — <strong>30 days remaining</strong>.</span>
-            <Link href="/settings" className="font-medium underline hover:no-underline">Upgrade plan</Link>
-          </div>
-        )}
+        {profile?.companies && (profile.companies as {subscription_plan: string; trial_ends_at: string | null}).subscription_plan === 'trial' && (() => {
+          const trialEndsAt = (profile.companies as {trial_ends_at: string | null}).trial_ends_at
+          const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000)) : null
+          return (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
+              <span>You&apos;re on a free trial{daysLeft !== null && <> — <strong>{daysLeft} day{daysLeft === 1 ? '' : 's'} remaining</strong></>}.</span>
+              <Link href="/settings" className="font-medium underline hover:no-underline">Upgrade plan</Link>
+            </div>
+          )
+        })()}
 
         <DashboardWidgets
           profileId={user.id}

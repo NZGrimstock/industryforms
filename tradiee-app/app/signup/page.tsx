@@ -91,7 +91,7 @@ export default function SignupPage() {
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <h1 className="text-lg font-semibold text-gray-900 mb-1">Create your account</h1>
-          <p className="text-sm text-gray-500 mb-6">Free 30-day trial, no credit card required.</p>
+          <p className="text-sm text-gray-500 mb-6">Free 28-day trial, no credit card required.</p>
 
           <form className="space-y-4" onSubmit={e => { e.preventDefault(); void handleSubmit() }}>
             <div>

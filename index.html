@@ -46,11 +46,19 @@
       "description": "Job management software for NZ and AU tradies with quotes, bookings, job scheduling, offline mobile access, forms, invoicing, Stripe payments, reminders, reporting, and AI admin support.",
       "areaServed": ["New Zealand", "Australia"],
       "offers": {
-        "@type": "Offer",
-        "price": "29",
+        "@type": "AggregateOffer",
         "priceCurrency": "NZD",
+        "lowPrice": "29",
+        "highPrice": "99",
+        "offerCount": "3",
         "availability": "https://schema.org/InStock",
-        "url": "https://app.industryforms.app/signup"
+        "priceValidUntil": "2026-12-31",
+        "url": "https://app.industryforms.app/signup",
+        "offers": [
+          { "@type": "Offer", "name": "Solo", "price": "29", "priceCurrency": "NZD", "priceValidUntil": "2026-12-31", "url": "https://app.industryforms.app/signup" },
+          { "@type": "Offer", "name": "Team", "price": "49", "priceCurrency": "NZD", "priceValidUntil": "2026-12-31", "url": "https://app.industryforms.app/signup" },
+          { "@type": "Offer", "name": "Pro", "price": "99", "priceCurrency": "NZD", "priceValidUntil": "2026-12-31", "url": "https://app.industryforms.app/signup" }
+        ]
       }
     },
     {
@@ -870,6 +878,35 @@
           <p class="text-[10px] text-white/55 font-semibold">Paid ✓</p>
         </div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ SCREENSHOTS -->
+<section class="relative z-10 py-24 md:py-32 px-6 bg-paper-dark/40">
+  <div class="max-w-7xl mx-auto">
+    <div class="reveal text-center max-w-2xl mx-auto mb-14">
+      <span class="tag-orange text-[11px] font-bold tracking-widest uppercase px-4 py-1.5 rounded-full">See It In Action</span>
+      <h2 class="font-display font-bold text-3xl md:text-[2.75rem] leading-tight tracking-tight text-ink mt-6 mb-4">The real app, not a mockup.</h2>
+      <p class="text-ink/50 text-lg">Actual screens from the product — dashboard, jobs, schedule, and invoicing.</p>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-5 max-w-4xl mx-auto">
+      <figure class="reveal reveal-d1 card-lift rounded-2xl border border-black/[0.05] shadow-glass overflow-hidden bg-white">
+        <img src="screenshots/dashboard.webp" alt="Industry Forms dashboard showing active jobs, pending invoices, and today's schedule" width="820" height="389" loading="lazy" class="w-full h-auto">
+        <figcaption class="px-5 py-3 text-sm font-semibold text-ink/70">Dashboard</figcaption>
+      </figure>
+      <figure class="reveal reveal-d2 card-lift rounded-2xl border border-black/[0.05] shadow-glass overflow-hidden bg-white">
+        <img src="screenshots/jobs.webp" alt="Industry Forms jobs list showing job status, assignee, and site address" width="820" height="389" loading="lazy" class="w-full h-auto">
+        <figcaption class="px-5 py-3 text-sm font-semibold text-ink/70">Jobs</figcaption>
+      </figure>
+      <figure class="reveal reveal-d3 card-lift rounded-2xl border border-black/[0.05] shadow-glass overflow-hidden bg-white">
+        <img src="screenshots/schedule.webp" alt="Industry Forms schedule view showing team visits by day" width="820" height="389" loading="lazy" class="w-full h-auto">
+        <figcaption class="px-5 py-3 text-sm font-semibold text-ink/70">Schedule</figcaption>
+      </figure>
+      <figure class="reveal reveal-d4 card-lift rounded-2xl border border-black/[0.05] shadow-glass overflow-hidden bg-white">
+        <img src="screenshots/invoices.webp" alt="Industry Forms invoices list showing status and amount owing" width="820" height="389" loading="lazy" class="w-full h-auto">
+        <figcaption class="px-5 py-3 text-sm font-semibold text-ink/70">Invoices</figcaption>
+      </figure>
     </div>
   </div>
 </section>

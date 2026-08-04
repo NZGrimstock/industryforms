@@ -1183,7 +1183,7 @@ const PLAN_DETAILS = [
     label: 'Free trial',
     price: 'Free',
     users: '1 user',
-    desc: '30-day free trial with full access',
+    desc: '28-day free trial with full access',
     features: ['All core features', 'Jobs, quotes & invoices', 'Customer management', 'Mobile app access'],
     highlight: false,
   },
