@@ -57,34 +57,34 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What does Industry Forms do for tradies?",
+          "name": "What is Industry Forms?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Industry Forms gives NZ and AU tradies one place for web leads, AI-drafted quotes, bookings, jobs, forms, scheduling, offline mobile notes and photos, invoices, Stripe payments, reminders, messaging, and gross-profit reporting."
+            "text": "Industry Forms is job management software for NZ and AU tradies. It brings quotes, jobs, bookings, forms, schedules, timesheets, invoices, payments, reminders, messaging, and reporting into one workflow."
           }
         },
         {
           "@type": "Question",
-          "name": "Can customers accept quotes and pay deposits online?",
+          "name": "Can customers accept quotes and pay online?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Customers can accept quotes and pay deposits or invoices online without creating an account, reducing friction between quote sent, job booked, and payment received."
+            "text": "Yes. Customers can accept quotes, pay deposits, and pay invoices online through secure links without creating an account."
           }
         },
         {
           "@type": "Question",
-          "name": "Does Industry Forms work offline?",
+          "name": "Does the mobile app work without cell service?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Field crews can log job notes, time, and photos offline, then sync when a connection returns."
+            "text": "Yes. Crews can capture notes, photos, time, and job evidence offline. Updates sync when the device gets signal again."
           }
         },
         {
           "@type": "Question",
-          "name": "Is Industry Forms built for New Zealand and Australia?",
+          "name": "What makes it different from generic trade software?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Industry Forms is built specifically for NZ and AU trade businesses with transparent pricing and workflows for quotes, jobs, compliance forms, GST, scheduling, payments, and field crews."
+            "text": "Industry Forms is built around practical NZ and AU trade workflows: multiple visits per job, offline field capture, real inventory, Google Calendar sync, Stripe payments, AI quote drafting from your price list, and transparent pricing."
           }
         }
       ]
@@ -303,9 +303,15 @@
   }
   .pillar-panel { display: none; }
   .pillar-panel.is-active { display: block; }
-  .faq-panel { display: none; }
-  .faq-item.is-open .faq-panel { display: block; }
-  .faq-item.is-open .faq-icon { transform: rotate(45deg); }
+  /* Native <details>/<summary> — the browser handles open/closed state and
+     keyboard/screen-reader semantics for free; this is just the visual skin
+     (styles.css is a static Tailwind build with no build step in this repo,
+     so new utility classes like group-open: won't exist in it — plain CSS
+     is the correct tool here, not a Tailwind class that would silently do
+     nothing). */
+  .faq-item > summary { cursor: pointer; list-style: none; }
+  .faq-item > summary::-webkit-details-marker { display: none; }
+  .faq-item[open] > summary .faq-icon { transform: rotate(45deg); }
 </style>
 </head>
 <body class="grain">
@@ -407,14 +413,14 @@
     <div class="reveal reveal-d2 mt-10 lg:mt-0 bg-white/75 backdrop-blur-sm border border-black/[0.05] shadow-glass rounded-3xl p-5 lg:self-start">
       <p class="text-[10px] font-bold tracking-widest uppercase text-ink/35 mb-3">Get the app</p>
       <div class="flex flex-col gap-2.5">
-        <a href="https://app.industryforms.app/signup" title="App Store — coming soon, sign up on the web for now" aria-label="Industry Forms on the App Store, coming soon" class="group flex items-center gap-3 bg-ink text-white rounded-xl px-3.5 py-2.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-ink hover:bg-ink-light">
-          <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.884-3.63-.884-1.698 0-2.302.91-3.696.91-1.377 0-2.35-1.25-3.463-2.79C2.94 18.06 2 15.3 2 12.68c0-4.19 2.73-6.41 5.42-6.41 1.34 0 2.46.9 3.3.9.81 0 2.06-.96 3.58-.96.58 0 2.65.05 4.02 2.02-.11.07-2.4 1.4-2.4 4.29 0 3.5 3.06 4.66 3.02 4.7z"/></svg>
+        <a href="https://app.industryforms.app/signup" title="iPhone app coming soon — sign up on the web for now" aria-label="iPhone app coming soon — sign up on the web for now" class="group flex items-center gap-3 bg-ink/60 text-white rounded-xl px-3.5 py-2.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:bg-ink/75">
+          <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 flex-shrink-0 opacity-70"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.884-3.63-.884-1.698 0-2.302.91-3.696.91-1.377 0-2.35-1.25-3.463-2.79C2.94 18.06 2 15.3 2 12.68c0-4.19 2.73-6.41 5.42-6.41 1.34 0 2.46.9 3.3.9.81 0 2.06-.96 3.58-.96.58 0 2.65.05 4.02 2.02-.11.07-2.4 1.4-2.4 4.29 0 3.5 3.06 4.66 3.02 4.7z"/></svg>
           <span class="leading-tight">
-            <span class="block text-[9px] text-white/55">Available on the</span>
-            <span class="block text-sm font-bold font-display -mt-0.5">App Store</span>
+            <span class="block text-[9px] text-white/55">iPhone app</span>
+            <span class="block text-sm font-bold font-display -mt-0.5">Coming soon</span>
           </span>
         </a>
-        <a href="https://app.industryforms.app/signup" title="Google Play — coming soon, sign up on the web for now" aria-label="Industry Forms on Google Play, coming soon" class="group flex items-center gap-3 bg-ink text-white rounded-xl px-3.5 py-2.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-ink hover:bg-ink-light">
+        <a href="https://play.google.com/store/apps/details?id=com.industryforms" target="_blank" rel="noopener" title="Industry Forms on Google Play" aria-label="Industry Forms on Google Play" class="group flex items-center gap-3 bg-ink text-white rounded-xl px-3.5 py-2.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:shadow-ink hover:bg-ink-light">
           <svg viewBox="0 0 24 24" class="w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
             <defs>
               <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -867,72 +873,6 @@
   </div>
 </section>
 
-<!-- ============================================================ TESTIMONIALS -->
-<section class="relative z-10 py-24 md:py-32 px-6">
-  <div class="max-w-7xl mx-auto">
-    <div class="reveal text-center max-w-2xl mx-auto mb-16">
-      <div class="accent-line mx-auto mb-6"></div>
-      <h2 class="font-display font-bold text-3xl md:text-[2.75rem] leading-tight tracking-tight text-ink">Trusted by trades who were<br>tired of the chaos.</h2>
-    </div>
-    <div class="grid md:grid-cols-3 gap-5">
-      <div class="reveal reveal-d1 card-lift bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-black/[0.05] shadow-glass relative overflow-hidden">
-        <div class="quote-mark">"</div>
-        <div class="flex items-center gap-0.5 mb-5">
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-        </div>
-        <p class="text-sm text-ink/60 leading-relaxed mb-7">"I used to spend my Sunday evenings doing invoices. Now they just... happen. Genuinely life-changing for a one-man band like me."</p>
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal to-teal-light text-white text-sm font-bold flex items-center justify-center">D</div>
-          <div>
-            <p class="text-sm font-bold text-ink">Dave Morrison</p>
-            <p class="text-xs text-ink/40">Morrison Electrical</p>
-          </div>
-        </div>
-      </div>
-      <div class="reveal reveal-d2 card-lift bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-black/[0.05] shadow-glass relative overflow-hidden">
-        <div class="quote-mark">"</div>
-        <div class="flex items-center gap-0.5 mb-5">
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-        </div>
-        <p class="text-sm text-ink/60 leading-relaxed mb-7">"We cancelled three separate subscriptions and replaced them all with Industry Forms. The job map alone saves us 2 hours a day in travel."</p>
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-brand to-brand-light text-white text-sm font-bold flex items-center justify-center">S</div>
-          <div>
-            <p class="text-sm font-bold text-ink">Sarah Chen</p>
-            <p class="text-xs text-ink/40">Chen Plumbing & Heating</p>
-          </div>
-        </div>
-      </div>
-      <div class="reveal reveal-d3 card-lift bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-black/[0.05] shadow-glass relative overflow-hidden">
-        <div class="quote-mark">"</div>
-        <div class="flex items-center gap-0.5 mb-5">
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-          <i data-lucide="star" class="w-4 h-4 fill-brand text-brand"></i>
-        </div>
-        <p class="text-sm text-ink/60 leading-relaxed mb-7">"The compliance forms are brilliant. Gas safe certs done on my phone, signed by the customer, and stored forever. No more filing cabinets."</p>
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-grape to-grape-light text-white text-sm font-bold flex items-center justify-center">J</div>
-          <div>
-            <p class="text-sm font-bold text-ink">Jake Williams</p>
-            <p class="text-xs text-ink/40">JW Gas Services</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ============================================================ PRICING -->
 <section id="pricing" class="relative z-10 py-24 md:py-32 px-6">
   <div class="max-w-7xl mx-auto">
@@ -1035,42 +975,42 @@
     </div>
 
     <div class="space-y-3">
-      <article class="faq-item is-open reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
-        <button class="faq-trigger w-full flex items-center justify-between gap-4 text-left p-6">
+      <details class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden" open>
+        <summary class="w-full flex items-center justify-between gap-4 text-left p-6">
           <span class="font-display font-bold text-ink">What is Industry Forms?</span>
           <i data-lucide="plus" class="faq-icon w-5 h-5 text-brand transition-transform"></i>
-        </button>
-        <div class="faq-panel px-6 pb-6 text-sm text-ink/55 leading-relaxed">
+        </summary>
+        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">
           Industry Forms is job management software for NZ and AU tradies. It brings quotes, jobs, bookings, forms, schedules, timesheets, invoices, payments, reminders, messaging, and reporting into one workflow.
         </div>
-      </article>
-      <article class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
-        <button class="faq-trigger w-full flex items-center justify-between gap-4 text-left p-6">
+      </details>
+      <details class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
+        <summary class="w-full flex items-center justify-between gap-4 text-left p-6">
           <span class="font-display font-bold text-ink">Can customers accept quotes and pay online?</span>
           <i data-lucide="plus" class="faq-icon w-5 h-5 text-brand transition-transform"></i>
-        </button>
-        <div class="faq-panel px-6 pb-6 text-sm text-ink/55 leading-relaxed">
+        </summary>
+        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">
           Yes. Customers can accept quotes, pay deposits, and pay invoices online through secure links without creating an account.
         </div>
-      </article>
-      <article class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
-        <button class="faq-trigger w-full flex items-center justify-between gap-4 text-left p-6">
+      </details>
+      <details class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
+        <summary class="w-full flex items-center justify-between gap-4 text-left p-6">
           <span class="font-display font-bold text-ink">Does the mobile app work without cell service?</span>
           <i data-lucide="plus" class="faq-icon w-5 h-5 text-brand transition-transform"></i>
-        </button>
-        <div class="faq-panel px-6 pb-6 text-sm text-ink/55 leading-relaxed">
+        </summary>
+        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">
           Yes. Crews can capture notes, photos, time, and job evidence offline. Updates sync when the device gets signal again.
         </div>
-      </article>
-      <article class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
-        <button class="faq-trigger w-full flex items-center justify-between gap-4 text-left p-6">
+      </details>
+      <details class="faq-item reveal bg-white/75 border border-black/[0.05] shadow-glass rounded-2xl overflow-hidden">
+        <summary class="w-full flex items-center justify-between gap-4 text-left p-6">
           <span class="font-display font-bold text-ink">What makes it different from generic trade software?</span>
           <i data-lucide="plus" class="faq-icon w-5 h-5 text-brand transition-transform"></i>
-        </button>
-        <div class="faq-panel px-6 pb-6 text-sm text-ink/55 leading-relaxed">
+        </summary>
+        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">
           Industry Forms is built around practical NZ and AU trade workflows: multiple visits per job, offline field capture, real inventory, Google Calendar sync, Stripe payments, AI quote drafting from your price list, and transparent pricing.
         </div>
-      </article>
+      </details>
     </div>
   </div>
 </section>
@@ -1144,7 +1084,7 @@
       </div>
     </div>
     <div class="border-t border-white/[0.05] pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-      <p class="text-xs text-white/20">© 2025 Industry Forms Ltd. All rights reserved.</p>
+      <p class="text-xs text-white/20">© 2026 Industry Forms Ltd. All rights reserved.</p>
     </div>
   </div>
 </footer>
@@ -1227,13 +1167,6 @@
       tab.classList.add('is-active');
       tab.classList.remove('text-ink/65', 'hover:bg-black/[0.04]');
       pillarPanels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === key));
-    });
-  });
-
-  // FAQ accordion
-  document.querySelectorAll('.faq-trigger').forEach(trigger => {
-    trigger.addEventListener('click', () => {
-      trigger.closest('.faq-item').classList.toggle('is-open');
     });
   });
 
