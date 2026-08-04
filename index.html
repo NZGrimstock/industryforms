@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>document.documentElement.classList.add('js')</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Industry Forms — Job Management Software for NZ & AU Tradies</title>
 <meta name="description" content="Industry Forms helps NZ and AU tradies quote faster, schedule cleaner, work offline, invoice sooner, take Stripe payments, and manage jobs from first enquiry to final payment. Start a free trial.">
@@ -152,12 +153,13 @@
   .orb-2 { animation: orb2 20s ease-in-out infinite; }
   .orb-3 { animation: orb3 13s ease-in-out infinite; }
 
-  /* Reveal animations */
-  .reveal {
-    opacity: 0;
-    transform: translateY(32px);
-    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  }
+  /* Reveal animations — gated on html.js (set by an inline script at the top
+     of <head>, before anything renders) instead of hiding by default. If JS
+     never runs at all — disabled, blocked, a slow/failed third-party script
+     upstream — content stays visible instead of the page staying blank
+     forever waiting for an IntersectionObserver that will never fire. */
+  html.js .reveal { opacity: 0; transform: translateY(32px); }
+  .reveal { transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
   .reveal.in { opacity: 1; transform: translateY(0); }
   .reveal-d1 { transition-delay: 0.08s; }
   .reveal-d2 { transition-delay: 0.16s; }
@@ -321,9 +323,27 @@
   .faq-item > summary { cursor: pointer; list-style: none; }
   .faq-item > summary::-webkit-details-marker { display: none; }
   .faq-item[open] > summary .faq-icon { transform: rotate(45deg); }
+  .sr-only-focusable { position: absolute; left: -9999px; top: 0; z-index: 100; background: #E8722A; color: #fff; padding: 0.75rem 1.25rem; border-radius: 0 0 0.5rem 0; font-weight: 600; font-size: 0.875rem; }
+  .sr-only-focusable:focus { left: 0; }
+
+  /* WCAG 2.2.2: the grain texture, ambient orbs, and sticky ticker all
+     autoplay continuously with no way to pause them. Reduced-motion users
+     get them switched off entirely rather than just shortened. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    html { scroll-behavior: auto; }
+    .grain::after, .orb-1, .orb-2, .orb-3 { animation: none !important; }
+    html.js .reveal { opacity: 1; transform: none; }
+  }
 </style>
 </head>
 <body class="grain">
+
+<a href="#main" class="sr-only-focusable">Skip to content</a>
 
 <!-- Ambient background orbs -->
 <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
@@ -367,7 +387,7 @@
 </nav>
 
 <!-- ============================================================ HERO -->
-<section class="relative z-10 pt-36 md:pt-48 pb-20 md:pb-32 px-6">
+<section id="main" class="relative z-10 pt-36 md:pt-48 pb-20 md:pb-32 px-6">
   <div class="max-w-7xl mx-auto">
     <div class="lg:grid lg:grid-cols-[1fr_300px] lg:gap-10 xl:gap-14">
     <div class="max-w-3xl">
