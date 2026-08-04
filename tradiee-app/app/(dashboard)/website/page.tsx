@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { WebsiteClient } from './client'
@@ -12,6 +13,13 @@ export default async function WebsitePage() {
     .select('full_name, role, is_super_admin, companies!company_id(id, name, trade_type, address, logo_url, billing_exempt, subscription_status, addons)')
     .eq('id', user!.id)
     .single()
+
+  // The public marketing site is an owner/admin concern — a staff member has no
+  // reason to rewrite what the business publishes to the world. RLS is the real
+  // boundary (see 20260804140000_restrict_website_writes_to_admins.sql); this
+  // gate just stops staff being shown an editor whose every save would fail.
+  const role = (profile as unknown as { role: string | null } | null)?.role
+  if (role !== 'owner' && role !== 'admin') redirect('/dashboard')
 
   const company = (profile as unknown as {
     companies: { id: string; name: string; trade_type: string | null; address: string | null; logo_url: string | null; billing_exempt: boolean | null; subscription_status: string | null; addons: Record<string, { active?: boolean }> | null }

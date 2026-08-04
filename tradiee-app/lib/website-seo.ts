@@ -60,6 +60,28 @@ export function siteDescription(company: SeoCompany, sections: WebsiteSection[],
   return trade ? `${company.name} — ${trade}${area ? ` serving ${area}` : ''}.` : undefined
 }
 
+// Serialize a JSON-LD graph for embedding in a <script type="application/ld+json">
+// block. JSON.stringify alone is NOT safe here: it does not escape `<`, so any
+// tenant-controlled string containing `</script>` closes the tag early and turns
+// the rest into live markup. Every field in the graph below is tenant-editable
+// (company name, service titles, FAQ answers, SEO description), and the public
+// site also renders at app.industryforms.app/site/<slug> — the same origin that
+// holds the app's session cookies — so a breakout here is XSS on the real app
+// origin, not just on the tenant's own subdomain.
+//
+// Escaping as \uXXXX keeps the output valid JSON (parsers decode it back to the
+// original characters) while making a tag breakout impossible. U+2028/U+2029 are
+// included because they're legal in JSON strings but are line terminators in
+// JavaScript, which breaks the script block in older parsers.
+export function serializeJsonLd(graph: unknown): string {
+  return JSON.stringify(graph)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
 // schema.org JSON-LD graph: LocalBusiness (typed by trade) + WebSite + a
 // Service node per listed service + FAQPage. This is the core GEO/AEO/AIO
 // payload. (Google restricted *FAQ rich results* to gov/health sites in 2023,

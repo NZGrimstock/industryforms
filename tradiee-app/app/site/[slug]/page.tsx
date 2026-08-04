@@ -5,7 +5,7 @@ import { DEFAULT_THEME, type WebsiteSection, type WebsiteTheme } from '@/lib/web
 import { SiteHeader, SiteFooter, SectionBlock, getStyleModule } from './sections'
 import { ContactForm } from './contact-form'
 import { BookingForm } from './booking-form'
-import { siteBaseUrl, siteDescription, buildJsonLd, areaFromAddress, type SeoCompany } from '@/lib/website-seo'
+import { siteBaseUrl, siteDescription, buildJsonLd, serializeJsonLd, areaFromAddress, type SeoCompany } from '@/lib/website-seo'
 
 type SiteRow = {
   company_id: string
@@ -127,7 +127,7 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: styleMod.fontFamily }}>
       {jsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       )}
       {isDraft && (
         <div className="bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950">

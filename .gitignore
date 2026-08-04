@@ -74,3 +74,4 @@ tradiee-mobile/store-artifacts/
 .migration.env
 .migration-work/
 tradiee-mobile/.eas-update.env
+.vercel
