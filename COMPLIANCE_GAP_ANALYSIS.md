@@ -1,5 +1,10 @@
 # TradeHub — Security & Compliance Gap Analysis
 
+> **A second full audit was run on 2026-08-04.** Its findings are appended at
+> the end of this document under "Audit pass 2". The 2026-07-07 body below is
+> kept as-is for history — check pass 2 before treating anything here as
+> current.
+
 **Date:** 2026-07-07
 **Scope:** Engineering-level review of the codebase against technical controls typically required by SOC 2, ISO 27001, GDPR, and PCI DSS.
 
@@ -115,3 +120,132 @@ No further gaps found. The "Still open" list from the previous pass no longer in
 4. Confirm the account-deletion process against your actual privacy policy's stated timelines.
 5. Hand this document to a lawyer for GDPR/DPA review and to a QSA (or Stripe's guidance) for PCI SAQ-A self-attestation.
 6. If pursuing SOC 2/ISO 27001 formally, engage an accredited auditor — they'll want this document plus policy artifacts (access control policy, incident response plan, vendor management policy) that don't exist in code.
+
+---
+
+# Audit pass 2 — 2026-08-04
+
+**Scope:** everything added since 2026-07-07 (Stripe Connect + Tap to Pay,
+bookings/deposits, the Instant Website builder and its public sites, custom
+static-site hosting, purchase orders, quote sign-to-accept, terms-acceptance
+gate, PowerSync mobile sync), plus a re-check of the areas pass 1 flagged.
+
+## Fixed this pass
+
+### [HIGH] Stored XSS on the app origin via public-site JSON-LD
+`app/site/[slug]/page.tsx` rendered `JSON.stringify(buildJsonLd(...))` directly
+into `dangerouslySetInnerHTML` inside a `<script type="application/ld+json">`
+block. `JSON.stringify` does not escape `<`, so any tenant-editable string in
+the graph — company name, service titles/descriptions, FAQ questions/answers,
+SEO description — containing `</script>` closed the tag and turned the
+remainder into live markup.
+
+Blast radius was larger than "the tenant's own subdomain":
+- The published site also renders at `app.industryforms.app/site/<slug>`. The
+  builder UI advertises that URL in the Web-address card and the **Preview**
+  button links straight to it, so it is a normal, reachable path — not an
+  obscure one.
+- That is the same origin the dashboard runs on, and `@supabase/ssr@0.12.0`
+  sets session cookies with `httpOnly: false` (confirmed in
+  `node_modules/@supabase/ssr/dist/main/utils/constants.js`), so injected script
+  could read them directly via `document.cookie`. Even with httpOnly it would
+  still have had same-origin authenticated access to every `/api/*` route.
+
+Fixed by `serializeJsonLd()` in `lib/website-seo.ts`, which escapes `<`, `>`,
+`&` and U+2028/U+2029 as `\uXXXX`. Output remains valid JSON and round-trips
+losslessly, so crawlers still read the real business name. Verified with a
+runnable check asserting both that the breakout is blocked and that no field is
+mangled.
+
+### [MEDIUM] Any company member could rewrite and publish the public site
+`company_websites` insert/update policies checked only
+`company_id = current_company_id()` — no role check — while the delete policy
+already required `is_admin_or_owner()`. So a `staff`-role user could:
+1. rewrite the company's public marketing site (the same content that feeds the
+   JSON-LD above), and
+2. flip it live, because `is_published` is just a column on that table — the
+   Bookings Website add-on paywall is only enforced by the builder UI hiding
+   the Publish button (`canPublish`), never at the write layer.
+
+The builder page had no server-side role gate either, so this needed no crafted
+API call. Fixed in `20260804140000_restrict_website_writes_to_admins.sql`
+(applied to remote) plus a page-level redirect so staff aren't shown an editor
+whose saves would silently fail.
+
+### [LOW] `.vercel/` untracked but not ignored
+Repo root had no ignore rule, so `git add .` would have committed the Vercel
+project/org ids. Added to `.gitignore`.
+
+## Verified clean (no action needed)
+
+- **RLS coverage is now 65/65 tables.** Scripted sweep across all 86 migrations
+  (create-table statements vs `enable row level security`). The
+  `calendar_sync_log` gap from pass 1 is closed. Three tables
+  (`portal_login_attempts`, `sms_usage_events`, `sms_pool_sessions`) have RLS on
+  with zero policies — deny-all to normal clients, reachable only via
+  service-role. That is fail-closed and correct; confirmed nothing client-side
+  touches them.
+- **Custom static-site hosting is well-designed.** Uploaded HTML is served from
+  the R2 CDN origin (`cdn.industryforms.app`), never the app origin, with
+  `frame-ancestors 'none'; connect-src 'self' …; form-action 'self'`. Gated to
+  owner/admin + active paid subscription (explicitly not free-trial) + 2MB +
+  single `.html`. The reasoning is documented in `proxy.ts`. Zip support was
+  correctly deferred pending zip-slip/zip-bomb handling.
+- **Twilio webhooks** (`sms/inbound`, `sms/status`) verify signatures with HMAC-
+  SHA1 + `timingSafeEqual`, and **fail closed** (503) when `TWILIO_AUTH_TOKEN`
+  is unset, so nothing can land during the dark period.
+- **Financial amounts are server-derived.** `bookings/deposit-intent` takes only
+  a uuid and computes the amount from the booking row.
+  `stripe/terminal/payment-intent` clamps any client-supplied amount with
+  `Math.min(requested, outstanding)`, on top of auth + company-ownership check +
+  paid-plan gate + per-charge and per-day caps.
+- **Public tokens** (`quotes.public_token`, `invoices.public_token`, booking
+  packages) are `gen_random_uuid()` — 122-bit, not enumerable. The
+  `Math.random()` in `lib/sms.ts` is pool-number load balancing, not security.
+- **Service-role key** never reaches client code — only `lib/supabase/server.ts`
+  and server-side API routes. No `.env*` files tracked in git.
+- **Pass 1 regressions:** none. `auth/invite` still auth+role gated, the OAuth
+  callbacks still derive identity from the session rather than `state`, and the
+  search route still uses the escaped-literal form.
+
+## Still open
+
+1. **[HIGH — dependencies] 3 high-severity advisories**, all requiring a Next
+   major bump (`npm audit fix --force` → next@16.3.0, outside the stated range):
+   - `postcss <=8.5.22` — 4 advisories (XSS via unescaped `</style>`, plus
+     arbitrary `.map` file read via attacker-controlled `sourceMappingURL`).
+     Build-time only for this app; not reachable from user input at runtime.
+   - `sharp <0.35.0` — inherited libvips CVEs (CVE-2026-33327/33328/35590/35591).
+     **This one is runtime-reachable**: `lib/pdf-logo.ts` runs `sharp` over a
+     company-uploaded logo. Worth prioritising over the postcss items.
+   Deliberately not attempted in this pass — a Next major upgrade needs its own
+   dedicated branch and regression test, not a drive-by `--force`.
+2. **[MEDIUM] Paid-feature enforcement is UI-only in places.** The website
+   publish gate is the example fixed above, but the underlying pattern —
+   `hasAddon()` checked in the page/component rather than at the write or the
+   public-render boundary — is worth a dedicated sweep. Note the public site
+   render (`/site/[slug]`) checks `is_published` but **not** the add-on, so a
+   site published before a subscription lapses keeps serving. That is a business
+   decision (do lapsed customers' sites go dark?), not a bug to silently patch.
+3. **[LOW] `NEXT_PUBLIC_LOCATIONIQ_KEY`** ships in the client bundle by design.
+   Confirm it is domain-restricted in the LocationIQ dashboard, or it is
+   quota-theft bait.
+4. **Structural, carried over from pass 1:** `/api/*` is still exempt from
+   middleware auth — every route self-checks. A new route that forgets is
+   silently public. The scripted scan used this pass (service-role client with
+   no auth signal in the same file) found 11 routes, all of which turned out to
+   be intentionally public or gated by a mechanism the heuristic didn't know;
+   that script is worth keeping as a CI check.
+5. Items 2/3 from pass 1's "Still open" (audit-log coverage, GDPR data export)
+   are unchanged.
+
+## Not covered by this pass
+
+- PowerSync sync-rules were **not** audited as an access-control boundary. They
+  decide what rows reach each mobile device and are a real authorization
+  surface, separate from RLS. The 2026-08-02 outage showed the rules and the
+  Postgres publication can drift apart. Worth its own pass.
+- No live exploitation was performed against the production project — findings
+  are from code/schema analysis plus local reasoning. The XSS fix is covered by
+  a runnable check; the RLS change was applied and typechecked but not
+  exercised with a real staff-role session.
