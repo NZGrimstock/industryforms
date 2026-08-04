@@ -10,7 +10,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL ?? ''
 
 export default function SignupScreen() {
   const [form, setForm] = useState({
-    fullName: '', email: '', password: '', companyName: '', tradeType: '', country: 'NZ',
+    fullName: '', email: '', phone: '', password: '', companyName: '', tradeType: '', country: 'NZ',
   })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -21,9 +21,9 @@ export default function SignupScreen() {
   }
 
   async function handleSignup() {
-    const { fullName, email, password, companyName } = form
-    if (!fullName || !email || !password || !companyName) {
-      Alert.alert('Missing fields', 'Please fill in your name, email, password and business name.')
+    const { fullName, email, phone, password, companyName } = form
+    if (!fullName || !email || !phone.trim() || !password || !companyName) {
+      Alert.alert('Missing fields', 'Please fill in your name, email, phone, password and business name.')
       return
     }
     if (password.length < 8) {
@@ -76,6 +76,11 @@ export default function SignupScreen() {
           <TextInput style={styles.input} value={form.email} onChangeText={v => set('email', v)}
             placeholder="email@company.com" placeholderTextColor="#6b7280"
             autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+
+          <Text style={styles.label}>Phone number</Text>
+          <TextInput style={styles.input} value={form.phone} onChangeText={v => set('phone', v)}
+            placeholder="+64 21 123 4567" placeholderTextColor="#6b7280"
+            keyboardType="phone-pad" autoComplete="tel" />
 
           <Text style={styles.label}>Password</Text>
           <View style={styles.passwordRow}>

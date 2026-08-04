@@ -51,6 +51,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     lines.push(`## ${about.heading || 'About'}`, about.body.trim(), '')
   }
 
+  const faqSection = sections.find(s => s.type === 'faq')
+  if (faqSection && faqSection.type === 'faq') {
+    const items = faqSection.items.filter(f => f.question.trim() && f.answer.trim())
+    if (items.length) {
+      lines.push(`## ${faqSection.heading || 'Frequently asked questions'}`)
+      for (const f of items) lines.push(`### ${f.question.trim()}`, f.answer.trim(), '')
+    }
+  }
+
   lines.push(`## Contact`, `To request a quote or book a visit, use the contact form at ${url}#contact${company.phone ? ` or call ${company.phone}` : ''}.`, '')
 
   return new Response(lines.join('\n'), {

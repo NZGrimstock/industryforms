@@ -125,6 +125,29 @@ export function Section({ section, primary, businessName, ContactForm, BookingFo
       )
     }
 
+    case 'faq': {
+      const items = section.items.filter(i => i.question.trim())
+      if (!items.length) return null
+      return (
+        <section style={{ background: BG, color: INK }}>
+          <div className="border-y border-white/10 px-6 py-10 text-center">
+            <h2 className="text-2xl font-light tracking-wide md:text-3xl">{section.heading}</h2>
+          </div>
+          <div className="mx-auto max-w-3xl divide-y divide-white/10 px-6">
+            {items.map((f, i) => (
+              <details key={i} className="group py-6">
+                <summary className="flex cursor-pointer list-none items-baseline justify-between gap-6 text-lg font-light [&::-webkit-details-marker]:hidden">
+                  {f.question}
+                  <span className="shrink-0 text-sm text-white/40 transition-transform group-open:rotate-45" aria-hidden>+</span>
+                </summary>
+                <p className="mt-4 whitespace-pre-wrap text-sm font-light leading-loose text-white/60">{f.answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
     case 'contact':
       return (
         <section id="contact" className="px-6 py-20" style={{ background: BG }}>

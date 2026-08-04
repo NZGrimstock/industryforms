@@ -61,7 +61,10 @@ export function siteDescription(company: SeoCompany, sections: WebsiteSection[],
 }
 
 // schema.org JSON-LD graph: LocalBusiness (typed by trade) + WebSite + a
-// Service node per listed service. This is the core GEO/AEO/AIO payload.
+// Service node per listed service + FAQPage. This is the core GEO/AEO/AIO
+// payload. (Google restricted *FAQ rich results* to gov/health sites in 2023,
+// but the markup is still what AI answer engines parse to lift a Q&A — which
+// is the point of the FAQ section, not the SERP accordion.)
 export function buildJsonLd(opts: {
   company: SeoCompany
   url: string
@@ -101,5 +104,21 @@ export function buildJsonLd(opts: {
         }))
     : []
 
-  return { '@context': 'https://schema.org', '@graph': [business, website, ...services] }
+  const faqSection = sections.find(s => s.type === 'faq')
+  const faqs = faqSection && faqSection.type === 'faq'
+    ? faqSection.items.filter(f => f.question.trim() && f.answer.trim())
+    : []
+  const faqPage = faqs.length
+    ? [{
+        '@type': 'FAQPage',
+        '@id': `${url}#faq`,
+        mainEntity: faqs.map(f => ({
+          '@type': 'Question',
+          name: f.question.trim(),
+          acceptedAnswer: { '@type': 'Answer', text: f.answer.trim() },
+        })),
+      }]
+    : []
+
+  return { '@context': 'https://schema.org', '@graph': [business, website, ...services, ...faqPage] }
 }

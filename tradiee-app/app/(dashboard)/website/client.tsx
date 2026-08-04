@@ -27,7 +27,7 @@ type Initial = {
   exists: boolean
 }
 
-const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery', 'testimonials', 'contact', 'booking']
+const ALL_TYPES: WebsiteSectionType[] = ['hero', 'about', 'services', 'gallery', 'testimonials', 'faq', 'contact', 'booking']
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
 
 export function WebsiteClient({
@@ -761,6 +761,23 @@ function SectionEditor({
             </div>
           ))}
           <button onClick={() => patch(idx, { items: [...section.items, { quote: '', author: '' }] })} className="text-sm font-medium text-[var(--accent,#f97316)] hover:underline">+ Add testimonial</button>
+        </div>
+      )
+    case 'faq':
+      return (
+        <div className="space-y-3">
+          <Field label="Heading"><input value={section.heading} onChange={e => patch(idx, { heading: e.target.value })} className={inputCls} /></Field>
+          {section.items.map((it, i) => (
+            <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 p-3 space-y-2">
+              <div className="flex gap-2">
+                <input value={it.question} onChange={e => patch(idx, { items: section.items.map((x, k) => k === i ? { ...x, question: e.target.value } : x) })} placeholder="e.g. Do you charge for quotes?" className={inputCls} />
+                <button onClick={() => patch(idx, { items: section.items.filter((_, k) => k !== i) })} className="shrink-0 px-2 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+              <textarea value={it.answer} onChange={e => patch(idx, { items: section.items.map((x, k) => k === i ? { ...x, answer: e.target.value } : x) })} placeholder="Your answer" rows={2} className={inputCls} />
+            </div>
+          ))}
+          <button onClick={() => patch(idx, { items: [...section.items, { question: '', answer: '' }] })} className="text-sm font-medium text-[var(--accent,#f97316)] hover:underline">+ Add question</button>
+          <p className="text-xs text-gray-400">Answer the questions customers actually ask on the phone — these get marked up for Google and AI search assistants.</p>
         </div>
       )
     case 'contact':

@@ -28,6 +28,11 @@ export type TestimonialsSection = {
   heading: string
   items: { quote: string; author: string }[]
 }
+export type FaqSection = {
+  type: 'faq'
+  heading: string
+  items: { question: string; answer: string }[]
+}
 export type ContactSection = {
   type: 'contact'
   heading: string
@@ -46,6 +51,7 @@ export type WebsiteSection =
   | ServicesSection
   | GallerySection
   | TestimonialsSection
+  | FaqSection
   | ContactSection
   | BookingSection
 
@@ -77,6 +83,7 @@ export const SECTION_LABELS: Record<WebsiteSectionType, string> = {
   services: 'Services',
   gallery: 'Photo gallery',
   testimonials: 'Testimonials',
+  faq: 'FAQ',
   contact: 'Contact',
   booking: 'Book a visit',
 }
@@ -96,6 +103,8 @@ export function blankSection(type: WebsiteSectionType): WebsiteSection {
       return { type, heading: 'Our work', images: [] }
     case 'testimonials':
       return { type, heading: 'What customers say', items: [{ quote: '', author: '' }] }
+    case 'faq':
+      return { type, heading: 'Frequently asked questions', items: [{ question: '', answer: '' }] }
     case 'contact':
       return { type, heading: 'Get in touch', showForm: true }
     case 'booking':

@@ -36,6 +36,11 @@ export async function POST(request: Request) {
     if (!fullName || !email || !password || !companyName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
+    // Phone is required: it's the only channel support/sales can reach a trial
+    // on, and both signup forms already ask for it.
+    if (!phone?.trim()) {
+      return NextResponse.json({ error: 'A phone number is required' }, { status: 400 })
+    }
     if (!acceptedTerms) {
       return NextResponse.json({ error: 'You must accept the Terms of Service' }, { status: 400 })
     }
@@ -69,7 +74,7 @@ export async function POST(request: Request) {
         name: companyName,
         trade_type: tradeType || null,
         country,
-        phone: phone || null,
+        phone: phone.trim(),
         address: companyAddress || null,
         default_gst_rate: gstRate,
         subscription_plan: 'trial',
@@ -91,7 +96,7 @@ export async function POST(request: Request) {
         company_id: company.id,
         full_name: fullName,
         email,
-        phone: phone || null,
+        phone: phone.trim(),
         role: 'owner',
         terms_accepted_at: new Date().toISOString(),
         terms_version: CURRENT_TERMS_VERSION,
