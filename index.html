@@ -1211,7 +1211,14 @@
       entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
     }, { threshold: 0.08, rootMargin: '0px 0px -48px 0px' });
     revealEls.forEach(el => revealObs.observe(el));
-  } catch (e) { console.error(e); document.querySelectorAll('.reveal').forEach(el => el.classList.add('in')); }
+  } catch (e) { console.error(e); }
+  // Hard fallback: the try/catch above only helps if setup *throws*. If the
+  // observer is created but something (a browser quirk, an extension, tab
+  // throttling) stops it from ever calling back, nothing above catches that
+  // — so force every section visible after a short delay regardless.
+  setTimeout(() => {
+    document.querySelectorAll('.reveal:not(.in)').forEach(el => el.classList.add('in'));
+  }, 1500);
 
   try { lucide.createIcons(); } catch (e) { console.error(e); }
 
