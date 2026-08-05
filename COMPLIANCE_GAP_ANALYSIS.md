@@ -1,9 +1,10 @@
 # TradeHub — Security & Compliance Gap Analysis
 
-> **A second full audit was run on 2026-08-04.** Its findings are appended at
-> the end of this document under "Audit pass 2". The 2026-07-07 body below is
-> kept as-is for history — check pass 2 before treating anything here as
-> current.
+> **A second full audit ran 2026-08-04 (web app + marketing site), a third ran
+> 2026-08-05 (mobile app + PowerSync sync rules).** Findings are appended at
+> the end of this document under "Audit pass 2" and "Audit pass 3". The
+> 2026-07-07 body below is kept as-is for history — check the later passes
+> before treating anything here as current.
 
 **Date:** 2026-07-07
 **Scope:** Engineering-level review of the codebase against technical controls typically required by SOC 2, ISO 27001, GDPR, and PCI DSS.
@@ -249,3 +250,172 @@ project/org ids. Added to `.gitignore`.
   are from code/schema analysis plus local reasoning. The XSS fix is covered by
   a runnable check; the RLS change was applied and typechecked but not
   exercised with a real staff-role session.
+
+---
+
+# Audit pass 3 — 2026-08-05 (tradiee-mobile + PowerSync sync rules)
+
+**Scope:** the Expo/React Native app, plus the PowerSync sync rules as an
+access-control boundary — explicitly called out at the end of pass 2 as not
+yet covered. `tradiee-app/` and the root marketing files were out of scope
+(already covered in pass 2).
+
+Run as an isolated background agent (worktree `agent-a6a31d8a893013113`,
+branch `worktree-agent-a6a31d8a893013113`), reviewed and merged by the parent
+session rather than taken on trust — every fix below was independently
+re-verified: diffs read in full, the two new runnable checks re-run from the
+main tree (not just inside the worktree), the claimed APIs (`expo-secure-store`'s
+`AFTER_FIRST_UNLOCK`, PowerSync's `disconnectAndClear()`) confirmed to actually
+exist in the installed packages, and the sync-rules finding cross-checked
+against the live database directly (see the correction below).
+
+## Fixed this pass
+
+### [HIGH] Supabase refresh token mirrored into unencrypted AsyncStorage
+`lib/supabase.ts` persisted the session in `expo-secure-store`, then
+immediately copied the access *and refresh* token back out into AsyncStorage
+so the background location task could authenticate — negating the SecureStore
+adapter entirely. AsyncStorage is a plain unencrypted SQLite file, readable
+from a device backup, `adb backup`, or a rooted/jailbroken phone. A refresh
+token is long-lived and mints fresh access tokens on demand, so this was a
+standing account-takeover primitive in cleartext on disk.
+
+The stated justification ("SecureStore is unavailable in background tasks")
+was a misdiagnosis — the real failure is an iOS Keychain read while the phone
+is locked (items default to `WHEN_UNLOCKED`, and the background location
+task runs exactly then). Root-cause fix: write with
+`keychainAccessible: AFTER_FIRST_UNLOCK` and have the background task use the
+app's one shared client instead of rebuilding a second one from hand-copied
+tokens. Also fixed a latent reliability bug this uncovered: the throwaway
+client ran `persistSession: false`, so a token refresh there silently broke
+background writes until the app was next foregrounded. Existing installs
+already have the token on disk — `supabase.ts` now deletes the legacy key
+once at startup.
+
+### [MEDIUM] Script injection into the job-map WebView
+`app/job-map.tsx` interpolated `JSON.stringify(...)` directly into an inline
+`<script>` inside a `WebView` with `originWhitelist={['*']}`. Same bug class
+as the 2026-08-04 JSON-LD XSS: `JSON.stringify` doesn't escape `<`, so a job
+titled `</script><script>...</script>` closed the tag and ran as markup. Job
+titles are not trusted input — written by other company members, and
+`tradiee-app`'s enquiries flow lets a job title originate from the public,
+unauthenticated booking widget. Fixed with the same `\uXXXX` escaping
+approach as `serializeJsonLd()`. Covered by a new runnable check
+(`tradiee-mobile/scripts/check-map-escaping.mjs`) that extracts the shipped
+helper from the source file at runtime rather than copying it, so the check
+can't silently drift from the real implementation.
+
+### [MEDIUM] Offline PowerSync replica survived sign-out
+Sign-out called `auth.signOut()`; the layout's cleanup called `db.disconnect()`.
+Neither touches data. The local replica (`tradelogix.db`, `enableSQLCipher:
+false`) holds the whole synced dataset — customers, site access notes,
+price-list costs, timesheet pay rates, quotes, invoices — and none of it was
+cleared, so it outlived the session on disk indefinitely: readable by whoever
+holds the device next (resale, a shared work handset), and a second sign-in
+on the same phone would land on top of the previous account's rows. Fixed
+with `db.disconnectAndClear()`, wired into `onAuthStateChange` (covers a
+revoked/expired session too, not just the sign-out button). Also set
+`android.allowBackup: false` — Auto Backup defaults on and would otherwise
+copy the same unencrypted store to the user's Google Drive. This bounds the
+unencrypted-replica gap, it doesn't close it (see "Still open" below).
+
+### [MEDIUM] Stale, non-role-aware sync rules — and the admin UI was actively recommending them
+Two sync-rule files existed. `sync-rules.yaml` is current and role-aware
+(mirrors migration 031: owner/admin get the full dataset, staff get
+reference data plus only their own jobs/time, never quotes or invoices).
+`powersync-sync-rules.yaml` was an older edition where every query was
+scoped to company only, with no role check at all — deploying it would have
+handed every staff user the whole company's timesheets (`bill_rate`,
+`cost_rate` included) and every job's material costs, all of which
+migration 031 makes owner/admin-only. Verified by reading the deleted file's
+actual content before it was removed: confirmed, all 11 queries filtered
+only on `company_id`.
+
+This wasn't a dormant leftover: `tradiee-app/app/admin/settings/page.tsx`
+told operators, by filename, to paste `powersync-sync-rules.yaml` into the
+PowerSync dashboard. Fixed by deleting the stale file and — in a follow-up
+commit — correcting that one-line reference (flagged by the mobile-audit
+pass as correctly out of its own scope, since it's a `tradiee-app` file).
+
+New `scripts/check-sync-rules.mjs` makes the invariant enforceable: asserts
+every stream query is scoped by `auth.user_id()`, that any company-wide join
+is also role-gated, and that the tables migration 031 restricts to
+owner/admin are only ever reached through a role-gated stream. All pass (45
+queries, 0 unscoped).
+
+**Correction to the mobile-audit pass's original finding:** its fourth
+assertion (sync rules reference tables absent from the `powersync`
+publication) failed against `sync-rules.yaml`, and the pass reported this as
+"still open." Before accepting that, the parent session queried
+`pg_publication_tables` on the live database directly rather than relying on
+static analysis — production already has all six tables published
+correctly, matching the 2026-08-02 fix. The real gap was narrower than first
+reported: the fix landed as a standalone idempotent script
+(`supabase/powersync-publication.sql`), not a tracked migration, so
+`supabase db push` alone — a fresh dev environment, a disaster-recovery
+restore — would silently reproduce the exact publication gap that caused the
+2026-08-02 outage. New migration
+`20260805130000_powersync_publication_full_table_list.sql` folds that
+script's table list into the tracked sequence (same idempotent guards).
+Applied to remote and confirmed as a no-op, exactly as expected. Also fixed
+`check-sync-rules.mjs`'s fourth assertion, which only parsed migration 022 in
+isolation and would have kept failing forever even with the new migration
+present — it now scans every migration for both the plain
+`alter publication ... add table` form and the `wanted := array[...]`
+PL/pgSQL-loop form the new migration uses.
+
+## Verified clean (no action needed)
+
+- **Sync rules are correctly scoped** (see above) — 45/45 queries pass all
+  three access-control assertions.
+- **No secrets in the bundle.** Only 6 `EXPO_PUBLIC_*` vars referenced
+  anywhere; no service-role key, Stripe secret key, JWTs, or private keys.
+  `eas.json`'s submit-config paths (`.p8`, service-account JSON) are
+  gitignored and absent from the repo.
+- **Every authenticated API call attaches the bearer token** — checked all
+  24 `fetch()` call sites. The only unauthenticated one is `/api/auth/signup`,
+  correctly so.
+- **Deep links are not an authorization surface.** The one handled link
+  (`industryforms://invite/<token>`) presents its token to
+  `/api/invitations/accept`, which still requires the bearer token — no
+  client-side authorization decision made from a link param, nothing
+  resembling the web app's OAuth `state`-param vulnerability from pass 1.
+- **Financial amounts stay server-derived on mobile too** — Tap to Pay sends
+  an invoice id, not a client-computed amount; the owner/admin-only ToS gate
+  on connecting a reader is correctly enforced.
+- **TLS is stock**, no cleartext-traffic opt-outs, no cert-pinning removed.
+- **Login/signup are clean** — no credential logging, enumeration-safe reset
+  copy, client-side password check backing the server-side policy.
+
+## Still open
+
+1. **[MEDIUM] MFA is bypassable via the mobile app.** The web app enforces
+   `aal2` (TOTP) on `/admin`. Mobile has no MFA challenge screen at all —
+   `signInWithPassword` returns an aal1 session and the app proceeds. No
+   super-admin surface exists on mobile to bypass, but a user who enrolled
+   TOTP expecting it to protect their account has a password-only door to
+   the same company data via the phone. Needs a real MFA challenge screen —
+   a feature, not a patch.
+2. **[LOW-MEDIUM] Local replica is unencrypted** (`enableSQLCipher: false`).
+   `allowBackup: false` (this pass) bounds the exposure; turning on SQLCipher
+   needs a key-management decision and an existing-install migration path.
+3. **[LOW] The job-map WebView loads Leaflet from `unpkg.com`** and tiles
+   from OpenStreetMap — third-party script executing in-app, and job
+   coordinates leaving to a third party. Pass 2 removed the equivalent unpkg
+   dependency from the marketing site for the same reason; vendoring Leaflet
+   here wasn't attempted.
+4. **[LOW] `EXPO_PUBLIC_LOCATIONIQ_KEY`** ships in the mobile bundle, same
+   key already flagged in the web app. Confirm it's domain/app-restricted in
+   the LocationIQ dashboard.
+5. Session tokens use `AFTER_FIRST_UNLOCK`, not
+   `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` — the stricter constant would stop a
+   session restoring onto a replacement device, at the cost of forcing
+   re-login after a device restore. A product call, not a bug.
+
+## Not covered
+
+- No `npm audit` run on `tradiee-mobile`, no dependency version bumps.
+- Nothing exercised on a real device or simulator — the Keychain-read-while-
+  locked behaviour, the sign-out wipe, and the WebView render all need
+  hardware to confirm; every code path is typechecked (`npx tsc --noEmit`
+  clean, re-run independently from the main tree after merge) but not run.
