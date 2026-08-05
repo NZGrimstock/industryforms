@@ -8,6 +8,23 @@ import { dirname, join } from 'node:path'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
+// Every POSTS[] field below is hardcoded by hand, not attacker-controlled — but
+// it's still raw-interpolated into HTML text/attributes and into a JSON-LD
+// <script> block. Escaping it anyway means the pattern stays safe if this data
+// ever stops being hand-authored (e.g. if these pages get an editor later), and
+// mirrors lib/website-seo.ts's serializeJsonLd() fix for the same sink class on
+// the tenant sites — same bug, same fix, don't leave it unescaped just because
+// today's inputs happen to be clean.
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function escJsonLd(s) {
+  // JSON.stringify handles quotes/backslashes/control chars correctly; strip
+  // the wrapping quotes since the template already supplies them, then also
+  // neutralize < so a literal </script> can't close the surrounding tag.
+  return JSON.stringify(String(s)).slice(1, -1).replace(/</g, '\\u003c')
+}
+
 const CATEGORY_COLOR = { brand: 'text-brand', teal: 'text-teal', grape: 'text-grape' }
 
 const POSTS = [
@@ -413,27 +430,29 @@ function relatedPosts(current) {
 function page(post) {
   const url = `https://www.industryforms.app/blog/${post.slug}.html`
   const related = relatedPosts(post)
+  const h = { title: escHtml(post.title), description: escHtml(post.description), category: escHtml(post.category), ctaText: escHtml(post.ctaText) }
+  const j = { title: escJsonLd(post.title), description: escJsonLd(post.description) }
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${post.title} — Industry Forms</title>
-<meta name="description" content="${post.description}">
+<title>${h.title} — Industry Forms</title>
+<meta name="description" content="${h.description}">
 <link rel="canonical" href="${url}">
 <link rel="icon" href="../Logo/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="../Logo/favicon.png">
 <meta name="theme-color" content="#E8722A">
-<meta property="og:title" content="${post.title}">
-<meta property="og:description" content="${post.description}">
+<meta property="og:title" content="${h.title}">
+<meta property="og:description" content="${h.description}">
 <meta property="og:type" content="article">
 <meta property="og:url" content="${url}">
 <meta property="og:image" content="https://www.industryforms.app/Logo/Logo.png">
 <meta property="og:site_name" content="Industry Forms">
 <meta property="og:locale" content="en_NZ">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${post.title}">
-<meta name="twitter:description" content="${post.description}">
+<meta name="twitter:title" content="${h.title}">
+<meta name="twitter:description" content="${h.description}">
 <meta name="twitter:image" content="https://www.industryforms.app/Logo/Logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="preload" as="font" type="font/woff2" href="../fonts/figtree.woff2" crossorigin>
@@ -447,8 +466,8 @@ function page(post) {
   "@graph": [
     {
       "@type": "BlogPosting",
-      "headline": "${post.title}",
-      "description": "${post.description}",
+      "headline": "${j.title}",
+      "description": "${j.description}",
       "datePublished": "${post.datePublished}",
       "dateModified": "${DATE_MODIFIED}",
       "author": { "@type": "Organization", "name": "Industry Forms" },
@@ -465,7 +484,7 @@ function page(post) {
       "itemListElement": [
         { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.industryforms.app/" },
         { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://www.industryforms.app/blog.html" },
-        { "@type": "ListItem", "position": 3, "name": "${post.title}", "item": "${url}" }
+        { "@type": "ListItem", "position": 3, "name": "${j.title}", "item": "${url}" }
       ]
     }
   ]
@@ -526,14 +545,14 @@ function page(post) {
 
 <main id="main" class="max-w-3xl mx-auto px-6 pt-36 pb-24">
   <nav aria-label="Breadcrumb" class="mb-6 text-xs text-ink/40">
-    <a href="../blog.html" class="hover:text-ink transition-colors">Blog</a> / <span class="text-ink/60">${post.category}</span>
+    <a href="../blog.html" class="hover:text-ink transition-colors">Blog</a> / <span class="text-ink/60">${h.category}</span>
   </nav>
   <article class="bg-white rounded-3xl border border-black/[0.05] p-8 md:p-10 scroll-mt-24">
-    <p class="text-xs font-semibold ${CATEGORY_COLOR[post.color]} mb-2">${post.category}</p>
-    <h1 class="font-display font-bold text-2xl md:text-3xl text-ink mb-6 leading-tight">${post.title}</h1>
+    <p class="text-xs font-semibold ${CATEGORY_COLOR[post.color]} mb-2">${h.category}</p>
+    <h1 class="font-display font-bold text-2xl md:text-3xl text-ink mb-6 leading-tight">${h.title}</h1>
     <div class="prose-post">${post.body}
     </div>
-    <a href="https://app.industryforms.app" class="btn-brand bg-brand text-white font-semibold text-sm px-6 py-3 rounded-full inline-flex items-center gap-2 mt-2">${post.ctaText} <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+    <a href="https://app.industryforms.app" class="btn-brand bg-brand text-white font-semibold text-sm px-6 py-3 rounded-full inline-flex items-center gap-2 mt-2">${h.ctaText} <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
   </article>
 
   <div class="mt-10">
@@ -541,8 +560,8 @@ function page(post) {
     <div class="flex flex-col gap-3">
       ${related.map(r => `<a href="${r.slug}.html" class="card-lift bg-white rounded-2xl border border-black/[0.05] p-5 flex items-center justify-between gap-4">
         <div>
-          <p class="text-xs font-semibold ${CATEGORY_COLOR[r.color]} mb-1">${r.category}</p>
-          <p class="font-display font-semibold text-ink">${r.title}</p>
+          <p class="text-xs font-semibold ${CATEGORY_COLOR[r.color]} mb-1">${escHtml(r.category)}</p>
+          <p class="font-display font-semibold text-ink">${escHtml(r.title)}</p>
         </div>
         <i data-lucide="arrow-right" class="w-4 h-4 text-ink/30 flex-shrink-0"></i>
       </a>`).join('\n      ')}

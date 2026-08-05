@@ -8,6 +8,19 @@ import { dirname, join } from 'node:path'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
+// Every TRADES[] field below is hardcoded by hand, not attacker-controlled —
+// but it's still raw-interpolated into HTML text/attributes and into a
+// JSON-LD <script> block. Escaping it anyway keeps the pattern safe if this
+// data ever stops being hand-authored, and mirrors both
+// lib/website-seo.ts's serializeJsonLd() (tenant sites) and the same fix in
+// build-blog-pages.mjs — same sink class, same fix, every time.
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function escJsonLd(s) {
+  return JSON.stringify(String(s)).slice(1, -1).replace(/</g, '\\u003c')
+}
+
 const TRADES = [
   {
     slug: 'plumbers',
@@ -198,27 +211,29 @@ const BLOG_TITLES = {
 function page(t) {
   const url = `https://www.industryforms.app/trades/${t.slug}.html`
   const description = `Job management software for ${t.name.toLowerCase()} in NZ and Australia — quotes, scheduling, offline mobile job cards, invoicing, and Stripe payments in one place. Free 28-day trial.`
+  const h = { heading: escHtml(t.heading), description: escHtml(description), name: escHtml(t.name), intro: escHtml(t.intro) }
+  const j = { description: escJsonLd(description), name: escJsonLd(t.name) }
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${t.heading} — Industry Forms</title>
-<meta name="description" content="${description}">
+<title>${h.heading} — Industry Forms</title>
+<meta name="description" content="${h.description}">
 <link rel="canonical" href="${url}">
 <link rel="icon" href="../Logo/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="../Logo/favicon.png">
 <meta name="theme-color" content="#E8722A">
-<meta property="og:title" content="${t.heading}">
-<meta property="og:description" content="${description}">
+<meta property="og:title" content="${h.heading}">
+<meta property="og:description" content="${h.description}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${url}">
 <meta property="og:image" content="https://www.industryforms.app/Logo/Logo.png">
 <meta property="og:site_name" content="Industry Forms">
 <meta property="og:locale" content="en_NZ">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${t.heading}">
-<meta name="twitter:description" content="${description}">
+<meta name="twitter:title" content="${h.heading}">
+<meta name="twitter:description" content="${h.description}">
 <meta name="twitter:image" content="https://www.industryforms.app/Logo/Logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="preload" as="font" type="font/woff2" href="../fonts/figtree.woff2" crossorigin>
@@ -236,22 +251,22 @@ function page(t) {
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "Web, iOS, Android",
       "url": "${url}",
-      "description": "${description}",
+      "description": "${j.description}",
       "areaServed": ["New Zealand", "Australia"],
-      "audience": { "@type": "BusinessAudience", "audienceType": "${t.name}" },
+      "audience": { "@type": "BusinessAudience", "audienceType": "${j.name}" },
       "offers": { "@type": "Offer", "price": "29", "priceCurrency": "NZD", "availability": "https://schema.org/InStock", "url": "https://app.industryforms.app/signup" }
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
-${t.faqs.map(f => `        { "@type": "Question", "name": "${f.q}", "acceptedAnswer": { "@type": "Answer", "text": "${f.a}" } }`).join(',\n')}
+${t.faqs.map(f => `        { "@type": "Question", "name": "${escJsonLd(f.q)}", "acceptedAnswer": { "@type": "Answer", "text": "${escJsonLd(f.a)}" } }`).join(',\n')}
       ]
     },
     {
       "@type": "BreadcrumbList",
       "itemListElement": [
         { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.industryforms.app/" },
-        { "@type": "ListItem", "position": 2, "name": "${t.name}", "item": "${url}" }
+        { "@type": "ListItem", "position": 2, "name": "${j.name}", "item": "${url}" }
       ]
     }
   ]
@@ -310,11 +325,11 @@ ${t.faqs.map(f => `        { "@type": "Question", "name": "${f.q}", "acceptedAns
 
 <header class="pt-36 pb-16 px-6 max-w-4xl mx-auto text-center">
   <nav aria-label="Breadcrumb" class="mb-5 text-xs text-ink/40">
-    <a href="../index.html" class="hover:text-ink transition-colors">Home</a> / <span class="text-ink/60">${t.name}</span>
+    <a href="../index.html" class="hover:text-ink transition-colors">Home</a> / <span class="text-ink/60">${h.name}</span>
   </nav>
-  <p class="text-[10px] font-bold tracking-widest uppercase text-brand mb-4">For ${t.name}</p>
-  <h1 class="font-display font-bold text-4xl md:text-5xl leading-[1.05] tracking-tight text-ink mb-5">${t.heading.replace('Job management software for ', 'Job management software for ')}</h1>
-  <p class="text-lg text-ink/50 max-w-2xl mx-auto leading-relaxed">${t.intro}</p>
+  <p class="text-[10px] font-bold tracking-widest uppercase text-brand mb-4">For ${h.name}</p>
+  <h1 class="font-display font-bold text-4xl md:text-5xl leading-[1.05] tracking-tight text-ink mb-5">${h.heading}</h1>
+  <p class="text-lg text-ink/50 max-w-2xl mx-auto leading-relaxed">${h.intro}</p>
   <a href="https://app.industryforms.app" class="btn-brand bg-brand text-white font-semibold text-sm px-6 py-3.5 rounded-full inline-flex items-center gap-2 mt-8">Start 4-Week Free Trial <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
 </header>
 
@@ -322,7 +337,7 @@ ${t.faqs.map(f => `        { "@type": "Question", "name": "${f.q}", "acceptedAns
   <section class="bg-white rounded-3xl border border-black/[0.05] p-8 md:p-10 mb-10">
     <h2 class="font-display font-bold text-2xl text-ink mb-6">Built for ${t.name.toLowerCase()}</h2>
     <ul class="space-y-3">
-${t.built.map(b => `      <li class="flex items-start gap-3"><i data-lucide="check" class="w-5 h-5 text-brand flex-shrink-0 mt-0.5"></i><span class="text-ink/70">${b}</span></li>`).join('\n')}
+${t.built.map(b => `      <li class="flex items-start gap-3"><i data-lucide="check" class="w-5 h-5 text-brand flex-shrink-0 mt-0.5"></i><span class="text-ink/70">${escHtml(b)}</span></li>`).join('\n')}
     </ul>
   </section>
 
@@ -331,10 +346,10 @@ ${t.built.map(b => `      <li class="flex items-start gap-3"><i data-lucide="che
     <div class="space-y-3">
 ${t.faqs.map(f => `      <details class="faq-item bg-white border border-black/[0.05] rounded-2xl overflow-hidden">
         <summary class="w-full flex items-center justify-between gap-4 text-left p-6">
-          <span class="font-display font-bold text-ink">${f.q}</span>
+          <span class="font-display font-bold text-ink">${escHtml(f.q)}</span>
           <i data-lucide="plus" class="faq-icon w-5 h-5 text-brand transition-transform"></i>
         </summary>
-        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">${f.a}</div>
+        <div class="px-6 pb-6 text-sm text-ink/55 leading-relaxed">${escHtml(f.a)}</div>
       </details>`).join('\n')}
     </div>
   </section>
@@ -369,7 +384,7 @@ ${t.relatedBlogSlugs.map(slug => `      <a href="../blog/${slug}.html" class="ca
       <div>
         <p class="text-[10px] font-bold tracking-widest uppercase text-white/25 mb-5">Solutions</p>
         <ul class="space-y-3">
-${TRADES.map(o => `          <li><a href="${o.slug}.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">${o.name}</a></li>`).join('\n')}
+${TRADES.map(o => `          <li><a href="${o.slug}.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">${escHtml(o.name)}</a></li>`).join('\n')}
         </ul>
       </div>
       <div>
