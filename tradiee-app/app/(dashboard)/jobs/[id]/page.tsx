@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatDateTime, formatCurrency } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
+import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
+import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
 import { JobDetailClient } from './client'
 import { JobMaterials } from './materials'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
@@ -35,7 +37,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('*, customers(name, email, phone), customer_sites!site_id(address), profiles!assigned_to(full_name), quotes!quote_id(quote_number)')
+    .select('*, customers(name, email, phone), customer_sites!site_id(address), profiles!assigned_to(full_name), quotes!quote_id(quote_number, total)')
     .eq('id', id)
     .eq('company_id', profile!.company_id)
     .single()
@@ -150,6 +152,22 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   }, 0)
   const totalPaid = (invoicesRes.data ?? []).reduce((sum, i) => sum + Number(i.amount_paid ?? 0), 0)
   const totalInvoiced = (invoicesRes.data ?? []).reduce((sum, i) => sum + Number(i.total ?? 0), 0)
+
+  // At-a-glance financial box (top of page) — distinct from the Job Costing
+  // card further down: this excludes void invoices (summarizeInvoices) and
+  // compares against the quote's GST-inclusive total, not the excl.-GST
+  // estimate the costing card uses.
+  const jobQuote = job.quotes as unknown as { quote_number: string; total: number } | null
+  const { invoiced: financialInvoiced, paid: financialPaid, outstanding: financialOutstanding } = summarizeInvoices(invoicesRes.data ?? [])
+  const financialJobTotal = jobTotal(jobQuote?.total, financialInvoiced)
+  const financialToInvoice = toInvoice(financialJobTotal, financialInvoiced)
+  const jobFinancialStats: FinancialStat[] = [
+    { label: 'Job total', value: financialJobTotal },
+    { label: 'Invoiced', value: financialInvoiced },
+    { label: 'To invoice', value: financialToInvoice },
+    { label: 'Paid', value: financialPaid, accent: 'good' },
+    { label: 'Outstanding', value: financialOutstanding, accent: financialOutstanding > 0 ? 'warn' : 'neutral' },
+  ]
   // Sum of invoiced value excl. GST (excluding voided invoices) — used to prevent over-invoicing
   const alreadyInvoiced = (invoicesRes.data ?? [])
     .filter(i => i.status !== 'void')
@@ -185,6 +203,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   const co = profile?.companies as { name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
+  const currency = co?.country === 'AU' ? 'AUD' : 'NZD'
   const sheetData = {
     job: {
       id: job.id,
@@ -252,7 +271,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               <Link href={`/customers/${job.customer_id}`} className="text-orange-500 hover:underline">
                 {(job.customers as {name: string})?.name}
               </Link>
-              {job.quotes && <> · From quote <Link href={`/quotes/${job.quote_id}`} className="text-orange-500 hover:underline">{(job.quotes as {quote_number: string}).quote_number}</Link></>}
+              {job.quotes && <> · From quote <Link href={`/quotes/${job.quote_id}`} className="text-orange-500 hover:underline">{jobQuote?.quote_number}</Link></>}
             </p>
             <JobSiteSelector
               jobId={id}
@@ -286,6 +305,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               actualTotal={actualTotal}
               jobStatuses={jobStatuses}
             />
+          </div>
+        </div>
+
+        {/* At-a-glance financial position — kept right up top so it's visible
+            without scrolling past everything else on the job. */}
+        <div className="flex justify-end">
+          <div className="w-full sm:w-64">
+            <FinancialStatBox stats={jobFinancialStats} orientation="column" currency={currency} />
           </div>
         </div>
 

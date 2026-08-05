@@ -4,6 +4,9 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatDate, formatCurrency, formatDateTime } from '@/lib/utils'
+import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
+import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
+import { currentFinancialYearStart } from '@/lib/financial-year'
 import Link from 'next/link'
 import { CustomerDetailClient } from './client'
 import { SmsThread } from '@/components/customers/sms-thread'
@@ -13,7 +16,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('company_id, full_name, role, timezone, companies!company_id(country)')
+    .eq('id', user!.id)
+    .single()
 
   const { data: customer } = await supabase
     .from('customers')
@@ -24,19 +31,62 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   if (!customer) notFound()
 
-  const [quotesRes, jobsRes, invoicesRes, commsRes, messagesRes, pricingGroupsRes] = await Promise.all([
+  const company = profile!.companies as unknown as { country: string | null } | null
+  const currency = company?.country === 'AU' ? 'AUD' : 'NZD'
+
+  const [quotesRes, jobsRes, allInvoicesRes, commsRes, messagesRes, pricingGroupsRes] = await Promise.all([
     supabase.from('quotes').select('id, quote_number, status, total, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
-    supabase.from('jobs').select('id, job_number, title, status, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
-    supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, due_date').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
+    // quote_id + linked quote total needed to work out each job's "to invoice"
+    // ceiling — see lib/job-financials.ts. Not limited to 10: this feeds the
+    // stat box, not just the visible list.
+    supabase.from('jobs').select('id, job_number, title, status, created_at, quote_id, quotes(total)').eq('customer_id', id).order('created_at', { ascending: false }),
+    // Also unlimited — the stat box needs the customer's full invoice history,
+    // not just the 10 most recent shown in the card below.
+    supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, due_date, job_id, created_at').eq('customer_id', id).order('created_at', { ascending: false }),
     supabase.from('communications').select('id, channel, direction, subject, summary, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(20),
     supabase.from('customer_messages').select('id, direction, body, created_at, delivery_status').eq('customer_id', id).order('created_at', { ascending: true }).limit(200),
     supabase.from('customer_groups').select('id, name').eq('company_id', profile!.company_id).order('name'),
   ])
 
+  const allInvoices = allInvoicesRes.data ?? []
+  const allJobs = jobsRes.data ?? []
+  // Both re-sliced to 10 for their display cards below — the unlimited fetch
+  // above is only for the financial stat box's totals, not the visible lists.
+  const invoicesRes = { data: allInvoices.slice(0, 10) }
+  const jobsForDisplay = allJobs.slice(0, 10)
+
+  const { invoiced, paid, outstanding } = summarizeInvoices(allInvoices)
+
+  // "To invoice" per job needs that job's own invoices, so group first.
+  const invoicedByJob = new Map<string, number>()
+  for (const inv of allInvoices) {
+    if (inv.status === 'void' || !inv.job_id) continue
+    invoicedByJob.set(inv.job_id, (invoicedByJob.get(inv.job_id) ?? 0) + Number(inv.total))
+  }
+  const toInvoiceTotal = allJobs.reduce((sum, j) => {
+    const quote = j.quotes as unknown as { total: number } | null
+    const jobInvoiced = invoicedByJob.get(j.id) ?? 0
+    return sum + toInvoice(jobTotal(quote?.total, jobInvoiced), jobInvoiced)
+  }, 0)
+
+  const fyStart = currentFinancialYearStart(new Date(), company?.country, profile!.timezone)
+  const fytdInvoiced = allInvoices
+    .filter(i => i.status !== 'void' && new Date(i.created_at) >= fyStart)
+    .reduce((sum, i) => sum + Number(i.total), 0)
+
+  const stats: FinancialStat[] = [
+    { label: 'To invoice', value: toInvoiceTotal },
+    { label: 'Invoiced', value: invoiced },
+    { label: 'Paid', value: paid, accent: 'good' },
+    { label: 'Outstanding', value: outstanding, accent: outstanding > 0 ? 'warn' : 'neutral' },
+    { label: 'Total FYTD', value: fytdInvoiced },
+  ]
+
   return (
     <>
       <Header title={customer.name} profile={profile} />
       <div className="p-6 space-y-6">
+        <FinancialStatBox stats={stats} currency={currency} />
         <CustomerDetailClient customer={customer} companyId={profile!.company_id} pricingGroups={pricingGroupsRes.data ?? []} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -78,11 +128,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {(jobsRes.data ?? []).length === 0 ? (
+              {jobsForDisplay.length === 0 ? (
                 <p className="text-sm text-gray-400 px-6 pb-4">No jobs</p>
               ) : (
                 <ul className="divide-y divide-gray-50">
-                  {(jobsRes.data ?? []).map(j => (
+                  {jobsForDisplay.map(j => (
                     <li key={j.id}>
                       <Link href={`/jobs/${j.id}`} className="flex items-center justify-between px-6 py-2.5 hover:bg-gray-50 text-sm">
                         <div>

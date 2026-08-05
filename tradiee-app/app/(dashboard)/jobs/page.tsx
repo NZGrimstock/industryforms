@@ -1,19 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
-import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { formatDate } from '@/lib/utils'
 import { getJobStatuses } from '@/lib/job-statuses'
 import Link from 'next/link'
 import { Briefcase, List, LayoutGrid, Map } from 'lucide-react'
-import { DeleteConfirmButton } from '@/components/ui/delete-confirm-button'
 import React from 'react'
 import { NewJobButton } from './client'
 import { JobBoard } from './board'
 import { JobTemplatesPanel, ServiceRemindersPanel } from './panels'
 import { ListSearch } from '@/components/ui/list-search'
-import { SortHeader } from '@/components/ui/sort-header'
-import { InlineStatus } from '@/components/jobs/inline-status'
+import { JobsListTable } from '@/components/jobs/jobs-list-table'
 import { nextDocNumber } from '@/lib/numbering'
 
 const SORTABLE = ['job_number', 'title', 'status', 'created_at']
@@ -24,7 +20,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(standard_markup_enabled, standard_markup_pct, default_job_assignee_id)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(standard_markup_enabled, standard_markup_pct, default_job_assignee_id, default_gst_rate)').eq('id', user!.id).single()
   const [customersRes, priceItemsRes, jobStatuses, teamRes] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('id, name, unit, sell_price, cost_price, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
@@ -34,7 +30,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const customers = customersRes.data
   const priceItems = priceItemsRes.data ?? []
   const teamMembers = teamRes.data ?? []
-  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number; default_job_assignee_id?: string | null } | null
+  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number; default_job_assignee_id?: string | null; default_gst_rate?: number } | null
+  const gstRate = companySettings?.default_gst_rate ?? 0.15
   const terminalKeys = jobStatuses.filter(s => s.is_terminal).map(s => s.key)
 
   // Board needs all active statuses; list can be filtered.
@@ -126,36 +123,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} />
             } />
           ) : (
-            <Card className="overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Job #" column="job_number" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Title" column="title" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Customer</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Reference</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Status" column="status" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500">Assigned to</th>
-                    <th className="text-left px-6 py-3 font-medium text-gray-500"><SortHeader label="Created" column="created_at" basePath="/jobs" params={sortParams} sort={sp.sort} dir={sp.dir} /></th>
-                    <th className="w-10 px-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {jobs.map(j => (
-                    <tr key={j.id} className="hover:bg-gray-50 cursor-pointer">
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 font-medium text-gray-900">{j.job_number}</Link></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-700 max-w-[200px] truncate">{j.title}</Link></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-600">{(j.customers as {name: string} | null)?.name ?? '—'}</Link></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{j.reference ?? '—'}</Link></td>
-                      <td className="px-6 py-3"><InlineStatus jobId={j.id} status={j.status} statuses={jobStatuses} /></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-500">{(j.profiles as {full_name: string} | null)?.full_name ?? '—'}</Link></td>
-                      <td className="p-0"><Link href={`/jobs/${j.id}`} className="block px-6 py-3 text-gray-400">{formatDate(j.created_at)}</Link></td>
-                      <td className="px-3"><DeleteConfirmButton id={j.id} table="jobs" label="job" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
+            <JobsListTable
+              jobs={jobs as unknown as Parameters<typeof JobsListTable>[0]['jobs']}
+              jobStatuses={jobStatuses}
+              companyId={profile!.company_id}
+              gstRate={gstRate}
+              sortParams={sortParams}
+              sort={sp.sort}
+              dir={sp.dir}
+            />
           )
         )}
         </>
