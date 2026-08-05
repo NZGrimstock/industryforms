@@ -91,7 +91,20 @@ export default function RootLayout() {
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (!session) router.replace('/login')
+      if (!session) {
+        // Wipe the offline replica, not just the connection. `tradelogix.db` is
+        // an unencrypted SQLite file (enableSQLCipher: false) holding the whole
+        // synced dataset — customers, site addresses and access notes, price
+        // lists, timesheets with pay rates, invoices. db.disconnect() alone
+        // leaves every row of it on disk after sign-out, so the next person to
+        // hold the phone (resale, a shared work handset, a subcontractor
+        // handing the device back) can still read the previous account's data,
+        // and a second user signing in inherits rows their own sync rules would
+        // never have sent them. Handled here rather than in the sign-out button
+        // so it also covers a revoked or expired session.
+        db.disconnectAndClear().catch(console.error)
+        router.replace('/login')
+      }
     })
     return () => subscription.unsubscribe()
   }, [])

@@ -26,9 +26,27 @@ function hasCoords(j: MapJob) {
   return Number.isFinite(j.lat) && Number.isFinite(j.lng)
 }
 
+// JSON.stringify does not escape `<`, so a job titled `</script><script>…`
+// closes the inline <script> below and the rest of the title runs as markup in
+// the WebView. Job titles are not trusted input. Beyond other company members
+// writing them, converting an enquiry to a job copies the enquiry description
+// straight into the title (tradiee-app enquiries/[id]/client.tsx:
+// `title: enquiry.description?.slice(0, 100)`), and enquiry descriptions come
+// from the public contact/booking forms — i.e. from anonymous visitors. Escaping
+// to \uXXXX keeps the value valid JSON that round-trips losslessly (the map pin
+// still shows the real title) while making a tag break-out impossible. Same fix
+// as serializeJsonLd() in the web app's lib/website-seo.ts.
+// U+2028/U+2029 are legal in JSON strings but are line terminators to a JS
+// parser, so they are escaped here too.
+function escapeForScriptTag(json: string) {
+  return json.replace(/[<>&\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
+}
+
 function buildHtml(jobs: MapJob[]) {
   const located = jobs.filter(hasCoords)
-  const pts = JSON.stringify(located.map((j, i) => ({ lat: j.lat, lng: j.lng, label: `${i + 1}. ${j.job_number} — ${j.title}` })))
+  const pts = escapeForScriptTag(
+    JSON.stringify(located.map((j, i) => ({ lat: j.lat, lng: j.lng, label: `${i + 1}. ${j.job_number} — ${j.title}` })))
+  )
   return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>html,body,#map{height:100%;margin:0;padding:0}</style></head>
