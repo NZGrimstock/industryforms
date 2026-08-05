@@ -162,7 +162,11 @@
      forever waiting for an IntersectionObserver that will never fire. */
   html.js .reveal { opacity: 0; transform: translateY(32px); }
   .reveal { transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
-  .reveal.in { opacity: 1; transform: translateY(0); }
+  /* Must be at least as specific as "html.js .reveal" above (element + 2
+     classes) or the hidden state wins regardless of the .in class — plain
+     ".reveal.in" (2 classes, no element) loses that specificity fight and
+     the page stays permanently blank even though JS adds "in" correctly. */
+  html.js .reveal.in { opacity: 1; transform: translateY(0); }
   .reveal-d1 { transition-delay: 0.08s; }
   .reveal-d2 { transition-delay: 0.16s; }
   .reveal-d3 { transition-delay: 0.24s; }
