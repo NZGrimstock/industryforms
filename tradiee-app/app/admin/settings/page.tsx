@@ -26,7 +26,7 @@ export default function AdminSettings() {
           <h2 className="text-sm font-semibold text-gray-300 mb-1">PowerSync</h2>
           <p className="text-xs text-gray-500">
             Set <code className="bg-gray-800 px-1 py-0.5 rounded text-orange-400">NEXT_PUBLIC_POWERSYNC_URL</code> in your environment variables to enable offline sync.
-            Project name: <strong className="text-gray-300">IndustryForms</strong>. Paste <code className="text-orange-400">powersync-sync-rules.yaml</code> into the PowerSync dashboard.
+            Project name: <strong className="text-gray-300">IndustryForms</strong>. Paste <code className="text-orange-400">sync-rules.yaml</code> into the PowerSync dashboard.
           </p>
         </div>
       </div>

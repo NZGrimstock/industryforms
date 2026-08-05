@@ -8,7 +8,7 @@
 // Exits non-zero on a scoping regression. Cheap enough to run in CI.
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -80,18 +80,33 @@ for (const table of ADMIN_ONLY) {
 // the 2026-08-02 outage. Fails closed (missing tables sync nothing rather than
 // too much), but a silently half-syncing device is still a bug.
 //
-// KNOWN OPEN as of the 2026-08-05 mobile audit: this assertion fails. Migration
-// 022 predates six tables the current rules reference — `profiles` most
-// importantly, since every role check joins it. Clearing it needs a migration
-// extending `publication powersync` (and `replica identity full`) to cover
-// them, which is a DB change, deliberately left for a human to apply and
-// verify against the live project.
-const publication = migration022
-  .split(/create publication powersync for table/i)[1]
-  ?.split(';')[0] ?? ''
+// The publication's table list accumulates across the whole migration
+// sequence, not just migration 022 (which only creates it), so this has to
+// read every migration, not one file. Two shapes appear in practice:
+//   - a plain `alter publication powersync add table [public.]name;`
+//     statement (e.g. supabase/migrations/20260701*_secondary_assignee_*.sql)
+//   - a PL/pgSQL DO block that loops a `wanted := array[...]` table list and
+//     adds each one via `execute format(...)` — used by migrations that need
+//     to be safe to run against a publication in an unknown prior state (e.g.
+//     supabase/migrations/20260805*_powersync_publication_full_table_list.sql,
+//     mirroring the idempotent supabase/powersync-publication.sql script).
+//     The table names never appear next to the literal words "add table" in
+//     this shape, so they're picked up from the `wanted` array instead.
+const migrationsDir = join(repoRoot, 'supabase/migrations')
 const published = new Set(
-  publication.split(',').map(t => t.trim()).filter(Boolean)
+  (migration022.split(/create publication powersync for table/i)[1]?.split(';')[0] ?? '')
+    .split(',').map(t => t.trim()).filter(Boolean)
 )
+for (const file of readdirSync(migrationsDir).filter(f => f.endsWith('.sql'))) {
+  const sql = readFileSync(join(migrationsDir, file), 'utf8')
+  for (const m of sql.matchAll(/alter\s+publication\s+powersync\s+add\s+table\s+(?:public\.)?([a-z_]+)/gi)) {
+    published.add(m[1])
+  }
+  const wanted = sql.match(/wanted\s+text\[\]\s*:=\s*array\[([\s\S]*?)\]/i)
+  if (wanted) {
+    for (const m of wanted[1].matchAll(/'([a-z_]+)'/g)) published.add(m[1])
+  }
+}
 
 const referenced = new Set()
 for (const q of queries) {
@@ -103,7 +118,7 @@ assert.deepEqual(
   missing,
   [],
   `tables used by sync-rules.yaml but absent from the powersync publication ` +
-  `in migration 022 — sync rules cannot evaluate over them:\n  ${missing.join(', ')}`
+  `across all migrations — sync rules cannot evaluate over them:\n  ${missing.join(', ')}`
 )
 
 console.log(`OK — ${queries.length} sync-rules queries, all user-scoped and role-gated.`)
