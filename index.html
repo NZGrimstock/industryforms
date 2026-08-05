@@ -1202,43 +1202,53 @@
 </div>
 
 <script>
-  lucide.createIcons();
+  // Reveal on scroll — runs first and isolated: this is what makes the whole
+  // page visible (see the html.js .reveal rule above), so a throw in any of
+  // the independent widgets below must never be able to take it down with it.
+  try {
+    const revealEls = document.querySelectorAll('.reveal');
+    const revealObs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+    }, { threshold: 0.08, rootMargin: '0px 0px -48px 0px' });
+    revealEls.forEach(el => revealObs.observe(el));
+  } catch (e) { console.error(e); document.querySelectorAll('.reveal').forEach(el => el.classList.add('in')); }
+
+  try { lucide.createIcons(); } catch (e) { console.error(e); }
 
   // Populate ticker with 3 repeats
-  const tmpl = document.getElementById('tickerItems');
   const track = document.getElementById('tickerTrack');
-  for (let i = 0; i < 3; i++) {
-    track.appendChild(tmpl.content.cloneNode(true));
-  }
+  try {
+    const tmpl = document.getElementById('tickerItems');
+    for (let i = 0; i < 3; i++) {
+      track.appendChild(tmpl.content.cloneNode(true));
+    }
+  } catch (e) { console.error(e); }
 
   // Mobile menu
-  const mobileBtn = document.getElementById('mobileMenuBtn');
-  const mobileMenu = document.getElementById('mobileMenu');
-  mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
-  mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
+  try {
+    const mobileBtn = document.getElementById('mobileMenuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+    mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
+  } catch (e) { console.error(e); }
 
   // Workflow pillar tabs
-  const pillarTabs = document.querySelectorAll('.pillar-tab');
-  const pillarPanels = document.querySelectorAll('.pillar-panel');
-  pillarTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const key = tab.dataset.pillar;
-      pillarTabs.forEach(t => {
-        t.classList.remove('is-active');
-        t.classList.add('text-ink/65', 'hover:bg-black/[0.04]');
+  try {
+    const pillarTabs = document.querySelectorAll('.pillar-tab');
+    const pillarPanels = document.querySelectorAll('.pillar-panel');
+    pillarTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const key = tab.dataset.pillar;
+        pillarTabs.forEach(t => {
+          t.classList.remove('is-active');
+          t.classList.add('text-ink/65', 'hover:bg-black/[0.04]');
+        });
+        tab.classList.add('is-active');
+        tab.classList.remove('text-ink/65', 'hover:bg-black/[0.04]');
+        pillarPanels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === key));
       });
-      tab.classList.add('is-active');
-      tab.classList.remove('text-ink/65', 'hover:bg-black/[0.04]');
-      pillarPanels.forEach(panel => panel.classList.toggle('is-active', panel.dataset.panel === key));
     });
-  });
-
-  // Reveal on scroll
-  const revealEls = document.querySelectorAll('.reveal');
-  const revealObs = new IntersectionObserver((entries) => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
-  }, { threshold: 0.08, rootMargin: '0px 0px -48px 0px' });
-  revealEls.forEach(el => revealObs.observe(el));
+  } catch (e) { console.error(e); }
 
   // Sticky ticker
   const ticker = document.getElementById('stickyTicker');

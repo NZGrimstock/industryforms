@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-02. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-05. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
@@ -20,6 +20,32 @@ signing, build process, database) that the dated session logs can contradict.
   bigger lever than any ToS wording.
 - Confirm `STRIPE_WEBHOOK_SECRET_CONNECT` (+ optional `PLATFORM_ALERT_EMAIL`)
   are set in Vercel, or connected-account disputes never arrive.
+- **Mobile app has no MFA challenge screen** (2026-08-05 mobile audit,
+  `COMPLIANCE_GAP_ANALYSIS.md` pass 3). The web app enforces TOTP `aal2` on
+  `/admin`; `signInWithPassword` on mobile returns an aal1 session and the app
+  just proceeds. No super-admin surface exists on mobile to bypass, but a user
+  who enrolled TOTP expecting it to protect their account has a password-only
+  door to the same company data via the phone. This is a real feature to
+  design/build, not a patch — needs a decision on scope (challenge screen UX,
+  which roles it applies to) before it's code.
+- **Decide on SQLCipher for the mobile PowerSync replica** (same audit pass).
+  The local `tradelogix.db` is unencrypted; sign-out now wipes it and
+  `allowBackup:false` stops it leaving the device via backup, but the file
+  itself is still plaintext on disk while a session is active. Turning on
+  SQLCipher needs a key-management decision plus a migration path for
+  existing installs — not attempted.
+- **Confirm `EXPO_PUBLIC_LOCATIONIQ_KEY` / `NEXT_PUBLIC_LOCATIONIQ_KEY` are
+  domain/app-restricted** in the LocationIQ dashboard — both web and mobile
+  ship the same key in their public bundles by design (it's a client-side
+  autocomplete key), so restriction at the provider is the only thing
+  standing between it and quota-theft.
+- **Test the 2026-08-05 financial-visibility + batch-action features live.**
+  No local Supabase was running that session, so the customer/job financial
+  stat boxes and the batch invoice/complete dropdowns (jobs list, invoices
+  list) were only verified via `tsc`/`eslint`/runnable unit checks — never
+  exercised against real seeded data in a browser. Do a real pass before
+  relying on them, especially the "to invoice" math and the batch-print
+  popup-blocker behaviour.
 
 ## Open follow-ups (carry-forward — nothing blocking)
 
@@ -33,11 +59,25 @@ Optional next steps flagged during recent sessions; none are in-progress:
 - **Local-pack GEO**: `companies` has no lat/lng, so website JSON-LD includes
   address + areaServed but not precise `geo` coordinates. Adding a geocoded
   lat/lng field (on address save) is the upgrade for max local-pack strength.
-- **Website FAQ section + FAQPage schema**: high-value AEO win; there's no FAQ
-  section type yet. Would need a new `WebsiteSection` variant + JSON-LD.
 - **Per-section layout variants** (e.g. image-left vs image-right hero): the 3
   styles share the same fixed section building blocks; layout variants would be
   a larger builder feature, not a reskin.
+- **Job-map WebView loads Leaflet from unpkg + OSM tiles** (2026-08-05 mobile
+  audit) — third-party script executing in-app, same class of issue already
+  fixed on the marketing site by self-hosting fonts/icons. Vendoring Leaflet
+  into the app bundle is the fix; not attempted, low priority (no known
+  exploit, just supply-chain hygiene).
+- **Batch invoice "To invoice" reads $0 for time-and-materials jobs with no
+  quote** (2026-08-05, `lib/job-financials.ts`) — deliberate, not a bug: a job
+  with no quote has no independent billable ceiling to compare against
+  without replicating the GST/discount math invoices already do, and a wrong
+  number is worse than an honest $0. Revisit only if this actually confuses
+  users in practice.
+- **Batch "Complete/Invoice and Print" opens one PDF tab per document,
+  sequentially** — most browsers block pop-ups past the first per user
+  gesture, so batching more than ~1 invoice's worth of prints needs the user
+  to allow pop-ups. A combined multi-invoice PDF would fix this properly but
+  `/api/invoices/[id]/pdf` doesn't support it today; not built.
 - **Help Guide screenshots**: phone **Inbox** and **My Profile** still use the
   dashed placeholder (no clean screenshot existed). Drop
   `phone-inbox.webp`/`phone-profile.webp` into `public/help/` and add their ids
@@ -50,7 +90,7 @@ Optional next steps flagged during recent sessions; none are in-progress:
   merchant through payouts onboarding (0 connected accounts exist as of the
   2026-07-18 audit) so Tap-to-Pay stops hard-409ing.
 
-## Current app/release state (as at 2026-08-02)
+## Current app/release state (as at 2026-08-05)
 
 - **Android is LIVE on Google Play** (`com.industryforms`). Upload key was reset
   (old key lost); Play's registered upload cert is now SHA1
@@ -81,6 +121,244 @@ Optional next steps flagged during recent sessions; none are in-progress:
   delete once fully satisfied. Local creds for both are in `.migration.env`
   (gitignored); note new Supabase projects reject IPv4 on the `db.<ref>` direct
   host, so use the **pooler** host.
+- **PowerSync sync rules: `sync-rules.yaml` is the only correct file.** A stale,
+  non-role-aware `powersync-sync-rules.yaml` was deleted 2026-08-05 — it scoped
+  every query to company-only with no role check, which would hand every staff
+  device the whole company's pay rates and invoices. If any doc/note/dashboard
+  still references the old filename, it's wrong; `sync-rules.yaml` is edition 3
+  (streams), role-aware, mirrors migration 031. The `powersync` Postgres
+  publication's table list is now also captured in a tracked migration
+  (`20260805130000_powersync_publication_full_table_list.sql`), not just the
+  standalone `supabase/powersync-publication.sql` script — so a fresh
+  environment via `supabase db push` now gets the correct publication without
+  anyone remembering to also run that script by hand. Run
+  `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
+  asserts every query is user-scoped, role-gated where required, and that
+  every referenced table is actually in the publication.
+
+## Session 2026-08-05 (Claude, pt.3) — Mobile security audit + PowerSync publication migration drift
+
+Third security-audit pass, covering `tradiee-mobile/` and the PowerSync sync
+rules as an access-control boundary — explicitly flagged as uncovered at the
+end of pt.1's audit. Full write-up in `COMPLIANCE_GAP_ANALYSIS.md` under
+"Audit pass 3." Ran as a background agent in an isolated git worktree, then
+independently re-verified and merged (diffs read in full, both new runnable
+checks re-run from the main tree, claimed APIs confirmed to actually exist in
+the installed packages) rather than taken on trust.
+
+**[HIGH] Fixed — Supabase refresh token was mirrored into unencrypted
+AsyncStorage.** `lib/supabase.ts` persisted the session in `expo-secure-store`
+then copied the access *and refresh* token straight back out into
+AsyncStorage so the background location task could authenticate — negating
+SecureStore entirely. A refresh token there is a standing account-takeover
+primitive readable from a device backup or `adb backup`. Root cause was a
+misdiagnosis: SecureStore works fine in background tasks, the real failure is
+an iOS Keychain read while the phone is *locked* (default `WHEN_UNLOCKED`,
+and the background task runs exactly then). Fixed with
+`keychainAccessible: AFTER_FIRST_UNLOCK` and the background task now uses the
+app's one shared client instead of rebuilding a second one from hand-copied
+tokens. Legacy key deleted once at startup for installs that already have it
+on disk.
+
+**[MEDIUM] Fixed — script injection into the job-map WebView.** Same
+JSON-in-`<script>` bug class as the tenant-site JSON-LD XSS fixed in pt.1,
+this time in `app/job-map.tsx`. Reachable by an anonymous visitor: job titles
+aren't trusted input, and `tradiee-app`'s enquiries flow can seed a job title
+from the public, unauthenticated booking widget. Fixed with the same
+`\uXXXX`-escaping approach; covered by a new runnable check
+(`tradiee-mobile/scripts/check-map-escaping.mjs`) that extracts the shipped
+helper from source at runtime so it can't drift from what's actually shipped.
+
+**[MEDIUM] Fixed — offline PowerSync replica survived sign-out.**
+`tradelogix.db` (unencrypted, `enableSQLCipher:false`) held the whole synced
+dataset — customers, site access notes, pay rates, invoices — and neither
+`auth.signOut()` nor the old `db.disconnect()` cleanup ever cleared it. Now
+wiped via `db.disconnectAndClear()` in the `onAuthStateChange` handler
+(covers a revoked/expired session too). Also set `android.allowBackup:false`
+so Auto Backup doesn't copy the same unencrypted store to Google Drive. This
+*bounds* the "local replica is unencrypted" gap, doesn't close it — see Open
+follow-ups.
+
+**[MEDIUM] Fixed — stale, non-role-aware sync rules, and the admin UI was
+telling operators to deploy them.** `powersync-sync-rules.yaml` scoped every
+query to company-only with zero role check — pasting it would have handed
+every staff device the whole company's timesheets (incl. `bill_rate`/
+`cost_rate`) and job material costs, all of which migration 031 makes
+owner/admin-only. `tradiee-app/app/admin/settings/page.tsx` named this exact
+file for operators to paste into the PowerSync dashboard. Deleted the stale
+file, fixed the one-line reference, and added `scripts/check-sync-rules.mjs`
+(runs from repo root) to make the invariant enforceable going forward: every
+query must be `auth.user_id()`-scoped, every company-wide join must be
+role-gated, and every table `sync-rules.yaml` references must actually be in
+the `powersync` publication.
+
+**Correction I made to the audit pass's own finding, before accepting it:**
+its publication-drift assertion failed and was reported as "still open" —
+before taking that at face value I queried `pg_publication_tables` on the
+live database directly. **Production already had all the tables correctly
+published**, matching the 2026-08-02 fix — this was never an active outage.
+The real, narrower gap: that fix landed as a standalone script
+(`supabase/powersync-publication.sql`), never folded into a tracked
+migration, so a fresh environment or disaster-recovery restore via
+`supabase db push` alone would silently reproduce the exact publication gap
+that caused the 2026-08-02 outage. Closed with migration
+`20260805130000_powersync_publication_full_table_list.sql` (applied to
+remote, confirmed as a no-op as expected). Also fixed
+`check-sync-rules.mjs`'s publication-drift assertion itself, which only
+parsed migration 022 in isolation and would have kept failing forever even
+with the new migration present.
+
+Verified: `npx tsc --noEmit` clean on both apps (re-run independently after
+merge, not just inside the worktree); both new runnable checks pass
+(`node scripts/check-sync-rules.mjs`, `node tradiee-mobile/scripts/check-map-escaping.mjs`).
+**Nothing exercised on a real device or simulator** — the Keychain-while-
+locked behaviour, the sign-out wipe, and the WebView render all need hardware
+to confirm.
+
+**Still open** (also in Action items / Open follow-ups above): mobile has no
+MFA challenge screen at all (web enforces TOTP `aal2` on `/admin`, mobile
+doesn't have an equivalent path); local replica is still plaintext at rest
+while a session is active (bounded by the backup opt-out, not closed); the
+job-map WebView still loads Leaflet from unpkg + OSM tiles (supply-chain
+hygiene, not a known exploit).
+
+## Session 2026-08-05 (Claude, pt.2) — Customer/job financial visibility, batch invoice/complete actions
+
+**Customer detail page**: new stat strip across the top — To Invoice,
+Invoiced, Paid, Outstanding, Total FYTD. Financial-year boundary is NZ (1 Apr)
+vs AU (1 Jul), computed timezone-aware (`lib/financial-year.ts`) against the
+viewing user's own `profiles.timezone`, correctly handling NZ/AU DST (1 April
+is still daylight time some years). "To invoice" sums each job's own ceiling
+(the linked quote's total if it has one; a time-and-materials job with no
+quote has no independent ceiling and reads $0 rather than a guessed number)
+minus what's already invoiced against it, floored at 0.
+
+**Job detail page**: same 5-metric box (Job total / Invoiced / To invoice /
+Paid / Outstanding), right-aligned near the top. Sits *alongside* the
+existing "Job Costing" card further down rather than replacing it — that
+card answers a different question (profitability vs. quote estimate) and
+excludes void invoices differently; touching it risked changing numbers its
+existing users already rely on.
+
+Both boxes' math lives in `lib/job-financials.ts` / `lib/financial-year.ts`,
+covered by runnable checks (DST-crossing FY boundaries on both sides of the
+line, void-invoice exclusion, Postgres numeric-as-string coercion, the
+quote-vs-actuals total fallback, floor-at-zero).
+
+**Batch actions**: tick jobs on the jobs list → **Batch Invoice** / +SMS /
++Email / +Print (new `components/jobs/jobs-list-table.tsx`,
+`lib/batch-invoice.ts`); tick invoices on the invoices list → **Batch
+Complete** / +SMS / +Email / +Print (`components/invoices/invoices-list-table.tsx`,
+`lib/batch-complete-invoice.ts`). Batch invoicing is deliberately a simpler
+subset of the single-job "Invoice from quote/actuals" flow — it skips
+variations, partial-invoice trimming, and progress claims (genuinely
+per-job judgment calls a batch action with no per-job dialog can't make) and
+skips any job that already has a non-void invoice rather than guessing which
+one was meant, reporting what was skipped and why. Batch complete only flips
+drafts (mirrors the single-invoice "Complete invoice" button). Invoice
+numbering for the batch is handled by the existing atomic per-company counter
+trigger (`20260716120000_unique_doc_numbers.sql`), which overrides any
+client-supplied number — no new race risk from creating several invoices in
+one action.
+
+Verified: `tsc --noEmit` and `eslint` clean across every touched/new file;
+the two math-heavy modules have passing runnable checks. **Not verified
+live** — no local Supabase running that session, so none of this was
+exercised against real seeded data in a browser. Flagged in Action items
+above; test before relying on it.
+
+## Session 2026-08-05 (Claude, pt.1) & 2026-08-04 (Claude, pt.2) — Security audit pass 2: web app + marketing site
+
+Full write-up in `COMPLIANCE_GAP_ANALYSIS.md` under "Audit pass 2," appended
+to the 2026-07-07 doc. Two real findings, both fixed and applied to remote:
+
+**[HIGH] Fixed — stored XSS on the app origin via public-site JSON-LD.**
+`buildJsonLd()`'s output went through plain `JSON.stringify` into
+`dangerouslySetInnerHTML` inside a `<script>` block — doesn't escape `<`, so
+any tenant-editable field (company name, FAQ, service descriptions) could
+break out of the tag. Worse than tenant-subdomain-only: the published site
+also renders at `app.industryforms.app/site/<slug>` (the builder's own
+Preview button links there), the same origin as the dashboard, and
+`@supabase/ssr` sets session cookies `httpOnly:false`. Fixed with
+`serializeJsonLd()` in `lib/website-seo.ts` (escapes `<`, `>`, `&`,
+U+2028/2029 as `\uXXXX`, round-trips losslessly) — covered by a runnable
+check. The same raw-interpolation pattern was also found (not yet exploited,
+since all inputs were hand-authored) in the marketing-site page generators
+written the same session — fixed there too with matching `escHtml()`/
+`escJsonLd()` helpers in `scripts/build-blog-pages.mjs` /
+`scripts/build-trade-pages.mjs`.
+
+**[MEDIUM] Fixed — any company member could rewrite and publish the public
+site.** `company_websites` insert/update RLS only checked `company_id`, no
+role — a `staff` user could rewrite the site and, since `is_published` is
+just a column, flip it live, bypassing the $19/mo add-on paywall that was
+only enforced by the builder UI hiding a button. Migration
+`20260804140000_restrict_website_writes_to_admins.sql` locks writes to
+owner/admin (applied to remote), plus a matching page-level redirect.
+
+Also this session: the marketing static site had **zero security headers** —
+added a Cloudflare Pages `_headers` file (CSP, X-Frame-Options, nosniff,
+referrer-policy). Confirmed the self-hosted `lucide.min.js` bundle hashes
+byte-identical to the live CDN copy (no tampering) before trusting it.
+
+## Session 2026-08-04 (Claude, pt.1) — Marketing site: SEO/UX/trust/performance overhaul
+
+Full review-and-fix pass across the marketing static site (`index.html`,
+`blog.html`, `privacy.html`, `terms.html`, root-level, separate from the
+tenant Instant Websites). 12 items, all committed:
+
+1. **Removed fabricated testimonials** — "Trusted by trades" quotes attributed
+   to named companies that don't exist as customers; real FTA(NZ)/ACL(AU)
+   exposure.
+2. **Fixed App Store/Google Play badge honesty** — App Store visibly claimed
+   availability (iOS isn't submitted); Google Play linked to `/signup`
+   instead of the real `com.industryforms` listing.
+3. **Fixed FAQ JSON-LD** to match the visible FAQ text exactly (was
+   completely different questions — violates Google's structured-data
+   policy).
+4. **FAQ accordion → native `<details>/<summary>`** (was plain buttons with
+   no `aria-expanded`), plus `© 2025 → © 2026` in all four footers.
+5. **Wired up Umami analytics** (the site had zero tracking before this).
+6. **Split the 13 blog articles** crammed as anchors in one `blog.html` into
+   real pages (`blog/<slug>.html`), each with its own metadata + BlogPosting/
+   BreadcrumbList JSON-LD. `blog.html` is now a pure index. Generated by
+   `scripts/build-blog-pages.mjs` (data-driven, output committed, no build
+   step exists in this repo).
+7. **Built the 8 trade landing pages** (`trades/<slug>.html`) the footer
+   already linked to but didn't exist — generated by
+   `scripts/build-trade-pages.mjs`.
+8. **Fixed pricing schema** (single `Offer` → `AggregateOffer` for the 3
+   tiers), the **28-vs-30-day trial mismatch** across web/mobile signup +
+   settings (the dashboard trial banner had a real bug: hardcoded "30 days
+   remaining" regardless of the actual date), and added **real product
+   screenshots** to the homepage (previously just a CSS mockup).
+9. **Fixed the reveal-animation fail-closed risk** — the `<h1>` and 39 other
+   elements were `opacity:0` by default, only shown once an
+   IntersectionObserver fired; if JS never ran (disabled, blocked, a failed
+   upstream script) the page stayed blank forever. Now gated behind an
+   `html.js` class set by an early synchronous inline script, so no-JS means
+   nothing is ever hidden. Added `prefers-reduced-motion` support (grain
+   texture, orbs, reveal transitions had no way to pause — WCAG 2.2.2).
+10. **Self-hosted fonts and icons** — replaced Google Fonts + unpkg/lucide
+    CDN dependencies with locally-hosted `fonts/{figtree,sora}.woff2` +
+    `js/lucide.min.js` (exact same bytes, hash-verified against the live
+    CDN). `privacy.html`/`terms.html` additionally dropped the Tailwind CDN
+    *runtime compiler* entirely (worse than the other CDNs — zero styling at
+    all if blocked) after verifying 100/102 of their utility classes were
+    already in the static `styles.css` build; the 2 gaps patched by hand.
+11. Added a skip-to-content link (missing everywhere).
+12. Added a "Talk to us" contact path for the Pro-tier buyer (every CTA was
+    "Start Free Trial," fine for Solo self-serve, not for a 25-seat buyer who
+    wants a conversation first).
+
+Also this session (separate from the marketing pass): **added a FAQ section
+type** to the Instant Website builder (`WebsiteSection` variant, all 3 site
+styles, `FAQPage` JSON-LD, `llms.txt` entries) — closes the "Website FAQ
+section" item that had been sitting in Open follow-ups. And **locked invoice
+line items** once an invoice leaves draft status — items could previously be
+added (web) or added/removed (mobile) on a sent/paid invoice; now matches the
+existing draft-only delete restriction, enforced at the RLS layer too
+(`20260804120000_lock_invoice_line_items_to_draft.sql`, applied to remote).
 
 ## Session 2026-08-02 (Claude) — ⚠ PowerSync publication gap after the Sydney migration
 
