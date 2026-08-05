@@ -28,8 +28,11 @@ function hasCoords(j: MapJob) {
 
 // JSON.stringify does not escape `<`, so a job titled `</script><script>…`
 // closes the inline <script> below and the rest of the title runs as markup in
-// the WebView. Job titles are not trusted input: they come from other company
-// members and, via the public booking widget, from anonymous visitors. Escaping
+// the WebView. Job titles are not trusted input. Beyond other company members
+// writing them, converting an enquiry to a job copies the enquiry description
+// straight into the title (tradiee-app enquiries/[id]/client.tsx:
+// `title: enquiry.description?.slice(0, 100)`), and enquiry descriptions come
+// from the public contact/booking forms — i.e. from anonymous visitors. Escaping
 // to \uXXXX keeps the value valid JSON that round-trips losslessly (the map pin
 // still shows the real title) while making a tag break-out impossible. Same fix
 // as serializeJsonLd() in the web app's lib/website-seo.ts.
