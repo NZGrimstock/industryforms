@@ -1,7 +1,7 @@
 import * as TaskManager from 'expo-task-manager'
 import * as Location from 'expo-location'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '../supabase'
 
 export const LOCATION_TASK = 'TRADIEE_LOCATION_TRACKING'
 
@@ -48,7 +48,6 @@ export async function loadTradingHours(): Promise<TradingHours> {
 
 const STORAGE_KEY     = 'TRADIEE_ACTIVE_TRIP'
 const LAST_LOCATION_KEY = 'TRADIEE_LAST_TRACKED_LOCATION'
-const SESSION_KEY     = 'TRADIEE_SESSION'          // mirrored by supabase.ts for BG task access
 const ACTIVE_JOB_KEY  = 'TRADIEE_ACTIVE_JOB'
 const GEOFENCE_COOLDOWN_KEY = 'TRADIEE_GEOFENCE_LAST_CHECKIN'
 // Set by app/on-my-way.tsx after sending "On my way"; cleared here once the
@@ -177,25 +176,13 @@ async function clearLastLocation() {
   await AsyncStorage.removeItem(LAST_LOCATION_KEY)
 }
 
-async function getSupabase() {
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL!
-  const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-  // Session is mirrored here by supabase.ts; SecureStore is unavailable in BG tasks
-  const stored = await AsyncStorage.getItem(SESSION_KEY)
-  let session = null
-  if (stored) {
-    try {
-      session = JSON.parse(stored)
-    } catch {
-      await AsyncStorage.removeItem(SESSION_KEY)
-    }
-  }
-  const client = createClient(url, key, { auth: { persistSession: false } })
-  if (session?.access_token) {
-    await client.auth.setSession(session)
-  }
-  return client
-}
+// This task uses the app's single shared Supabase client rather than building a
+// second one from a hand-copied session. The old approach read the tokens from
+// AsyncStorage (unencrypted, backup-readable) and ran with persistSession:false,
+// so a refresh here rotated the refresh token without persisting the new one —
+// silently breaking background writes. The shared client reads the session from
+// SecureStore (AFTER_FIRST_UNLOCK, so it works while the phone is locked) and
+// persists refreshes.
 
 async function endTrip(state: TripState, endLat: number, endLng: number, endTime = new Date().toISOString()): Promise<boolean> {
   const finalDistance = Math.round(
@@ -206,7 +193,6 @@ async function endTrip(state: TripState, endLat: number, endLng: number, endTime
   // "trip" while stationary) — discard rather than logging a 0km trip.
   if (finalDistance < MIN_MOVING_DISTANCE_KM) return true
 
-  const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return false
 
@@ -390,7 +376,6 @@ async function maybeAutoCheckIn(lat: number, lng: number, nowIso: string) {
   const existingTimer = await AsyncStorage.getItem(ACTIVE_JOB_KEY)
   if (existingTimer) return
 
-  const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
@@ -553,7 +538,6 @@ async function maybeAutoArrive(lat: number, lng: number) {
     return
   }
 
-  const supabase = await getSupabase()
   const { data: job } = await supabase
     .from('jobs')
     .select('site_id, customer_sites(lat, lng)')
