@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, quoteLabel } from '@/lib/utils'
 import { PublicQuoteActions } from './client'
 import { Wrench } from 'lucide-react'
 
@@ -55,7 +55,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{quote.quote_number}</p>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{quoteLabel(quote.is_estimate)} · {quote.quote_number}</p>
               <h1 className="text-xl font-bold text-gray-900">{quote.title}</h1>
             </div>
             <div className="text-right text-sm text-gray-500">
@@ -121,13 +121,13 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
         )}
 
         {/* Actions */}
-        {canRespond && <PublicQuoteActions quoteId={quote.id} token={token} status={quote.status} />}
+        {canRespond && <PublicQuoteActions quoteId={quote.id} token={token} status={quote.status} isEstimate={!!quote.is_estimate} />}
 
         {quote.status === 'accepted' && (
-          <div className="text-center py-6 text-green-600 font-semibold">✓ This quote has been accepted. We&apos;ll be in touch shortly.</div>
+          <div className="text-center py-6 text-green-600 font-semibold">✓ This {quoteLabel(quote.is_estimate).toLowerCase()} has been accepted. We&apos;ll be in touch shortly.</div>
         )}
         {quote.status === 'declined' && (
-          <div className="text-center py-6 text-gray-500">This quote was declined.</div>
+          <div className="text-center py-6 text-gray-500">This {quoteLabel(quote.is_estimate).toLowerCase()} was declined.</div>
         )}
 
         {company.quote_footer && <p className="text-center text-sm text-gray-500 whitespace-pre-wrap">{company.quote_footer}</p>}

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { data: quote } = await service
     .from('quotes')
-    .select('company_id, customer_id, quote_number, title, public_token, customers(name, phone), companies(name, country)')
+    .select('company_id, customer_id, quote_number, title, public_token, is_estimate, customers(name, phone), companies(name, country)')
     .eq('id', quoteId)
     .single()
   if (!quote || quote.company_id !== auth.companyId) {
@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
   const company = quote.companies as unknown as { name: string; country: string | null } | null
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const body = `Hi ${customer.name.split(' ')[0]}, here's quote ${quote.quote_number} from ${company?.name ?? 'us'}: ${appUrl}/q/${quote.public_token}`
+  const docWord = quote.is_estimate ? 'estimate' : 'quote'
+  const body = `Hi ${customer.name.split(' ')[0]}, here's ${docWord} ${quote.quote_number} from ${company?.name ?? 'us'}: ${appUrl}/q/${quote.public_token}`
 
   const result = await sendSms({
     to: customer.phone,
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
   await service.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId).eq('status', 'draft')
   await logCommunication(service, {
     companyId: quote.company_id, customerId: quote.customer_id, channel: 'sms',
-    subject: `Quote ${quote.quote_number} texted`, summary: `Texted to ${customer.phone}`,
+    subject: `${quote.is_estimate ? 'Estimate' : 'Quote'} ${quote.quote_number} texted`, summary: `Texted to ${customer.phone}`,
     relatedType: 'quote', relatedId: quoteId,
   })
   return NextResponse.json({ ok: true })

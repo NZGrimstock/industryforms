@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-05. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-06. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
@@ -42,8 +42,11 @@ signing, build process, database) that the dated session logs can contradict.
 - **Test the 2026-08-05 financial-visibility + batch-action features live.**
   No local Supabase was running that session, so the customer/job financial
   stat boxes and the batch invoice/complete dropdowns (jobs list, invoices
-  list) were only verified via `tsc`/`eslint`/runnable unit checks — never
-  exercised against real seeded data in a browser. Do a real pass before
+  list) were only verified via `tsc`/`eslint` and, as of pt.4, a real runnable
+  check (`node tradiee-app/scripts/check-job-financials.mjs`) — never
+  exercised against real seeded data in a browser. The check proves the math
+  is internally consistent (and already caught a genuine DST off-by-one-hour
+  bug), not that it's correct against real rows. Do a real pass before
   relying on them, especially the "to invoice" math and the batch-print
   popup-blocker behaviour.
 
@@ -135,6 +138,194 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-06 (Claude, pt.2) — Sidebar reorder + Quote/Estimate toggle
+
+**Sidebar reorder** (`sidebar.tsx` + `mobile-nav.tsx`'s "more" list): Messages,
+Customers, Enquiries, Quotes, Jobs, Invoices, Statements, Job Map, Schedule,
+Time Logs, Vehicle Logbook, Forms, To-Do — per explicit user-specified order.
+
+**Quote/Estimate toggle** (web + mobile): a quote can now be flagged
+`is_estimate` (migration `20260806160000_quote_estimate_flag.sql`, plain
+boolean, default false) — purely a display-label distinction the user asked
+for explicitly: "a job has to land within a certain percentage of a quote,
+whereas an estimate is a best guess." Status, numbering, and the
+accept/convert-to-job workflow are all untouched; only what the document
+calls itself changes. New shared `quoteLabel()` helper in `lib/utils.ts`.
+
+Covered surfaces (deliberately scoped to where a real user — owner, staff, or
+the customer — actually reads the document's name in a meaningful moment):
+quote builder toggle (web checkbox / mobile `Switch`, both save
+`is_estimate`), quotes list badge, quote detail page badge + toasts + accept
+dialog, **the public customer-facing `/q/[token]` view** (arguably the most
+important one — eyebrow now reads "ESTIMATE · Q-0001" not just the number,
+accept/decline button and messages all dynamic), quote email
+(`quoteEmailHtml`, subject line in `/api/email/quote`) and SMS
+(`/api/sms/quote`), the quote follow-up reminder in `/api/reminders`.
+Mobile: quote list card badge, detail screen badge + Alert titles + toasts,
+new-quote screen toggle. PowerSync local schema (`is_estimate` on the mobile
+SQLite replica) and the `quotes/[id].tsx` explicit-column SQL query both
+updated — `sync-rules.yaml` already used `quotes.*` so no sync-rule change
+was needed, confirmed via `node scripts/check-sync-rules.mjs`.
+
+**Deliberately not touched** (documented scope cuts, not oversights): the
+static "New Quote" page-chrome title on both apps' creation screens (set
+before the toggle exists / before data loads); the one-line "Quote:
+Q-0001" reference on the internal job-sheet PDF; aggregate report labels
+("Quote conversion", "Quote win rate" — describe the whole mixed
+quotes+estimates metric, correctly stay generic); API error strings, mobile
+system-notification category labels, and help-walkthrough copy — all
+low-stakes/transient text, not a "header" in the sense the user meant.
+
+**Verified live**, not just `tsc`/`eslint` (both clean on every touched
+file, both apps): local Supabase spun back up, migration applied, logged in
+as the same throwaway test company from the Statements session. Confirmed
+the sidebar order exactly matches spec via DOM query. Created a real
+estimate through the builder — toggle flips the card header live
+("Quote details" → "Estimate details"), saved correctly with
+`is_estimate: true` in the DB, and every downstream surface read back
+correctly: list badge, detail-page ESTIMATE badge, "Open estimate →" link
+text, and critically the **public `/q/[token]` page** showed
+"ESTIMATE · Q-0001" with an "Accept estimate" button. Edit page correctly
+loads the toggle pre-checked for an existing estimate. Did not test
+email/SMS sends themselves (same reasoning as the Statements session —
+`RESEND_API_KEY`/`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` blanked for the
+duration so nothing real gets sent); code-read confirms those paths thread
+`is_estimate` through correctly. `.env.local` restored to production
+values afterward, local Supabase stopped.
+
+## Session 2026-08-06 (Claude) — Customer Statement Run (new feature)
+
+Built the "run statements" feature: find every customer with an outstanding
+invoice balance, let the owner untick any they don't want included, then
+batch-send by email, SMS, or print. Plus an optional recurring *reminder*
+(never an unattended auto-send — the user explicitly chose that: a human
+always reviews and ticks/unticks before anything goes out).
+
+**New page** `app/(dashboard)/statements/page.tsx` + `client.tsx` — reuses
+the exact tick/untick + `Dropdown`/`DropdownItem` batch-action pattern
+already established by `jobs-list-table.tsx`/`invoices-list-table.tsx`.
+Shows an aging breakdown per customer (Current / 1-30 / 31-60 / 61+) and a
+live selected-total. Nav link added to `sidebar.tsx` + `mobile-nav.tsx`
+(hidden from staff, same treatment as Invoices).
+
+**Math**: `lib/statement.ts` — `buildCustomerStatements()` groups a
+company's live (non-void, non-draft) invoices by customer, drops anything
+fully paid, and buckets the rest by days-overdue. Separate from
+`lib/job-financials.ts` (per-job ceiling math, not per-customer aging).
+Covered by a real runnable check, `scripts/check-statement.mjs` — void/draft
+exclusion, paid-off exclusion, Postgres numeric-string coercion,
+multi-customer grouping, and all four aging-bucket boundaries.
+
+**PDF**: `components/pdf/statement-pdf.tsx` (react-pdf, styled to match
+`invoice-pdf.tsx`) + shared `lib/pdf/render-statement.ts` renderer used by
+both `/api/statements/[customerId]/pdf` (batch print, same
+sequential-`window.open` pattern as the existing batch invoice/complete
+print, since browsers pop-up-block anything past the first per gesture) and
+`/api/email/statement` (same PDF attached to the email). No public
+"view statement online" page was built — deliberate scope cut, statements
+are itemized directly in the email body (new `statementEmailHtml()` in
+`lib/email.ts`) plus the PDF attachment, rather than adding a new public
+token/route surface. `lib/email.ts`'s `sendEmail()` and `lib/notify.ts`'s
+`EmailPayload` both gained `attachments` support (base64, Resend's format) —
+nobody else needed this before.
+
+**SMS**: `/api/sms/statement` — states the total balance and invoice count,
+points the customer at the email rather than trying to itemize in a text.
+
+**Schedule**: `companies.statement_run_interval` / `statement_run_next`
+(migration `20260806150000_statement_run_schedule.sql`), editable right on
+the Statements page (no changes to the already-huge `settings/client.tsx`).
+Reuses the interval vocabulary (`weekly`/`fortnightly`/`monthly`/`quarterly`)
+and the `addInterval()` roll-forward helper already used by recurring
+jobs/invoices/service reminders in `app/api/reminders/route.ts` — that
+helper is now exported from `lib/datetime.ts` instead of living locally in
+that one route file, so the Statements page can compute the same "next run"
+date the cron will later compute. New "Statement run reminders" section in
+`runReminders()`: finds companies whose `statement_run_next` is due, emails
+owner/admins a nudge (customer count + total owing) if there's actually
+something to report, and **always** rolls the date forward regardless of
+send success — same "don't nag forever" rule as the other recurring
+sections in that file.
+
+**A live browser test caught a real bug that `tsc`/`eslint` both missed**:
+`StatementPdf` initially had `'use client'` (copy-pasted from
+`invoice-pdf.tsx`), which broke with "Attempted to call StatementPdf() from
+the server but StatementPdf is on the client" — `invoice-pdf.tsx` legitimately
+needs that directive because `print-invoice.tsx` also renders it client-side;
+`StatementPdf` has no client consumer (server-only PDF generation was a
+deliberate scope cut — see above), so Next.js's bundler represented it as an
+unresolvable client-reference stub. Fixed by removing the directive. This
+class of bug is invisible to both the type checker and linter — only
+exercising the real route in a browser surfaced it.
+
+**Verified live**, not just statically: spun up local Supabase (a stale
+Docker volume from before the 2026-07-23 terms-acceptance migration caused
+an unrelated `/dashboard`↔`/upgrade` redirect loop first — `supabase db
+reset` fixed it, worth remembering if a fresh local session ever loops
+between those two routes), seeded a throwaway company with invoices across
+every aging bucket plus one void/draft/fully-paid each (to prove exclusion),
+and clicked through the real UI: tick/untick totals, the Email/SMS/Print
+batch actions (all three verified to reach their external-send call
+correctly — `RESEND_API_KEY`/`TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` were
+deliberately blanked in `.env.local` for the duration of this test so
+nothing actually emailed or texted a real number or spent real Twilio/Resend
+credit; Print's R2 upload was left live since it's just internal storage,
+matching how the existing invoice-PDF feature already behaves in
+production), and the schedule save (confirmed `addInterval` math and DB
+persistence). Also manually fired `/api/reminders` with the cron secret
+against a backdated `statement_run_next` and confirmed the new section
+finds the due company, attempts the nudge email, and rolls the date forward
+even though the send was (deliberately) unconfigured. `.env.local` restored
+to production values afterward, local Supabase stopped.
+
+**Not built**: unattended automatic sending (explicitly rejected in favor of
+reminder-only, see above) and a public "view statement online" page
+(scope cut, see PDF section above) — revisit either if a customer actually
+asks for self-serve statement access.
+
+## Session 2026-08-05 (Claude, pt.4) — Reality-check pass on pt.2/pt.3 claims; found and fixed a real FY-boundary bug
+
+Ran the Reality Checker agent against this doc's own recent claims (pt.2
+financial features, pt.3 mobile audit) rather than trusting the self-report.
+**pt.3 (mobile security audit) held up completely** — every fix, migration,
+and check re-verified by independently reading the code and re-running
+`check-map-escaping.mjs` / `check-sync-rules.mjs`, both pass.
+
+**pt.2 was overstated**: it claimed `lib/job-financials.ts` /
+`lib/financial-year.ts` were "covered by runnable checks" — no such check
+existed anywhere in the repo (confirmed by repo-wide grep/glob). The math
+read correctly by manual inspection and `tsc`/`eslint` were genuinely clean,
+but "read for correctness" had been conflated with "has a passing test."
+
+**Wrote the missing check**: `tradiee-app/scripts/check-job-financials.mjs`
+(run: `node scripts/check-job-financials.mjs` from `tradiee-app/`) — void-
+invoice exclusion, Postgres numeric-as-string coercion, quote-vs-actuals
+total fallback, floor-at-zero, and NZ/AU financial-year boundary crossing
+including the DST edge case.
+
+**That DST edge case caught a real bug, not a hypothetical one.**
+`zonedMidnightToUtc` in `lib/financial-year.ts` used a single-pass offset
+correction: format a naive UTC guess through the target timezone, measure
+the offset it reveals, correct once. That's wrong whenever the naive guess
+itself lands on the far side of a same-day DST transition — NZ's
++12/+13h offset is large enough that a midnight guess formats to *midday*
+local time, and on the rare years NZ's DST changeover (first Sunday of
+April) falls exactly on 1 April, midday has already crossed the transition.
+**Every FY-start instant computed for NZ in 2018, 2029, 2035, and 2040 was
+off by exactly one hour** (1am NZDT instead of midnight) — which would have
+silently shifted the customer/job "FYTD" financial-year window by an hour
+in those specific years. Fixed at the root (the one shared function both
+`customers/[id]` and `jobs/[id]` depend on, not patched per-caller) by
+replacing the single correction pass with fixed-point iteration — re-measure
+the offset at each improved estimate until it stops moving, which converges
+in 2-3 passes for any real single-hour DST shift. Verified all four affected
+years now round-trip to true local midnight via `Intl.DateTimeFormat`, and
+`npx tsc --noEmit` stayed clean.
+
+The underlying "not verified live" gap from pt.2 is **still open** — the new
+check proves the math is internally consistent, it does not replace testing
+against real seeded data in a browser (still in Action items above).
 
 ## Session 2026-08-05 (Claude, pt.3) — Mobile security audit + PowerSync publication migration drift
 
@@ -261,11 +452,13 @@ trigger (`20260716120000_unique_doc_numbers.sql`), which overrides any
 client-supplied number — no new race risk from creating several invoices in
 one action.
 
-Verified: `tsc --noEmit` and `eslint` clean across every touched/new file;
-the two math-heavy modules have passing runnable checks. **Not verified
-live** — no local Supabase running that session, so none of this was
-exercised against real seeded data in a browser. Flagged in Action items
-above; test before relying on it.
+Verified: `tsc --noEmit` and `eslint` clean across every touched/new file.
+**Correction (see pt.4 below): this originally claimed the two math-heavy
+modules "have passing runnable checks" — that check did not actually exist.**
+One was written and passing as of pt.4, and it caught a real DST bug in the
+process. **Not verified live** — no local Supabase running that session, so
+none of this was exercised against real seeded data in a browser. Flagged in
+Action items above; test before relying on it.
 
 ## Session 2026-08-05 (Claude, pt.1) & 2026-08-04 (Claude, pt.2) — Security audit pass 2: web app + marketing site
 

@@ -34,6 +34,7 @@ type Quote = {
   quote_number: string
   title: string
   status: string
+  is_estimate: number
   subtotal: number
   gst_amount: number
   total: number
@@ -93,7 +94,7 @@ export default function QuoteDetailScreen() {
   }
 
   const { data: quotes, isLoading, refresh: refreshQuote } = useQuery<Quote>(
-    `SELECT q.id, q.quote_number, q.title, q.status, q.subtotal, q.gst_amount, q.total,
+    `SELECT q.id, q.quote_number, q.title, q.status, q.is_estimate, q.subtotal, q.gst_amount, q.total,
             q.expires_at, q.customer_message, q.notes,
             q.customer_id, q.company_id,
             c.name AS customer_name, c.phone AS customer_phone
@@ -103,6 +104,7 @@ export default function QuoteDetailScreen() {
     [id]
   )
   const quote = quotes?.[0]
+  const docLabel = quote?.is_estimate ? 'Estimate' : 'Quote'
 
   const { data: priceItems } = useQuery<PriceListLookupItem>(
     `SELECT id, name, unit, sell_price, cost_price, category
@@ -138,7 +140,7 @@ export default function QuoteDetailScreen() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to send')
-      Alert.alert('Sent!', 'Quote emailed to customer.')
+      Alert.alert('Sent!', `${docLabel} emailed to customer.`)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not send email')
     } finally {
@@ -161,7 +163,7 @@ export default function QuoteDetailScreen() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to send')
-      Alert.alert('Sent!', 'Quote texted to customer.')
+      Alert.alert('Sent!', `${docLabel} texted to customer.`)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not send text')
     } finally {
@@ -172,7 +174,7 @@ export default function QuoteDetailScreen() {
   async function declineQuote() {
     if (!quote) return
     Alert.alert(
-      'Decline Quote',
+      `Decline ${docLabel}`,
       `Mark "${quote.title}" as declined?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -247,7 +249,7 @@ export default function QuoteDetailScreen() {
   async function acceptQuote() {
     if (!quote) return
     Alert.alert(
-      'Accept Quote',
+      `Accept ${docLabel}`,
       `Accept "${quote.title}" and auto-create a job?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -363,7 +365,7 @@ export default function QuoteDetailScreen() {
   if (!quote) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#6b7280' }}>Quote not found</Text>
+        <Text style={{ color: '#6b7280' }}>Quote/estimate not found</Text>
       </View>
     )
   }
@@ -398,7 +400,14 @@ export default function QuoteDetailScreen() {
         <View style={s.card}>
           <View style={s.cardTop}>
             <View style={{ flex: 1 }}>
-              <Text style={s.docNum}>{quote.quote_number}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={s.docNum}>{quote.quote_number}</Text>
+                {!!quote.is_estimate && (
+                  <View style={{ backgroundColor: '#dbeafe', borderRadius: 100, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#1d4ed8', letterSpacing: 0.3 }}>ESTIMATE</Text>
+                  </View>
+                )}
+              </View>
               <Text style={s.docTitle}>{quote.title}</Text>
             </View>
             <View style={[s.statusBadge, { backgroundColor: color + '20' }]}>

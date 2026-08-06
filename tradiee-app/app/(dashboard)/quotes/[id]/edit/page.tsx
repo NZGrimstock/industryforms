@@ -39,6 +39,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
     terms: quote.terms ?? null,
     expires_at: quote.expires_at ?? null,
     reference: quote.reference ?? null,
+    is_estimate: !!quote.is_estimate,
     discount_type: quote.discount_type ?? null,
     discount_value: quote.discount_value != null ? Number(quote.discount_value) : null,
     sections: ((quote.quote_sections ?? []) as Array<{

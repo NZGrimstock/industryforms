@@ -79,7 +79,10 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                   <tr key={q.id} className="hover:bg-gray-50 cursor-pointer">
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 font-medium text-gray-900">{q.quote_number}</Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-700">{(q.customers as {name: string} | null)?.name ?? '—'}</Link></td>
-                    <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-600 truncate max-w-[200px]">{q.title}</Link></td>
+                    <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-600 truncate max-w-[200px]">
+                      {q.title}
+                      {q.is_estimate && <span className="ml-2 text-[10px] font-medium bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full uppercase tracking-wide align-middle">Estimate</span>}
+                    </Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-400">{q.reference ?? '—'}</Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3"><StatusBadge status={q.status} /></Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-right font-medium text-gray-900">{formatCurrency(q.total)}</Link></td>

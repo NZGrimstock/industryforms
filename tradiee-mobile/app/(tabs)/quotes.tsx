@@ -29,6 +29,7 @@ type Quote = {
   quote_number: string
   title: string
   status: string
+  is_estimate: boolean
   total: number
   customer_name: string | null
 }
@@ -50,7 +51,7 @@ export default function QuotesScreen() {
     if (!profile) return
     const { data } = await supabase
       .from('quotes')
-      .select('id, quote_number, title, status, total, customers(name)')
+      .select('id, quote_number, title, status, is_estimate, total, customers(name)')
       .eq('company_id', profile.company_id)
       .order('created_at', { ascending: false })
       .limit(200)
@@ -60,6 +61,7 @@ export default function QuotesScreen() {
         quote_number: q.quote_number,
         title: q.title,
         status: q.status,
+        is_estimate: !!q.is_estimate,
         total: q.total,
         customer_name: ((Array.isArray(q.customers) ? q.customers[0] : q.customers) as { name: string } | null)?.name ?? null,
       }))
@@ -130,7 +132,14 @@ export default function QuotesScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.cardHeader}>
-                  <Text style={styles.quoteNumber}>{quote.quote_number}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.quoteNumber}>{quote.quote_number}</Text>
+                    {quote.is_estimate && (
+                      <View style={styles.estimateBadge}>
+                        <Text style={styles.estimateText}>ESTIMATE</Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={[styles.statusBadge, { backgroundColor: color + '20' }]}>
                     <Text style={[styles.statusText, { color }]}>
                       {STATUS_LABEL[quote.status] ?? quote.status}
@@ -162,6 +171,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   quoteNumber: { fontSize: 12, color: '#6b7280', fontWeight: '600', letterSpacing: 0.5 },
+  estimateBadge: { backgroundColor: '#dbeafe', borderRadius: 100, paddingHorizontal: 6, paddingVertical: 2 },
+  estimateText: { fontSize: 9, fontWeight: '700', color: '#1d4ed8', letterSpacing: 0.3 },
   statusBadge: { borderRadius: 100, paddingHorizontal: 8, paddingVertical: 3 },
   statusText: { fontSize: 11, fontWeight: '600' },
   title: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 8 },

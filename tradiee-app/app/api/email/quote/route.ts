@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const viewUrl = `${appUrl}/q/${quote.public_token}`
 
+  const docWord = quote.is_estimate ? 'Estimate' : 'Quote'
   const html = quoteEmailHtml({
     companyName: company.name,
     customerName: customer.name,
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
     companyPhone: company.phone,
     companyEmail: company.email,
     logoUrl: company.logo_url,
+    isEstimate: !!quote.is_estimate,
     timezone: callerProfile?.timezone ?? DEFAULT_TIMEZONE,
   })
 
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     companyId: quote.company_id,
     customerId: quote.customer_id,
     eventType: 'quote_email',
-    email: { to: customer.email, subject: `Quote ${quote.quote_number} from ${company.name}`, html, replyTo: company.email ?? null },
+    email: { to: customer.email, subject: `${docWord} ${quote.quote_number} from ${company.name}`, html, replyTo: company.email ?? null },
   })
 
   if (emailResult?.status !== 'sent') {
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
   await service.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
   await logCommunication(service, {
     companyId: quote.company_id, customerId: quote.customer_id, channel: 'email',
-    subject: `Quote ${quote.quote_number} sent`, summary: `Emailed to ${customer.email}`,
+    subject: `${docWord} ${quote.quote_number} sent`, summary: `Emailed to ${customer.email}`,
     relatedType: 'quote', relatedId: quoteId,
   })
 

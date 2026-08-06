@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, quoteLabel } from '@/lib/utils'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
 import { priceForCustomerGroup } from '@/lib/customer-pricing'
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Package, Clock } from 'lucide-react'
@@ -50,6 +50,7 @@ interface EditQuoteData {
   }>
   discount_type: string | null
   discount_value: number | null
+  is_estimate: boolean
 }
 
 interface Props {
@@ -344,6 +345,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
 
   const [docDiscountType, setDocDiscountType] = useState<DiscountType>((editQuote?.discount_type as DiscountType) ?? null)
   const [docDiscountValue, setDocDiscountValue] = useState<number>(Number(editQuote?.discount_value ?? 0))
+  const [isEstimate, setIsEstimate] = useState(!!editQuote?.is_estimate)
 
   const selectedCustomer = customerList.find(c => c.id === meta.customerId)
 
@@ -486,14 +488,14 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const save = useCallback(async (status: 'draft' | 'sent', opts: { silent?: boolean } = {}) => {
     const { silent = false } = opts
     if (!meta.customerId || !meta.title) {
-      if (!silent) toast(!meta.customerId ? 'Select a customer first' : 'Enter a quote title', 'error')
+      if (!silent) toast(!meta.customerId ? 'Select a customer first' : `Enter a ${quoteLabel(isEstimate).toLowerCase()} title`, 'error')
       return
     }
     if (silent) setAutosaveStatus('saving'); else setSaving(true)
 
     const quotePayload = {
       customer_id: meta.customerId, site_id: meta.siteId || null,
-      title: meta.title, status, subtotal, gst_amount: gstAmount, total,
+      title: meta.title, status, is_estimate: isEstimate, subtotal, gst_amount: gstAmount, total,
       reference: meta.reference || null,
       discount_type: docDiscountValue > 0 ? docDiscountType : null,
       discount_value: docDiscountValue > 0 ? docDiscountValue : 0,
@@ -542,9 +544,9 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     }
 
     if (silent) { setAutosaveStatus('saved'); setSaving(false); return }
-    toast(savedId ? 'Quote updated' : 'Quote saved')
+    toast(`${quoteLabel(isEstimate)} ${savedId ? 'updated' : 'saved'}`)
     router.push(`/quotes/${quoteId}`)
-  }, [meta, sections, subtotal, gstAmount, total, docDiscountType, docDiscountValue, docDiscountAmount, companyId, profileId, quoteNumber, supabase, toast, router, savedId, gstRate])
+  }, [meta, sections, subtotal, gstAmount, total, docDiscountType, docDiscountValue, docDiscountAmount, isEstimate, companyId, profileId, quoteNumber, supabase, toast, router, savedId, gstRate])
 
   // Autosave as a draft while the user is filling out the quote — needs at
   // least a customer and a title before there's anything meaningful to save.
@@ -562,7 +564,13 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
       <div className="flex-1 space-y-4">
         {/* Meta */}
         <Card>
-          <CardHeader className="font-semibold text-sm text-gray-900">Quote details</CardHeader>
+          <CardHeader className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-sm text-gray-900">{quoteLabel(isEstimate)} details</span>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" checked={isEstimate} onChange={e => setIsEstimate(e.target.checked)} className="rounded" />
+              This is an estimate, not a fixed quote
+            </label>
+          </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Customer <span className="text-red-400">*</span></Label>

@@ -8,7 +8,7 @@ import { JobTasksCard } from './tasks-card'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
-import { formatDateTime, formatCurrency } from '@/lib/utils'
+import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
@@ -37,7 +37,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('*, customers(name, email, phone), customer_sites!site_id(address), profiles!assigned_to(full_name), quotes!quote_id(quote_number, total)')
+    .select('*, customers(name, email, phone), customer_sites!site_id(address), profiles!assigned_to(full_name), quotes!quote_id(quote_number, total, is_estimate)')
     .eq('id', id)
     .eq('company_id', profile!.company_id)
     .single()
@@ -157,7 +157,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // card further down: this excludes void invoices (summarizeInvoices) and
   // compares against the quote's GST-inclusive total, not the excl.-GST
   // estimate the costing card uses.
-  const jobQuote = job.quotes as unknown as { quote_number: string; total: number } | null
+  const jobQuote = job.quotes as unknown as { quote_number: string; total: number; is_estimate: boolean } | null
   const { invoiced: financialInvoiced, paid: financialPaid, outstanding: financialOutstanding } = summarizeInvoices(invoicesRes.data ?? [])
   const financialJobTotal = jobTotal(jobQuote?.total, financialInvoiced)
   const financialToInvoice = toInvoice(financialJobTotal, financialInvoiced)
@@ -259,7 +259,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <Header title={`${job.job_number} — ${job.title}`} profile={profile} />
-      <div className="p-6 space-y-6 max-w-5xl">
+      <div className="p-6 space-y-6 max-w-6xl">
         {/* Header */}
         <div className="flex flex-wrap items-start gap-4 justify-between">
           <div>
@@ -271,7 +271,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               <Link href={`/customers/${job.customer_id}`} className="text-orange-500 hover:underline">
                 {(job.customers as {name: string})?.name}
               </Link>
-              {job.quotes && <> · From quote <Link href={`/quotes/${job.quote_id}`} className="text-orange-500 hover:underline">{jobQuote?.quote_number}</Link></>}
+              {job.quotes && <> · From {quoteLabel(jobQuote?.is_estimate).toLowerCase()} <Link href={`/quotes/${job.quote_id}`} className="text-orange-500 hover:underline">{jobQuote?.quote_number}</Link></>}
             </p>
             <JobSiteSelector
               jobId={id}
@@ -308,13 +308,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
 
-        {/* At-a-glance financial position — kept right up top so it's visible
-            without scrolling past everything else on the job. */}
-        <div className="flex justify-end">
-          <div className="w-full sm:w-64">
-            <FinancialStatBox stats={jobFinancialStats} orientation="column" currency={currency} />
-          </div>
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6 items-start">
+        <div className="space-y-6 min-w-0">
 
         {job.description && (
           <Card>
@@ -572,6 +567,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             )}
           </CardContent>
         </Card>
+
+        </div>
+
+        {/* At-a-glance financial position — sticky so it stays visible
+            alongside whichever card is currently in view. */}
+        <div className="sticky top-20">
+          <FinancialStatBox stats={jobFinancialStats} orientation="column" currency={currency} />
+        </div>
+
+        </div>
       </div>
     </>
   )

@@ -164,6 +164,7 @@ const quotes = new Table({
   quote_number:     column.text,
   title:            column.text,
   status:           column.text,
+  is_estimate:      column.integer,
   subtotal:         column.real,
   gst_amount:       column.real,
   total:            column.real,

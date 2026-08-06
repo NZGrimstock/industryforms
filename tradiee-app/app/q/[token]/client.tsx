@@ -4,15 +4,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SignaturePad } from '@/components/ui/signature-pad'
+import { quoteLabel } from '@/lib/utils'
 import { CheckCircle, XCircle } from 'lucide-react'
 
 interface Props {
   quoteId: string
   token: string
   status: string
+  isEstimate: boolean
 }
 
-export function PublicQuoteActions({ token }: Props) {
+export function PublicQuoteActions({ token, isEstimate }: Props) {
+  const label = quoteLabel(isEstimate).toLowerCase()
   const [loading, setLoading] = useState('')
   const [done, setDone] = useState('')
   const [error, setError] = useState('')
@@ -37,8 +40,8 @@ export function PublicQuoteActions({ token }: Props) {
     setLoading('')
   }
 
-  if (done === 'accept') return <div className="text-center py-6 text-green-600 font-semibold text-lg">✓ Thank you! Quote accepted. We&apos;ll be in touch shortly.</div>
-  if (done === 'decline') return <div className="text-center py-6 text-gray-500">You&apos;ve declined this quote.</div>
+  if (done === 'accept') return <div className="text-center py-6 text-green-600 font-semibold text-lg">✓ Thank you! {quoteLabel(isEstimate)} accepted. We&apos;ll be in touch shortly.</div>
+  if (done === 'decline') return <div className="text-center py-6 text-gray-500">You&apos;ve declined this {label}.</div>
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -46,7 +49,7 @@ export function PublicQuoteActions({ token }: Props) {
         <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
           <p className="text-sm text-gray-600 sm:mr-4">Ready to proceed?</p>
           <Button onClick={() => setSigning(true)} className="gap-2">
-            <CheckCircle className="h-4 w-4" /> Accept quote
+            <CheckCircle className="h-4 w-4" /> Accept {label}
           </Button>
           <Button variant="outline" loading={loading === 'decline'} onClick={() => respond('decline')} className="gap-2">
             <XCircle className="h-4 w-4" /> Decline
@@ -56,7 +59,7 @@ export function PublicQuoteActions({ token }: Props) {
         <div className="max-w-md mx-auto space-y-4">
           <div>
             <h3 className="font-semibold text-gray-900">Sign to accept</h3>
-            <p className="text-sm text-gray-500">Please sign below to confirm you accept this quote.</p>
+            <p className="text-sm text-gray-500">Please sign below to confirm you accept this {label}.</p>
           </div>
 
           <div>
@@ -78,7 +81,7 @@ export function PublicQuoteActions({ token }: Props) {
               onClick={() => respond('accept')}
               className="gap-2"
             >
-              <CheckCircle className="h-4 w-4" /> Accept quote
+              <CheckCircle className="h-4 w-4" /> Accept {label}
             </Button>
             <Button variant="outline" onClick={() => { setSigning(false); setError('') }}>Back</Button>
           </div>

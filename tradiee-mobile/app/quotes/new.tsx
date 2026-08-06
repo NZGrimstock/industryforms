@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type RefObject } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
+  KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList, Switch,
 } from 'react-native'
 import { router, Stack, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -34,6 +34,7 @@ export default function NewQuoteScreen() {
   const itemUnitRef = useRef<TextInput>(null)
   const itemPriceRef = useRef<TextInput>(null)
   const [title, setTitle] = useState('')
+  const [isEstimate, setIsEstimate] = useState(false)
   const [message, setMessage] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [customerName, setCustomerName] = useState('')
@@ -207,6 +208,7 @@ export default function NewQuoteScreen() {
         site_id: siteId,
         created_by: userId,
         status: 'draft',
+        is_estimate: isEstimate,
         quote_number: quoteNumber,
         subtotal,
         gst_amount: gst,
@@ -282,6 +284,16 @@ export default function NewQuoteScreen() {
         <View style={s.field}>
           <Text style={s.label}>Title *</Text>
           <TextInput ref={titleRef} style={s.input} value={title} onChangeText={setTitle} placeholder="e.g. Kitchen renovation quote" placeholderTextColor="#6b7280" autoFocus onFocus={() => focusField(titleRef)} />
+        </View>
+
+        <View style={s.switchRow}>
+          <Text style={s.switchLabel}>This is an estimate, not a fixed quote</Text>
+          <Switch
+            value={isEstimate}
+            onValueChange={setIsEstimate}
+            trackColor={{ true: '#f97316' }}
+            accessibilityLabel="This is an estimate, not a fixed quote"
+          />
         </View>
 
         <View style={s.field}>
@@ -552,6 +564,8 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   field: { marginBottom: 14 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, minHeight: 44 },
+  switchLabel: { fontSize: 14, color: '#374151', fontWeight: '500', flex: 1, marginRight: 10 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827' },
   picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14 },
   pickerVal: { fontSize: 15, color: '#111827' },

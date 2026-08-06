@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/ui/dialog'
 import { Send, CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2, ShoppingCart } from 'lucide-react'
+import { quoteLabel } from '@/lib/utils'
 import Link from 'next/link'
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
     customer_id: string
     converted_to_job_id: string | null
     title: string
+    is_estimate: boolean
     customers: {name: string; email?: string | null; phone?: string | null} | null
   }
   companyId: string
@@ -25,6 +27,7 @@ interface Props {
 }
 
 export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
+  const label = quoteLabel(quote.is_estimate)
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -77,17 +80,17 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
       // 3. Auto-create a to-do: "Schedule job booking with client"
       await supabase.from('todos').insert({
         company_id: companyId,
-        title: `Quote ${quote.title} accepted — schedule job booking with client`,
+        title: `${label} ${quote.title} accepted — schedule job booking with client`,
         priority: 'high',
         status: 'pending',
         job_id: job.id,
       })
 
-      toast('Quote accepted — job created!')
+      toast(`${label} accepted — job created!`)
       setAcceptOpen(false)
       router.push(`/jobs/${job.id}`)
     } catch (e: any) {
-      toast(e.message ?? 'Failed to accept quote', 'error')
+      toast(e.message ?? `Failed to accept ${label.toLowerCase()}`, 'error')
     }
     setLoading('')
   }
@@ -96,18 +99,18 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
     setLoading('declined')
     const { error } = await supabase.from('quotes').update({ status: 'declined', declined_at: new Date().toISOString() }).eq('id', quote.id)
     if (error) toast(error.message, 'error')
-    else { toast('Quote declined'); router.refresh() }
+    else { toast(`${label} declined`); router.refresh() }
     setLoading('')
   }
 
   async function deleteQuote() {
-    if (!confirm('Delete this quote? This cannot be undone.')) return
+    if (!confirm(`Delete this ${label.toLowerCase()}? This cannot be undone.`)) return
     setLoading('delete')
     await supabase.from('quote_line_items').delete().eq('quote_id', quote.id)
     await supabase.from('quote_sections').delete().eq('quote_id', quote.id)
     const { error } = await supabase.from('quotes').delete().eq('id', quote.id)
     if (error) { toast(error.message, 'error'); setLoading(''); return }
-    toast('Quote deleted')
+    toast(`${label} deleted`)
     router.push('/quotes')
   }
 
@@ -116,7 +119,7 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
     const res = await fetch('/api/email/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: quote.id }) })
     const data = await res.json()
     if (!res.ok) toast(data.error ?? 'Failed to send email', 'error')
-    else { toast('Quote emailed to customer'); router.refresh() }
+    else { toast(`${label} emailed to customer`); router.refresh() }
     setLoading('')
   }
 
@@ -125,7 +128,7 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
     const res = await fetch('/api/sms/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: quote.id }) })
     const data = await res.json()
     if (!res.ok) toast(data.error ?? 'Failed to send text', 'error')
-    else { toast('Quote texted to customer'); router.refresh() }
+    else { toast(`${label} texted to customer`); router.refresh() }
     setLoading('')
   }
 
@@ -167,10 +170,10 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
         </Button>
       )}
 
-      <Dialog open={acceptOpen} onClose={() => setAcceptOpen(false)} title="Accept quote & create job">
+      <Dialog open={acceptOpen} onClose={() => setAcceptOpen(false)} title={`Accept ${label.toLowerCase()} & create job`}>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            This will mark the quote as accepted and automatically create job <strong>{nextJobNumber}</strong>.
+            This will mark the {label.toLowerCase()} as accepted and automatically create job <strong>{nextJobNumber}</strong>.
             A to-do reminder will be added to your dashboard.
           </p>
           <div>

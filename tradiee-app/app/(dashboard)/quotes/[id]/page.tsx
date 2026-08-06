@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/header'
 import { nextDocNumber } from '@/lib/numbering'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime, quoteLabel } from '@/lib/utils'
 import { QuoteActions } from './client'
 import { SaveTemplateButton } from './save-template'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
@@ -51,6 +51,9 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
             <div className="flex items-center gap-3 mb-1">
               <h2 className="text-lg font-semibold text-gray-900">{quote.title}</h2>
               <StatusBadge status={quote.status} />
+              {quote.is_estimate && (
+                <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase tracking-wide">Estimate</span>
+              )}
             </div>
             <p className="text-sm text-gray-500">
               For{' '}
@@ -164,10 +167,10 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
           <CardContent className="flex items-center justify-between py-4">
             <div>
               <p className="text-sm font-medium text-gray-700">Customer link</p>
-              <p className="text-xs text-gray-400">Share this link with your customer to view and accept the quote</p>
+              <p className="text-xs text-gray-400">Share this link with your customer to view and accept the {quoteLabel(quote.is_estimate).toLowerCase()}</p>
             </div>
             <a href={`/q/${quote.public_token}`} target="_blank" className="text-sm text-orange-500 hover:underline">
-              Open quote →
+              Open {quoteLabel(quote.is_estimate).toLowerCase()} →
             </a>
           </CardContent>
         </Card>

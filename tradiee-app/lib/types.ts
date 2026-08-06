@@ -141,6 +141,7 @@ export interface Quote {
   quote_number: string
   title: string
   status: QuoteStatus
+  is_estimate: boolean
   subtotal: number
   discount_type: 'amount' | 'percent' | null
   discount_value: number

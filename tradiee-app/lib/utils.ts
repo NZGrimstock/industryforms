@@ -80,6 +80,14 @@ export function generateQuoteNumber(seq: number): string {
   return `Q-${String(seq).padStart(4, '0')}`
 }
 
+// A quote flagged is_estimate is a best-guess figure, not a fixed price a job
+// has to land within — real enough a difference that every place a customer
+// or the owner sees the document's name should say which one it is.
+export function quoteLabel(isEstimate: boolean | null | undefined, plural = false): string {
+  if (isEstimate) return plural ? 'Estimates' : 'Estimate'
+  return plural ? 'Quotes' : 'Quote'
+}
+
 export function generateJobNumber(seq: number): string {
   return `J-${String(seq).padStart(4, '0')}`
 }
