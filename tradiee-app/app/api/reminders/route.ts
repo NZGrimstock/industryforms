@@ -6,20 +6,9 @@ import { nextDocNumber } from '@/lib/numbering'
 import { notify } from '@/lib/notify'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
 import { logCommunication } from '@/lib/comms'
-import { DEFAULT_TIMEZONE, formatDateTime } from '@/lib/datetime'
-
-function addInterval(dateStr: string, interval: string | null): string {
-  const d = new Date(dateStr)
-  switch (interval) {
-    case 'weekly': d.setDate(d.getDate() + 7); break
-    case 'fortnightly': d.setDate(d.getDate() + 14); break
-    case 'monthly': d.setMonth(d.getMonth() + 1); break
-    case 'quarterly': d.setMonth(d.getMonth() + 3); break
-    case 'yearly': d.setFullYear(d.getFullYear() + 1); break
-    default: d.setFullYear(d.getFullYear() + 1)
-  }
-  return d.toISOString().slice(0, 10)
-}
+import { DEFAULT_TIMEZONE, addInterval, formatDateTime } from '@/lib/datetime'
+import { buildCustomerStatements, type StatementInvoice } from '@/lib/statement'
+import { formatCurrency } from '@/lib/utils'
 
 // The job loops over many records sending email/SMS — give it headroom past the
 // default serverless timeout.
@@ -63,7 +52,7 @@ async function runReminders() {
   // Sent quotes not viewed/accepted in 3 days, follow_up_at <= now
   const { data: quotesToRemind } = await service
     .from('quotes')
-    .select('id, company_id, customer_id, quote_number, title, public_token, subtotal, expires_at, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
+    .select('id, company_id, customer_id, quote_number, title, public_token, subtotal, expires_at, is_estimate, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
     .eq('status', 'sent')
     .lte('follow_up_at', new Date().toISOString())
     .is('viewed_at', null)
@@ -73,27 +62,29 @@ async function runReminders() {
     const company = quote.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null; logo_url: string | null } | null
     if (!customer || !company) continue
     const viewUrl = `${appUrl}/q/${quote.public_token}`
+    const docWord = quote.is_estimate ? 'Estimate' : 'Quote'
     let delivered = false
 
     if (customer.email) {
       const { subject, html } = reminderEmailHtml({
         type: 'quote_followup', companyName: company.name, customerName: customer.name,
         documentNumber: quote.quote_number, amountDue: `$${Number(quote.subtotal).toFixed(2)}`, viewUrl, logoUrl: company.logo_url,
+        isEstimate: !!quote.is_estimate,
       })
       const r = await sendEmail({ to: customer.email, subject, html, replyTo: company.email ?? undefined })
-      if (r.error) errors.push(`Quote ${quote.quote_number} email: ${r.error}`)
-      else { delivered = true; sent.push(`Quote ${quote.quote_number} email`) }
+      if (r.error) errors.push(`${docWord} ${quote.quote_number} email: ${r.error}`)
+      else { delivered = true; sent.push(`${docWord} ${quote.quote_number} email`) }
     }
     if (customer.phone) {
       const r = await sendSms({
         to: customer.phone, country: (company.country as 'NZ' | 'AU') ?? 'NZ',
-        body: `Hi ${customer.name.split(' ')[0]}, just following up on quote ${quote.quote_number} from ${company.name}: ${viewUrl}`,
+        body: `Hi ${customer.name.split(' ')[0]}, just following up on ${docWord.toLowerCase()} ${quote.quote_number} from ${company.name}: ${viewUrl}`,
         companyId: quote.company_id,
         relatedType: 'quote_followup',
         relatedId: quote.id,
       })
-      if (r.error && r.error !== 'SMS service not configured' && !isSmsBillingDisabledError(r.error)) errors.push(`Quote ${quote.quote_number} sms: ${r.error}`)
-      else if (!r.error) { delivered = true; sent.push(`Quote ${quote.quote_number} sms`) }
+      if (r.error && r.error !== 'SMS service not configured' && !isSmsBillingDisabledError(r.error)) errors.push(`${docWord} ${quote.quote_number} sms: ${r.error}`)
+      else if (!r.error) { delivered = true; sent.push(`${docWord} ${quote.quote_number} sms`) }
     }
     if (delivered) {
       await service.from('quotes').update({ follow_up_at: new Date(Date.now() + 7 * 86400000).toISOString() }).eq('id', quote.id)
@@ -504,6 +495,63 @@ async function runReminders() {
       await service.from('service_reminders').update({ due_date: addInterval(sr.due_date as string, sr.interval as string), last_sent_at: new Date().toISOString() }).eq('id', sr.id)
     } else {
       await service.from('service_reminders').update({ status: 'sent', last_sent_at: new Date().toISOString() }).eq('id', sr.id)
+    }
+  }
+
+  // ── Statement run reminders ─────────────────────────────────────────────
+  // Nudge-only, never auto-send: a human always reviews and ticks/unticks on
+  // the Statements page before anything goes out. This just emails the
+  // owner/admins "it's time to run statements" when the company's chosen
+  // interval is due, then rolls statement_run_next forward regardless of
+  // whether anyone currently owes money (same "always advance" rule as
+  // recurring jobs/invoices above) so it doesn't nag again tomorrow.
+  const { data: dueStatementRuns } = await service
+    .from('companies')
+    .select('id, name, email, logo_url, statement_run_interval, statement_run_next')
+    .not('statement_run_interval', 'is', null)
+    .not('statement_run_next', 'is', null)
+    .lte('statement_run_next', today)
+
+  for (const co of dueStatementRuns ?? []) {
+    try {
+      const { data: openInvoices } = await service
+        .from('invoices')
+        .select('id, customer_id, invoice_number, status, total, amount_paid, due_date, created_at')
+        .eq('company_id', co.id)
+        .in('status', ['sent', 'partially_paid', 'overdue'])
+      const statements = buildCustomerStatements((openInvoices ?? []) as StatementInvoice[])
+      const customerCount = statements.size
+      const totalOutstanding = [...statements.values()].reduce((sum, s) => sum + s.outstanding, 0)
+
+      if (customerCount > 0) {
+        const { data: admins } = await service
+          .from('profiles')
+          .select('email, full_name')
+          .eq('company_id', co.id)
+          .in('role', ['owner', 'admin'])
+          .eq('is_active', true)
+          .not('email', 'is', null)
+
+        for (const admin of admins ?? []) {
+          const r = await sendEmail({
+            to: admin.email as string,
+            subject: `Time to run statements — ${customerCount} customer${customerCount === 1 ? '' : 's'} owing`,
+            html: brandedEmailHtml({
+              companyName: co.name,
+              logoUrl: co.logo_url,
+              bodyHtml: `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${(admin.full_name as string ?? '').split(' ')[0] || 'there'},</p><p style="margin:0 0 16px;color:#4b5563">It's time for your ${co.statement_run_interval} statement run — <strong>${customerCount} customer${customerCount === 1 ? '' : 's'}</strong> currently ${customerCount === 1 ? 'has' : 'have'} a balance owing, totalling <strong>${formatCurrency(totalOutstanding)}</strong>.</p><p style="margin:0;color:#4b5563">Head to the Statements page to review and send.</p>`,
+            }),
+          })
+          if (r.error) errors.push(`Statement run reminder (${co.name}): ${r.error}`)
+          else sent.push(`Statement run reminder: ${co.name}`)
+        }
+      }
+
+      await service.from('companies').update({
+        statement_run_next: addInterval(co.statement_run_next as string, co.statement_run_interval as string),
+      }).eq('id', co.id)
+    } catch (e) {
+      errors.push(`Statement run reminder for company ${co.id}: ${e instanceof Error ? e.message : 'failed'}`)
     }
   }
 

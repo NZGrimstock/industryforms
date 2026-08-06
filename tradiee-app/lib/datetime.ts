@@ -27,3 +27,20 @@ export function formatTime(date: Date | string | number, timeZone: string, optio
 export function formatDateTime(date: Date | string | number, timeZone: string, options?: Intl.DateTimeFormatOptions) {
   return new Date(date).toLocaleString('en-NZ', { timeZone, hour: '2-digit', minute: '2-digit', ...options })
 }
+
+// Rolls a YYYY-MM-DD date forward by a recurrence interval. Shared by
+// recurring jobs/invoices/service reminders and the statement-run schedule
+// (all in app/api/reminders/route.ts) plus the Statements page, which needs
+// the identical math to preview "next run" when the user picks an interval.
+export function addInterval(dateStr: string, interval: string | null): string {
+  const d = new Date(dateStr)
+  switch (interval) {
+    case 'weekly': d.setDate(d.getDate() + 7); break
+    case 'fortnightly': d.setDate(d.getDate() + 14); break
+    case 'monthly': d.setMonth(d.getMonth() + 1); break
+    case 'quarterly': d.setMonth(d.getMonth() + 3); break
+    case 'yearly': d.setFullYear(d.getFullYear() + 1); break
+    default: d.setFullYear(d.getFullYear() + 1)
+  }
+  return d.toISOString().slice(0, 10)
+}

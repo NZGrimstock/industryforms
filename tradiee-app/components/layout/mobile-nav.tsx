@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Briefcase, Calendar, Receipt, MoreHorizontal,
   Users, FileText, Clock, Package, ClipboardList, CheckSquare,
-  BarChart3, Settings, MessageSquare, Map, Wrench, X, Globe, Inbox
+  BarChart3, Settings, MessageSquare, Map, Wrench, X, Globe, Inbox, FileStack
 } from 'lucide-react'
 
 const primary = [
@@ -18,9 +18,10 @@ const primary = [
 
 const more = [
   { href: '/messages', label: 'Messages', icon: Inbox },
-  { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
   { href: '/customers', label: 'Customers', icon: Users },
+  { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
   { href: '/quotes', label: 'Quotes', icon: FileText },
+  { href: '/statements', label: 'Statements', icon: FileStack },
   { href: '/jobs/map', label: 'Job Map', icon: Map },
   { href: '/timesheets', label: 'Timesheets', icon: Clock },
   { href: '/price-list', label: 'Price List', icon: Package },

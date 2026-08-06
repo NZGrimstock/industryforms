@@ -8,9 +8,10 @@ interface SendEmailOptions {
   subject: string
   html: string
   replyTo?: string
+  attachments?: Array<{ filename: string; content: string }> // content = base64
 }
 
-export async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, replyTo, attachments }: SendEmailOptions) {
   if (!RESEND_API_KEY) {
     console.warn('RESEND_API_KEY not set — email not sent')
     return { error: 'Email service not configured' }
@@ -19,7 +20,7 @@ export async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html, reply_to: replyTo }),
+    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html, reply_to: replyTo, attachments }),
   })
 
   const data = await res.json()
@@ -68,6 +69,7 @@ export function quoteEmailHtml({
   companyPhone,
   companyEmail,
   logoUrl,
+  isEstimate = false,
   timezone = DEFAULT_TIMEZONE,
 }: {
   companyName: string
@@ -80,8 +82,10 @@ export function quoteEmailHtml({
   companyPhone?: string | null
   companyEmail?: string | null
   logoUrl?: string | null
+  isEstimate?: boolean
   timezone?: string
 }) {
+  const label = isEstimate ? 'Estimate' : 'Quote'
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
@@ -90,15 +94,15 @@ export function quoteEmailHtml({
     ${emailBrandHeader(companyName, logoUrl)}
     <div style="padding:32px">
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
-      <p style="margin:0 0 24px;color:#6b7280">Please find your quote from ${companyName} attached below.</p>
+      <p style="margin:0 0 24px;color:#6b7280">Please find your ${label.toLowerCase()} from ${companyName} attached below.</p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin-bottom:24px">
-        <p style="margin:0 0 4px;font-size:13px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Quote</p>
+        <p style="margin:0 0 4px;font-size:13px;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">${label}</p>
         <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:#111827">${quoteNumber}</p>
         <p style="margin:0 0 12px;color:#4b5563">${quoteTitle}</p>
         <p style="margin:0;font-size:22px;font-weight:700;color:#f97316">${total}</p>
         ${expiresAt ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Expires ${formatDate(expiresAt, timezone, { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
       </div>
-      <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">View &amp; Accept Quote →</a>
+      <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">View &amp; Accept ${label} →</a>
       <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">
         Questions? Reply to this email${companyPhone ? ` or call ${companyPhone}` : ''}.
       </p>
@@ -156,6 +160,68 @@ export function invoiceEmailHtml({
         ${dueDate ? `<p style="margin:8px 0 0;font-size:13px;color:#9ca3af">Due date: ${formatDate(dueDate, timezone, { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
       </div>
       <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">View &amp; Pay Invoice →</a>
+      <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">
+        Questions? Reply to this email${companyPhone ? ` or call ${companyPhone}` : ''}.
+      </p>
+    </div>
+    <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">
+      <p style="margin:0;font-size:12px;color:#9ca3af">Sent by ${companyName}${companyEmail ? ` · ${companyEmail}` : ''} · Powered by IndustryForms</p>
+    </div>
+  </div>
+</body>
+</html>`
+}
+
+export function statementEmailHtml({
+  companyName,
+  customerName,
+  lines,
+  totalOutstanding,
+  companyPhone,
+  companyEmail,
+  logoUrl,
+  timezone = DEFAULT_TIMEZONE,
+}: {
+  companyName: string
+  customerName: string
+  lines: Array<{ invoiceNumber: string; date: string; dueDate: string | null; balance: string }>
+  totalOutstanding: string
+  companyPhone?: string | null
+  companyEmail?: string | null
+  logoUrl?: string | null
+  timezone?: string
+}) {
+  const rows = lines.map(l => `<tr>
+        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#374151">${l.invoiceNumber}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">${formatDate(l.date, timezone, { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px">${l.dueDate ? formatDate(l.dueDate, timezone, { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+        <td style="padding:8px 0;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:600;color:#111827">${l.balance}</td>
+      </tr>`).join('')
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    ${emailBrandHeader(companyName, logoUrl)}
+    <div style="padding:32px">
+      <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
+      <p style="margin:0 0 24px;color:#6b7280">Please find your account statement from ${companyName} below (also attached as a PDF).</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-bottom:8px;border-bottom:1px solid #e5e7eb;color:#9ca3af;font-size:11px;text-transform:uppercase">Invoice</th>
+            <th style="text-align:left;padding-bottom:8px;border-bottom:1px solid #e5e7eb;color:#9ca3af;font-size:11px;text-transform:uppercase">Date</th>
+            <th style="text-align:left;padding-bottom:8px;border-bottom:1px solid #e5e7eb;color:#9ca3af;font-size:11px;text-transform:uppercase">Due</th>
+            <th style="text-align:right;padding-bottom:8px;border-bottom:1px solid #e5e7eb;color:#9ca3af;font-size:11px;text-transform:uppercase">Balance</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="text-align:right;margin-top:16px;padding-top:12px;border-top:2px solid #f97316">
+        <span style="color:#6b7280;margin-right:12px">Total outstanding</span>
+        <span style="font-size:20px;font-weight:700;color:#f97316">${totalOutstanding}</span>
+      </div>
       <p style="margin:32px 0 0;font-size:13px;color:#9ca3af">
         Questions? Reply to this email${companyPhone ? ` or call ${companyPhone}` : ''}.
       </p>
@@ -314,6 +380,7 @@ export function reminderEmailHtml({
   daysOverdue,
   viewUrl,
   logoUrl,
+  isEstimate = false,
 }: {
   type: 'quote_followup' | 'invoice_overdue' | 'invoice_due_soon'
   companyName: string
@@ -323,16 +390,18 @@ export function reminderEmailHtml({
   daysOverdue?: number
   viewUrl: string
   logoUrl?: string | null
+  isEstimate?: boolean
 }) {
   const isQuote = type === 'quote_followup'
+  const quoteWord = isEstimate ? 'estimate' : 'quote'
   const days = daysOverdue ?? 0
   const subject = isQuote
-    ? `Following up on your quote ${documentNumber}`
+    ? `Following up on your ${quoteWord} ${documentNumber}`
     : type === 'invoice_due_soon'
       ? `Invoice ${documentNumber} is due ${days === 0 ? 'today' : 'soon'}`
       : `Invoice ${documentNumber} is overdue`
   const body = isQuote
-    ? `We wanted to follow up on quote ${documentNumber} we sent you recently. Please let us know if you have any questions or would like to proceed.`
+    ? `We wanted to follow up on ${quoteWord} ${documentNumber} we sent you recently. Please let us know if you have any questions or would like to proceed.`
     : type === 'invoice_due_soon'
       ? `Invoice ${documentNumber} for ${amountDue} is due ${days === 0 ? 'today' : `in ${days} day${days !== 1 ? 's' : ''}`}. You can pay online any time using the link below.`
       : `Invoice ${documentNumber} for ${amountDue} is now ${days} day${days !== 1 ? 's' : ''} overdue. Please arrange payment at your earliest convenience.`
@@ -349,7 +418,7 @@ export function reminderEmailHtml({
       <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${customerName},</p>
       <p style="margin:0 0 24px;color:#6b7280">${body}</p>
       <a href="${viewUrl}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">
-        ${isQuote ? 'View Quote →' : 'Pay Now →'}
+        ${isQuote ? `View ${isEstimate ? 'Estimate' : 'Quote'} →` : 'Pay Now →'}
       </a>
     </div>
     <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">

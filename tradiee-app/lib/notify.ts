@@ -8,7 +8,7 @@
 import { sendEmail } from '@/lib/email'
 import { isSmsBillingDisabledError, sendSms, smsConfigured } from '@/lib/sms'
 
-type EmailPayload = { to: string | null; subject: string; html: string; replyTo?: string | null }
+type EmailPayload = { to: string | null; subject: string; html: string; replyTo?: string | null; attachments?: Array<{ filename: string; content: string }> }
 type SmsPayload = { to: string | null; country?: 'NZ' | 'AU'; body: string }
 export type NotificationResult = { channel: 'email' | 'sms'; status: string; error?: string | null }
 
@@ -50,7 +50,7 @@ export async function notify(params: {
   const results: NotificationResult[] = []
 
   if (email?.to) {
-    const result = await sendEmail({ to: email.to, subject: email.subject, html: email.html, replyTo: email.replyTo ?? undefined })
+    const result = await sendEmail({ to: email.to, subject: email.subject, html: email.html, replyTo: email.replyTo ?? undefined, attachments: email.attachments })
     const status = result.error ? 'failed' : 'sent'
     await logEvent(service, {
       companyId, customerId, bookingId, eventType, channel: 'email',
@@ -111,7 +111,7 @@ export async function notifyPreferred(params: {
   }
 
   if (email?.to) {
-    const result = await sendEmail({ to: email.to, subject: email.subject, html: email.html, replyTo: email.replyTo ?? undefined })
+    const result = await sendEmail({ to: email.to, subject: email.subject, html: email.html, replyTo: email.replyTo ?? undefined, attachments: email.attachments })
     const status = result.error ? 'failed' : 'sent'
     await logEvent(service, {
       companyId, customerId, bookingId, eventType, channel: 'email',
