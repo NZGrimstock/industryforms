@@ -74,12 +74,21 @@ export async function xeroRequest(path: string, tenantId: string, accessToken: s
 // only create when nothing matches. (Matches on exact Name — the same
 // constraint Xero itself enforces, so no separate contact could exist with
 // that name anyway.)
+// Escape order matters: a literal backslash must become \\ before a quote
+// becomes \" — otherwise a name ending in a bare backslash (e.g. "Smith \")
+// would pair with the closing quote's escape and never actually close the
+// string literal in Xero's where-clause grammar.
+export function xeroWhereNameClause(name: string): string {
+  const escaped = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return `Name=="${escaped}"`
+}
+
 async function findOrCreateXeroContact(
   tenantId: string,
   accessToken: string,
   customer: { name: string; email: string | null }
 ): Promise<string | undefined> {
-  const clause = `Name=="${customer.name.replace(/"/g, '\\"')}"`
+  const clause = xeroWhereNameClause(customer.name)
   const found = await xeroRequest(`/Contacts?where=${encodeURIComponent(clause)}`, tenantId, accessToken)
   const existing = found.Contacts?.[0]?.ContactID
   if (existing) return existing

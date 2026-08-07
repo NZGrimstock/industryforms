@@ -1,12 +1,12 @@
-// Runnable check for pickXeroTaxType() in lib/xero.ts — the only pure-logic
-// piece of the Xero sync fix (the rest needs a live Xero org to exercise).
-// Regression guard for the "hardcoded OUTPUT2 breaks AU orgs and ignores
-// per-line tax rate" bug this replaced.
+// Runnable check for the pure-logic pieces of lib/xero.ts — the rest of the
+// sync flow needs a live Xero org to exercise. Regression guard for two real
+// bugs: hardcoded OUTPUT2 breaking AU orgs / ignoring per-line tax rate, and
+// incomplete backslash escaping in the contact-name where-clause filter.
 //
-// Run:  node scripts/check-xero-tax.mjs   (from tradiee-app/)
+// Run:  node scripts/check-xero.mjs   (from tradiee-app/)
 
 import assert from 'node:assert/strict'
-import { pickXeroTaxType } from '../lib/xero.ts'
+import { pickXeroTaxType, xeroWhereNameClause } from '../lib/xero.ts'
 
 const NZ_RATES = [
   { TaxType: 'OUTPUT2', DisplayTaxRate: 15 },
@@ -35,4 +35,14 @@ assert.equal(pickXeroTaxType(NZ_RATES, 0), NZ_RATES.find(r => r.DisplayTaxRate =
 assert.equal(pickXeroTaxType(NZ_RATES, 7.5), 'OUTPUT2', 'an unconfigured custom rate should fall back to the first revenue rate rather than erroring')
 assert.equal(pickXeroTaxType([], 15), 'NONE', 'an org with no matching revenue rates at all must not throw')
 
-console.log('OK — pickXeroTaxType verified (exact match, float tolerance, zero-rate handling, safe fallback).')
+// ── contact-name where-clause escaping ──────────────────────────────────────
+assert.equal(xeroWhereNameClause('Alpha Builders'), 'Name=="Alpha Builders"', 'plain name should pass through unescaped')
+assert.equal(xeroWhereNameClause('O\'Brien Plumbing'), 'Name=="O\'Brien Plumbing"', 'apostrophes need no escaping inside a double-quoted literal')
+assert.equal(xeroWhereNameClause('Bob "Sparky" Smith'), 'Name=="Bob \\"Sparky\\" Smith"', 'embedded double quotes must be escaped so they cannot close the literal early')
+// A name ending in a bare backslash: escaping order matters here. If the
+// backslash isn't escaped to \\ before the closing quote is appended, the
+// backslash pairs with the closing quote's own escaping and the literal
+// never actually closes in Xero's where-clause grammar.
+assert.equal(xeroWhereNameClause('Smith \\'), 'Name=="Smith \\\\"', 'a trailing backslash must be escaped before the closing quote is added')
+
+console.log('OK — lib/xero.ts pure logic verified (tax type matching: exact match, float tolerance, zero-rate handling, safe fallback; where-clause escaping: quotes and backslashes).')
