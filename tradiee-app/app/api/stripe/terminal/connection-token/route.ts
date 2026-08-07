@@ -49,7 +49,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const stripe = getStripe()
-  const token = await stripe.terminal.connectionTokens.create({}, options)
-  return NextResponse.json({ secret: token.secret })
+  try {
+    const stripe = getStripe()
+    const token = await stripe.terminal.connectionTokens.create({}, options)
+    return NextResponse.json({ secret: token.secret })
+  } catch (e) {
+    console.error('Terminal connection token error:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Could not start a Tap to Pay session.' },
+      { status: 502 }
+    )
+  }
 }

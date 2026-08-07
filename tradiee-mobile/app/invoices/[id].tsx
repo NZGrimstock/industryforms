@@ -308,8 +308,11 @@ export default function InvoiceDetailScreen() {
       const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/pdf`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Could not generate PDF')
+      }
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Could not generate PDF')
       await Linking.openURL(json.url)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not open PDF')
@@ -375,6 +378,27 @@ export default function InvoiceDetailScreen() {
     setSavingEdit(false)
     setShowEdit(false)
     refreshInvoice?.()
+  }
+
+  async function revertToDraft() {
+    if (!invoice) return
+    Alert.alert(
+      'Revert to draft?',
+      'The invoice will be unlocked for editing until you complete it again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revert', onPress: async () => {
+            setSavingEdit(true)
+            const { error } = await supabase.from('invoices').update({ status: 'draft' }).eq('id', id)
+            setSavingEdit(false)
+            if (error) { Alert.alert('Error', error.message); return }
+            setShowEdit(false)
+            refreshInvoice?.()
+          },
+        },
+      ]
+    )
   }
 
   if (isLoading) {
@@ -659,30 +683,45 @@ export default function InvoiceDetailScreen() {
               placeholderTextColor="#6b7280"
               multiline
             />
-            <Text style={[styles.metaLabel, { marginTop: 8 }]}>Discount</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                value={editForm.discount_value}
-                onChangeText={v => setEditForm(f => ({ ...f, discount_value: v }))}
-                placeholder="0.00"
-                placeholderTextColor="#6b7280"
-                keyboardType="decimal-pad"
-              />
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {(['amount', 'percent'] as const).map(t => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[styles.methodChip, editForm.discount_type === t && styles.methodChipActive]}
-                    onPress={() => setEditForm(f => ({ ...f, discount_type: t }))}
-                    accessibilityRole="button"
-                    accessibilityLabel={t === 'amount' ? 'Dollar discount' : 'Percent discount'}
-                  >
-                    <Text style={[styles.methodChipText, editForm.discount_type === t && styles.methodChipTextActive]}>{t === 'amount' ? '$' : '%'}</Text>
+            {isDraft ? (
+              <>
+                <Text style={[styles.metaLabel, { marginTop: 8 }]}>Discount</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={editForm.discount_value}
+                    onChangeText={v => setEditForm(f => ({ ...f, discount_value: v }))}
+                    placeholder="0.00"
+                    placeholderTextColor="#6b7280"
+                    keyboardType="decimal-pad"
+                  />
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {(['amount', 'percent'] as const).map(t => (
+                      <TouchableOpacity
+                        key={t}
+                        style={[styles.methodChip, editForm.discount_type === t && styles.methodChipActive]}
+                        onPress={() => setEditForm(f => ({ ...f, discount_type: t }))}
+                        accessibilityRole="button"
+                        accessibilityLabel={t === 'amount' ? 'Dollar discount' : 'Percent discount'}
+                      >
+                        <Text style={[styles.methodChipText, editForm.discount_type === t && styles.methodChipTextActive]}>{t === 'amount' ? '$' : '%'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.metaLabel, { marginTop: 8, color: '#9ca3af' }]}>
+                  Discount is locked once sent — revert to draft to change it.
+                </Text>
+                {Number(invoice.amount_paid ?? 0) === 0 && (
+                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#6b7280', marginTop: 8 }]} onPress={revertToDraft} activeOpacity={0.85}>
+                    <Text style={styles.saveBtnText}>Revert to draft</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                )}
+              </>
+            )}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
               <Text style={[styles.metaLabel, { marginTop: 0 }]}>Repeat this invoice</Text>

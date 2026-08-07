@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer, FileText } from 'lucide-react'
+import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer, FileText, Undo2 } from 'lucide-react'
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
 import { PrintInvoice, viewInvoicePdf } from '@/components/pdf/print-invoice'
 import { useInvoiceLines, type InvoiceLine } from '@/components/invoices/invoice-lines'
@@ -378,6 +378,16 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     router.push('/invoices')
   }
 
+  async function revertToDraft() {
+    if (!confirm('Revert to draft? The invoice will be unlocked for editing until you complete it again.')) return
+    setLoading(true)
+    const { error } = await supabase.from('invoices').update({ status: 'draft' }).eq('id', invoice.id)
+    if (error) { toast(error.message, 'error'); setLoading(false); return }
+    toast('Invoice reverted to draft')
+    router.refresh()
+    setLoading(false)
+  }
+
   async function completeAndSms() {
     if (isDraft) await supabase.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoice.id)
     await sendText()
@@ -396,20 +406,26 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   const canSendEmail = ['draft', 'sent', 'overdue'].includes(invoice.status) && !!invoice.customer_email
   const canSendText = ['draft', 'sent', 'partially_paid', 'overdue'].includes(invoice.status) && !!invoice.customer_phone
   const canPay = ['sent', 'partially_paid', 'overdue'].includes(invoice.status)
+  // Once sent, the invoice is a document the customer may have already seen
+  // or been sent a total for — editing (including the discount) is locked
+  // (DB also enforces this) until explicitly reverted back to draft. Only
+  // offered before any payment's been recorded against it.
+  const canRevertToDraft = !isDraft && Number(invoice.amount_paid) === 0
 
   const canComplete = isDraft || canSendEmail || canSendText
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Add — line items are locked once the invoice leaves draft (audit
-          trail: the customer may already have seen or paid it). Discount
-          stays editable regardless of status, same as before. */}
-      <Dropdown label="Add" icon={<Plus className="h-4 w-4" />}>
-        {isDraft && <DropdownItem icon={<Plus />} onClick={() => setActiveDialog('line')}>Line</DropdownItem>}
-        {isDraft && <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>}
-        <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('discount')}>{invoice.discount_amount > 0 ? 'Edit discount' : 'Discount'}</DropdownItem>
-        {isDraft && <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>}
-      </Dropdown>
+      {/* Add — everything here (including Discount) is locked once the
+          invoice leaves draft; revert to draft to unlock it again. */}
+      {isDraft && (
+        <Dropdown label="Add" icon={<Plus className="h-4 w-4" />}>
+          <DropdownItem icon={<Plus />} onClick={() => setActiveDialog('line')}>Line</DropdownItem>
+          <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>
+          <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('discount')}>{invoice.discount_amount > 0 ? 'Edit discount' : 'Discount'}</DropdownItem>
+          <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>
+        </Dropdown>
+      )}
 
       {/* Print */}
       <Dropdown label="Print" icon={<Printer className="h-4 w-4" />}>
@@ -418,6 +434,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
 
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}
+      {canRevertToDraft && <Button variant="outline" size="sm" loading={loading} onClick={revertToDraft}><Undo2 className="h-4 w-4" /> Revert to draft</Button>}
       {isDraft && <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>}
 
       {/* Complete Invoice (green, right-aligned) */}

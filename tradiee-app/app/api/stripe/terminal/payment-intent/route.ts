@@ -111,18 +111,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const stripe = getStripe()
-  const pi = await stripe.paymentIntents.create({
-    amount: cents,
-    currency: stripeCurrency(company?.country),
-    payment_method_types: ['card_present'],
-    capture_method: 'automatic',
-    metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, channel: 'tap_to_pay' },
-  }, options)
+  try {
+    const stripe = getStripe()
+    const pi = await stripe.paymentIntents.create({
+      amount: cents,
+      currency: stripeCurrency(company?.country),
+      payment_method_types: ['card_present'],
+      capture_method: 'automatic',
+      metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number, channel: 'tap_to_pay' },
+    }, options)
 
-  return NextResponse.json({
-    client_secret: pi.client_secret,
-    id: pi.id,
-    amount: cents,
-  })
+    return NextResponse.json({
+      client_secret: pi.client_secret,
+      id: pi.id,
+      amount: cents,
+    })
+  } catch (e) {
+    console.error('Terminal PaymentIntent error:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Could not start this card payment.' },
+      { status: 502 }
+    )
+  }
 }

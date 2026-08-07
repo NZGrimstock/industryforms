@@ -49,13 +49,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }
 
-  const element = React.createElement(InvoicePdf, { data })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfBuffer = Buffer.from(await renderToBuffer(element as any))
+  try {
+    const element = React.createElement(InvoicePdf, { data })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfBuffer = Buffer.from(await renderToBuffer(element as any))
 
-  const key = `${auth.companyId}/invoices/${invoice.id}.pdf`
-  await putObject(PRIVATE_BUCKET, key, pdfBuffer, 'application/pdf')
-  const url = await presignedDownload(key, 60 * 10)
+    const key = `${auth.companyId}/invoices/${invoice.id}.pdf`
+    await putObject(PRIVATE_BUCKET, key, pdfBuffer, 'application/pdf')
+    const url = await presignedDownload(key, 60 * 10)
 
-  return NextResponse.json({ url, filename: `${invoice.invoice_number}.pdf` })
+    return NextResponse.json({ url, filename: `${invoice.invoice_number}.pdf` })
+  } catch (e) {
+    // Without this, a render/upload failure was an unhandled 500 with no
+    // body — the mobile client's `res.json()` then threw its own parse
+    // error ("Unexpected end of input"), hiding whatever actually broke.
+    console.error('Invoice PDF generation error:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Could not generate the invoice PDF.' },
+      { status: 502 }
+    )
+  }
 }

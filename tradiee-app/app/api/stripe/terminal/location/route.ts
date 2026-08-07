@@ -39,15 +39,29 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const locationId = await ensureTerminalLocation({
-    id: company.id,
-    name: company.name,
-    phone: company.phone,
-    address: company.address,
-    country: company.country,
-    stripe_account_id: company.stripe_account_id,
-    stripe_terminal_location_id: company.stripe_terminal_location_id,
-  })
+  try {
+    const locationId = await ensureTerminalLocation({
+      id: company.id,
+      name: company.name,
+      phone: company.phone,
+      address: company.address,
+      country: company.country,
+      stripe_account_id: company.stripe_account_id,
+      stripe_terminal_location_id: company.stripe_terminal_location_id,
+    })
 
-  return NextResponse.json({ location_id: locationId })
+    return NextResponse.json({ location_id: locationId })
+  } catch (e) {
+    // Without this, a Stripe error here (e.g. Terminal not enabled on this
+    // connected account, or an address Stripe rejects) became an unhandled
+    // 500 with no JSON body — the mobile client's res.json() then threw a
+    // generic parse error, surfacing as "Could not resolve a Terminal
+    // location" with the real reason lost. Now the actual message reaches
+    // the user.
+    console.error('ensureTerminalLocation error:', e)
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Could not set up a Tap to Pay location for this company.' },
+      { status: 502 }
+    )
+  }
 }

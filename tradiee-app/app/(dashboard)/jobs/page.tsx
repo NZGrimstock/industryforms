@@ -47,10 +47,18 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
   const asc = sp.sort ? sp.dir === 'asc' : false
   const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
-  const [{ data: jobs }, nextJobNumber] = await Promise.all([
+  const [{ data: rawJobs }, nextJobNumber, { data: invoicedJobRows }] = await Promise.all([
     query.order(sortCol, { ascending: asc }),
     nextDocNumber(supabase, profile!.company_id, 'job'),
+    supabase.from('invoices').select('job_id').eq('company_id', profile!.company_id).not('job_id', 'is', null).neq('status', 'void'),
   ])
+
+  // A completed job that's been invoiced is done in every sense — from here
+  // it only needs to exist as an invoice, not as a job anymore. Applied
+  // across every filter/view (not just the default "Active" list), since the
+  // point is it's no longer findable as a job at all, only via Invoices.
+  const invoicedJobIds = new Set((invoicedJobRows ?? []).map(r => r.job_id))
+  const jobs = (rawJobs ?? []).filter(j => !(j.status === 'completed' && invoicedJobIds.has(j.id)))
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
     { key: 'list', icon: List, label: 'List' },

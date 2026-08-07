@@ -1,11 +1,21 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-06. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-07. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **⚠ If this session's code is deployed without a `supabase db push` first,
+  it WILL 404/500 in production again** — the exact mistake from the
+  2026-08-06 pt.2 session (see that entry: shipped `is_estimate` code before
+  the migration reached prod, jobs 404'd). Two new migrations,
+  `20260807100000_job_derived_invoice_numbers.sql` and
+  `20260807110000_lock_invoice_financials_to_draft.sql`, must be applied to
+  the production Supabase project (`quidcdrnzjwarrqdpyao`) via
+  `npx supabase db push --linked` in the SAME action as deploying the code
+  that depends on them (job-derived invoice numbering, the sent-invoice
+  financial lock) — not as a follow-up step.
 - **Promote v7 from Internal testing → Production** in Play Console. A
   versionCode can only be uploaded once app-wide, so this is *Promote release*,
   not a re-upload.
@@ -138,6 +148,106 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-07 (Claude) — 5-item bug batch: Tap to Pay, jobs→invoices, invoice lock, mobile PDF error, job-derived invoice numbers
+
+User-reported list, root-caused (not just patched):
+
+**[HIGH] Tap to Pay: "Could not resolve a Terminal location" — real cause was
+hidden, not a Stripe SDK error.** That exact string is `tap-to-pay.ts`'s own
+client-side fallback text, shown whenever `res.json().catch(() => ({}))`
+swallows a JSON parse failure. Root cause: all three
+`app/api/stripe/terminal/*` routes had zero try/catch around their Stripe
+calls, so any Stripe-side failure became an unhandled 500 with no body — the
+mobile client lost the real error and showed the generic fallback instead.
+Added try/catch to `location`, `connection-token`, and `payment-intent`
+routes so the actual Stripe error now reaches the user. **Could not confirm
+the underlying Stripe-side trigger** (no live Stripe Terminal sandbox
+available this session) — next time it fails, the real message will show
+instead of the generic one, which should make root-causing it trivial.
+
+**[HIGH] Mobile invoice PDF: "JSON Parse error: Unexpected end of input" —
+identical root cause, confirmed exactly.** `app/api/invoices/[id]/pdf/route.ts`
+had no try/catch around `renderToBuffer`/R2 upload; the mobile client's
+`viewPdf()` called `res.json()` unconditionally (no `.catch()` fallback even
+on the failure path, unlike `tap-to-pay.ts`), so an unhandled 500 with an
+empty body crashed the client's own JSON.parse with that exact message.
+Fixed both sides: the route now catches and returns a real error message;
+the mobile client now uses the same `res.json().catch(() => ({}))` guard
+already used elsewhere. This class of bug (server route with no try/catch +
+mobile fetch with no `.catch()` on the error path) likely exists in other
+routes too — not audited exhaustively, only the two reported.
+
+**[MEDIUM] "Once a job is invoiced it is no longer a job."** Previously,
+completed jobs only left the *default* "Active" Jobs filter — still visible
+under "All". Per the user's explicit framing, changed this: a job with
+`status = 'completed'` **and** at least one non-void invoice now disappears
+from Jobs entirely (list, board, every status filter, search) — only
+findable via Invoices from then on. A completed-but-not-yet-invoiced job
+still shows (a nudge to invoice it). Applied as a post-fetch filter in
+`app/(dashboard)/jobs/page.tsx` using a lightweight second query for
+invoiced job_ids, not a query-builder change, so it's one filter point
+covering every view uniformly.
+
+**[MEDIUM] Sent invoices could still have their discount edited — closing
+the gap 20260804120000 left.** That migration locked invoice *line items* to
+draft-only but never touched the invoice's own discount/subtotal/total
+fields, and the UI's Discount menu item had no draft guard at all (the code
+comment literally said "stays editable regardless of status"). Fixed at
+both layers: `client.tsx` now hides the whole "Add" menu (Discount included)
+unless draft, and a new DB trigger
+(`20260807110000_lock_invoice_financials_to_draft.sql`) blocks
+discount/subtotal/gst/total changes via any direct API call once a non-draft
+invoice *stays* non-draft — but allows the update when the same statement
+flips status back to `draft`, which is the new **"Revert to draft"** action
+added to unlock editing again (separate from the existing "Revert back to
+job," which deletes an unpaid draft entirely — this one just unlocks a sent,
+unpaid invoice without destroying anything). Mirrored on mobile: the edit
+modal's discount fields are hidden once sent, with the same revert action
+inline. Verified live end-to-end (seeded a sent invoice, confirmed Discount
+menu absent, clicked Revert to draft, confirmed it reappeared) plus a SQL
+regression check.
+
+**[Feature] Invoice numbers now match their job's number.** Job J-1046's
+first invoice becomes `INV-1046`; a second invoice on the same job (progress
+claims, re-invoicing) gets `INV-1046-1`, a third `INV-1046-2`, etc. — matches
+how the business already numbers paperwork by job. Implemented entirely in
+the existing `assign_doc_number()` trigger
+(`20260807100000_job_derived_invoice_numbers.sql`), so every creation path
+(single job invoice, batch invoice, progress claims) gets this for free with
+no application-code changes — `lib/batch-invoice.ts` already just inserts a
+`'PENDING'` placeholder and lets the trigger own the real number. A new
+`jobs.invoice_seq` column (atomically incremented, same row-lock pattern as
+the existing per-company counters) drives the suffix and never reuses a
+number even across deletes. Jobless invoices keep the ordinary sequential
+counter, completely unchanged.
+
+**Real bug my own test caught before it shipped**: job-derived numbers and
+the ordinary sequential counter share the same namespace and both start
+counting from 1 — a fresh company's first counter-based invoice ("INV-0001")
+collided with job #1's own first invoice, which also wants "INV-0001",
+causing a hard unique-constraint insert failure. Fixed by looping the
+counter-fallback path past any collision (safe: `next_doc_number()` never
+reuses a value, so the loop always terminates once the counter clears the
+range job numbers occupy). This is exactly the kind of thing that would have
+looked fine in isolated testing and then broken for real users on day one.
+
+**Preview text may lag** — the several places that call
+`nextDocNumber(..., 'invoice')` purely to show a number before creation
+(pre-existing pattern, several files) aren't job-aware and weren't updated;
+the trigger is authoritative regardless, so the created invoice always gets
+the correct job-derived number even if a preview briefly showed the old
+sequential-style one. Not fixed — cosmetic only, matches the pre-existing
+documented caveat in `lib/numbering.ts`.
+
+Verified: `tsc`/`eslint` clean on both apps. New
+`scripts/check-invoice-numbering.mjs` (needs local Supabase running, unlike
+the other pure-JS `check-*.mjs` scripts — this one exercises real Postgres
+triggers) covers base numbering, -1/-2 suffixes, the collision-safety fix,
+and the full financial-lock/revert-to-draft round trip — all passing.
+Jobs-list filtering and the invoice discount-lock/revert UI verified live
+against seeded local data (see the ⚠ action item above — **migrations not
+yet pushed to production as of this write-up**).
 
 ## Session 2026-08-06 (Claude, pt.2) — Sidebar reorder + Quote/Estimate toggle
 
