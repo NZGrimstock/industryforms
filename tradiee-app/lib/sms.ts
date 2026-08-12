@@ -1,29 +1,35 @@
-// SMS via Twilio. Mirrors lib/email.ts: a guarded sender that no-ops (without
-// throwing) when not configured, so builds/runtime never depend on SMS being
-// set up. Briefly swapped to ClickSend 2026-07-13, reverted same day — its
-// pricing didn't actually beat Twilio once checked properly. The number-pool
-// session-routing built during that swap (and the cross-tenant collision fix
-// it carries) is provider-agnostic, so it's kept as-is, just wired back to
-// Twilio's send/webhook APIs.
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+// SMS via WebSMS (websms.co.nz). Mirrors lib/email.ts: a guarded sender that
+// no-ops (without throwing) when not configured, so builds/runtime never
+// depend on SMS being set up.
+// Replaced Twilio 2026-08-11 — toll-free US verification didn't fit NZ/AU
+// carrier rules (NZ requires a dedicated short code, not toll-free) and
+// WebSMS is a NZ-native aggregator. Sending today from WebSMS's shared
+// "group pool" short code **34567** (their standard offer below 3000
+// msgs/month — WebSMS owns the carrier registration for that number, not
+// us); our own dedicated code **848484** is provisioned and ready to switch
+// to once volume passes that threshold — a WEBSMS_POOL_NZ env var change
+// only, see .env.local. `twilio_sid` columns are kept as-is and now hold the
+// WebSMS message_id — a schema rename wasn't worth the diff for a
+// naming-only concern.
+import { randomUUID, timingSafeEqual } from 'crypto'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 
-const SID = process.env.TWILIO_ACCOUNT_SID
-const TOKEN = process.env.TWILIO_AUTH_TOKEN
+const CLIENT_ID = process.env.WEBSMS_CLIENT_ID
+const CLIENT_SECRET = process.env.WEBSMS_CLIENT_SECRET
+const API_BASE = 'https://api.websms.co.nz/api/connexus'
 // Single dedicated number — used when the pool below isn't configured.
-const FROM = process.env.TWILIO_FROM_NUMBER
+const FROM = process.env.WEBSMS_FROM_NUMBER
 const SMS_BILLING_DISABLED = 'SMS billing is not enabled for this account'
 
-// Shared number pool (2026-07-13): a handful of dedicated numbers serve ALL
-// tenants, routed by sms_pool_sessions rather than one number per company.
-// Numbers themselves are env config (bought a few times a year, not runtime
-// state); comma-separated E.164, e.g. "+64211110001,+64211110002,+64211110003".
-// Falls back to the single TWILIO_FROM_NUMBER (pre-pool behaviour) when
-// unset — keeps dev/small-scale environments working without real pool
-// numbers provisioned.
+// Shared number pool: a handful of numbers serve ALL tenants, routed by
+// sms_pool_sessions rather than one number per company. Today this is a
+// pool of one (WEBSMS_POOL_NZ=34567, WebSMS's own group-pool code — see
+// file header) — AU has no number yet, so AU sends fail cleanly with "No
+// sender number configured" until one is provisioned. Comma-separated, e.g.
+// "34567".
 function poolNumbers(country: 'NZ' | 'AU'): string[] {
-  const raw = country === 'AU' ? process.env.TWILIO_POOL_AU : process.env.TWILIO_POOL_NZ
+  const raw = country === 'AU' ? process.env.WEBSMS_POOL_AU : process.env.WEBSMS_POOL_NZ
   return (raw ?? '').split(',').map(n => n.trim()).filter(Boolean)
 }
 
@@ -39,35 +45,54 @@ export function allPoolNumbers(): string[] {
 }
 
 export function smsConfigured(): boolean {
-  return !!(SID && TOKEN)
+  return !!(CLIENT_ID && CLIENT_SECRET)
 }
 
 export function isSmsBillingDisabledError(error: string | null | undefined): boolean {
   return error === SMS_BILLING_DISABLED
 }
 
+// Cached bearer token — WebSMS tokens are valid 24h; refresh a minute early
+// so an in-flight request never races the real expiry.
+let cachedToken: { token: string; expiresAt: number } | null = null
+
+async function getAccessToken(): Promise<string | null> {
+  if (!CLIENT_ID || !CLIENT_SECRET) return null
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.token
+
+  const res = await fetch(`${API_BASE}/auth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET }),
+  })
+  if (!res.ok) return null
+  const data = await res.json().catch(() => null) as { access_token?: string; expires_in?: number } | null
+  if (!data?.access_token) return null
+
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in ?? 86400) * 1000 - 60_000,
+  }
+  return cachedToken.token
+}
+
 /**
- * Verify Twilio's X-Twilio-Signature on an inbound webhook request.
- * Algorithm (no SDK — the `twilio` package isn't a dependency here, and this
- * is a single well-documented HMAC-SHA1 computation):
- * https://www.twilio.com/docs/usage/security#validating-requests
+ * Verify the `?secret=` query param WebSMS webhook requests carry, against
+ * WEBSMS_WEBHOOK_SECRET. Constant-time compare — same care as the Twilio
+ * HMAC check it replaces, just a simpler shared-secret scheme (WebSMS has no
+ * per-request signature).
  */
-export function validateTwilioSignature(
-  authToken: string,
-  signature: string,
-  url: string,
-  params: Record<string, string>
-): boolean {
-  const data = Object.keys(params).sort().reduce((acc, key) => acc + key + params[key], url)
-  const expected = createHmac('sha1', authToken).update(data, 'utf8').digest('base64')
+export function validateWebhookSecret(secret: string | null | undefined): boolean {
+  const expected = process.env.WEBSMS_WEBHOOK_SECRET
+  if (!expected || !secret) return false
   const a = Buffer.from(expected)
-  const b = Buffer.from(signature)
+  const b = Buffer.from(secret)
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
 }
 
 /**
- * Normalise a local NZ/AU number to E.164 (Twilio requires it).
+ * Normalise a local NZ/AU number to E.164 (used for storage/matching).
  * Leaves already-international (+…) numbers untouched.
  */
 export function toE164(raw: string | null | undefined, country: 'NZ' | 'AU' = 'NZ'): string | null {
@@ -80,6 +105,13 @@ export function toE164(raw: string | null | undefined, country: 'NZ' | 'AU' = 'N
   if (n.startsWith(cc)) return '+' + n
   if (n.startsWith('0')) return '+' + cc + n.slice(1)
   return '+' + cc + n
+}
+
+// WebSMS's documented examples use no leading '+' (e.g. "6421234567") —
+// strip it for the outbound API call only; toE164()'s '+' form is still
+// what's stored/matched everywhere else.
+function toWebSmsFormat(e164: string): string {
+  return e164.replace(/^\+/, '')
 }
 
 // Sticky pool-number assignment for a (company, customer) pair. No fixed
@@ -145,8 +177,8 @@ export async function sendSms(
     relatedId?: string | null
   }
 ): Promise<{ id?: string; error?: string; from?: string }> {
-  if (!SID || !TOKEN) {
-    console.warn('Twilio not configured — SMS not sent')
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.warn('WebSMS not configured — SMS not sent')
     return { error: 'SMS service not configured' }
   }
   const dest = toE164(to, country)
@@ -160,26 +192,25 @@ export async function sendSms(
   }
 
   // Which number this send goes FROM: a sticky pool-number assignment for
-  // this (company, customer) pair once TWILIO_POOL_NZ/AU is configured, else
-  // the single TWILIO_FROM_NUMBER (pre-pool behaviour).
+  // this (company, customer) pair once WEBSMS_POOL_NZ/AU is configured, else
+  // the single WEBSMS_FROM_NUMBER (pre-pool behaviour).
   const from = await resolveOutboundFrom(companyId, dest, country)
   if (!from) return { error: 'No sender number configured' }
 
-  const statusCallback = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/sms/status`
-    : undefined
+  const token = await getAccessToken()
+  if (!token) return { error: 'SMS authentication failed' }
 
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
+  const res = await fetch(`${API_BASE}/sms/out`, {
     method: 'POST',
-    headers: { Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      From: from, To: dest, Body: body,
-      ...(statusCallback ? { StatusCallback: statusCallback } : {}),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: toWebSmsFormat(dest), from, body,
+      messageClass: 'transactional',
     }),
   })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) return { error: data.message ?? `SMS failed (${res.status})` }
-  const sid = typeof data.sid === 'string' ? data.sid : randomUUID()
+  const data = await res.json().catch(() => ({})) as { success?: boolean; message_id?: string; error?: string; message?: string }
+  if (!res.ok || data.success === false) return { error: data.error ?? data.message ?? `SMS failed (${res.status})` }
+  const sid = typeof data.message_id === 'string' ? data.message_id : randomUUID()
   if (companyId) {
     await recordSmsUsage({
       companyId,
@@ -199,12 +230,14 @@ export async function sendSms(
 // billing ledger entry, just a generic bounce so the sender isn't left
 // hanging. Used only by the inbound webhook's unmapped-message path.
 export async function sendRawSms(from: string, to: string, body: string): Promise<void> {
-  if (!SID || !TOKEN) return
+  if (!CLIENT_ID || !CLIENT_SECRET) return
   try {
-    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
+    const token = await getAccessToken()
+    if (!token) return
+    await fetch(`${API_BASE}/sms/out`, {
       method: 'POST',
-      headers: { Authorization: 'Basic ' + Buffer.from(`${SID}:${TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ From: from, To: to, Body: body }),
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: toWebSmsFormat(to), from, body, messageClass: 'transactional' }),
     })
   } catch (error) {
     console.error('[sms] unmapped auto-reply failed', error)

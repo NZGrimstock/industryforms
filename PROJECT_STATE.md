@@ -1,21 +1,36 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-07. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-11. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **⚠ If this session's code is deployed without a `supabase db push` first,
-  it WILL 404/500 in production again** — the exact mistake from the
-  2026-08-06 pt.2 session (see that entry: shipped `is_estimate` code before
-  the migration reached prod, jobs 404'd). Two new migrations,
-  `20260807100000_job_derived_invoice_numbers.sql` and
-  `20260807110000_lock_invoice_financials_to_draft.sql`, must be applied to
-  the production Supabase project (`quidcdrnzjwarrqdpyao`) via
-  `npx supabase db push --linked` in the SAME action as deploying the code
-  that depends on them (job-derived invoice numbering, the sent-invoice
-  financial lock) — not as a follow-up step.
+- **SMS provider swapped Twilio → WebSMS 2026-08-11.** Vercel production env
+  vars are now set (confirmed 2026-08-12) — sending live from WebSMS's shared
+  **group-pool short code 34567** (their standard offer below 3000 msgs/month;
+  WebSMS owns the carrier registration for that number, not us). Our own
+  dedicated code **848484** is provisioned and ready — switching to it later
+  is a one-value `WEBSMS_POOL_NZ` env change (Vercel + `.env.local`), no code
+  change. Two things still needing a human:
+  1. Register the webhook URL in the WebSMS members area
+     (websms.co.nz/members/api-keys.php):
+     `https://app.industryforms.app/api/sms/webhook?secret=<WEBSMS_WEBHOOK_SECRET value>`
+     — must be the real prod domain, not the local `NEXT_PUBLIC_APP_URL`.
+  2. **Send a real test text and check Vercel logs** for the
+     `[sms/webhook] raw payload` line. WebSMS's inbound (MO) and delivery-
+     report (DLR) JSON field names aren't fully documented publicly — the
+     webhook (`app/api/sms/webhook/route.ts`) was built from their OpenAPI
+     spec and query-endpoint response shapes, with fallback field names for
+     the ambiguous ones (`messageId` vs `message_id`), but this needs a live
+     message to confirm it's parsing the real shape correctly before trusting
+     it for customer replies. See file header comment for exactly what's
+     unconfirmed.
+  3. **When volume nears 3000/month**, confirm with WebSMS whether moving to
+     848484 needs its own business/sample-message verification submission
+     (the sample invoice/quote messages + expected-reply examples prepared
+     during the original short-code application are still accurate and
+     ready to reuse if so).
 - **Promote v7 from Internal testing → Production** in Play Console. A
   versionCode can only be uploaded once app-wide, so this is *Promote release*,
   not a re-upload.
@@ -149,6 +164,76 @@ Optional next steps flagged during recent sessions; none are in-progress:
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
 
+## Session 2026-08-11 (Claude) — SMS provider swap Twilio → WebSMS; Tradify/Jobber/ServiceM8/Fergus comparison pages
+
+**Why:** Twilio toll-free verification was rejected (error 30474 — the
+submission identified the ISV, Industry Forms Ltd, instead of each tenant's
+own end-business) and, on digging into Twilio's own guidelines, toll-free
+doesn't apply to NZ/AU SMS at all — NZ requires a **dedicated short code**
+(long codes, toll-free, and alphanumeric sender IDs are all unsupported for
+SMS to NZ mobiles), AU wants a long code or registered alphanumeric ID. At
+20,000 target users, Twilio's per-tenant ISV verification flow doesn't scale
+either. Decided to move to **WebSMS** (websms.co.nz), a NZ-native aggregator,
+with a dedicated NZ short code (**848484**) already provisioned.
+
+**Update 2026-08-12:** live sending actually starts from WebSMS's shared
+**group-pool short code 34567**, not 848484 — WebSMS's standard offer below
+3000 msgs/month, at their own carrier registration, not ours. 848484 stays
+provisioned for when volume crosses that line (see Action items). Every
+mention of 848484 below describes the original plan, not what's live today.
+
+**Code changes** (`lib/sms.ts` rewritten, same exported interface — every
+caller (`quote`, `invoice`, `statement`, `send`, `reminders` routes)
+needed zero changes):
+- Twilio's Basic-auth REST calls replaced with WebSMS's OAuth2 client-
+  credentials flow (`POST /connexus/auth/token`, 24h bearer token, cached
+  in-module with a 60s refresh margin) and `POST /connexus/sms/out`
+  (`messageClass: 'transactional'`).
+- The existing shared-number-pool architecture (`sms_pool_sessions`,
+  `WEBSMS_POOL_NZ`/`WEBSMS_POOL_AU` env vars) was **kept as-is**, just
+  renamed from `TWILIO_POOL_*` — it's a pool of one number today (848484)
+  but the sticky per-(company, customer) reply-routing it provides is
+  exactly what's needed the moment a second number (AU, or a second NZ
+  code) gets added.
+- `app/api/sms/inbound/route.ts` + `app/api/sms/status/route.ts` (Twilio's
+  two separate form-urlencoded webhooks) deleted and replaced by one route,
+  `app/api/sms/webhook/route.ts` — WebSMS posts both inbound replies (MO)
+  and delivery reports (DLR) as JSON to a single configured URL. Verified
+  with `?secret=` query-param check (`WEBSMS_WEBHOOK_SECRET`, generated
+  locally) since WebSMS has no per-request HMAC signature the way Twilio did.
+- **Not fully confirmed**: WebSMS's live webhook JSON field names aren't
+  publicly documented in detail — the route was built from their OpenAPI
+  spec and query-endpoint response shapes, with fallback field names for
+  the ambiguous ones. It logs the raw payload on every hit specifically so
+  this can be confirmed against a real test message. Flagged in Action
+  items above — do that check before fully trusting inbound replies.
+- `twilio_sid` columns (`sms_usage_events`, `customer_messages`) were
+  **not renamed** — they now hold the WebSMS `message_id` instead. A
+  schema/rename pass wasn't worth the diff for a cosmetic naming concern.
+- `.env.local`: old `TWILIO_*` vars commented out (not deleted, in case of
+  rollback), new `WEBSMS_*` vars added including the short code.
+  **Still needed in Vercel production** — see Action items.
+
+Verified: `npx tsc --noEmit` and `eslint` clean on every touched file (after
+clearing a stale `.next` route-type manifest still referencing the deleted
+routes — known gotcha, see `feedback` memory). **Not verified live** — no
+real WebSMS test message has been sent yet; that's the confirmation step
+called out above.
+
+**Also this session**: built 4 comparison landing pages
+(`alternatives/tradify.html`, `jobber.html`, `servicem8.html`, `fergus.html`,
+generated by `scripts/build-alternative-pages.mjs`) as a low-cost SEO/growth
+play for the pre-launch (zero-subscriber) bootstrap phase, wired into every
+page's footer as a new "Compare" column (`scripts/build-trade-pages.mjs`,
+`scripts/build-blog-pages.mjs`, and the hand-authored `index.html`/
+`blog.html`/`terms.html`/`privacy.html` all updated, footer grid widened
+5→6 columns). Every competitor-weakness claim is phrased as "reviewers
+report..." rather than asserted as fact, sourced from real review-site
+research that session — get a quick accuracy/legal pass before these go
+live, same caution as the existing ToS review action item. Also scoped (not
+built) a wholesaler/association referral-partnership structure —
+`PARTNERSHIP_REFERRAL_SCOPE.md`.
+
 ## Session 2026-08-07 (Claude) — 5-item bug batch: Tap to Pay, jobs→invoices, invoice lock, mobile PDF error, job-derived invoice numbers
 
 User-reported list, root-caused (not just patched):
@@ -246,8 +331,18 @@ the other pure-JS `check-*.mjs` scripts — this one exercises real Postgres
 triggers) covers base numbering, -1/-2 suffixes, the collision-safety fix,
 and the full financial-lock/revert-to-draft round trip — all passing.
 Jobs-list filtering and the invoice discount-lock/revert UI verified live
-against seeded local data (see the ⚠ action item above — **migrations not
-yet pushed to production as of this write-up**).
+against seeded local data. Committed, pushed (`3dd4a67`), and **both
+migrations applied to production** via `supabase db push --linked` in the
+same pass — confirmed directly against prod afterward (`jobs.invoice_seq`
+column present, `next_job_invoice_seq()` callable, existing job rows
+untouched with `invoice_seq` correctly defaulted to 0). One snag on push:
+GitHub's secret scanning blocked the first attempt — `check-invoice-numbering.mjs`
+had the local Supabase service-role key hardcoded. Since the commit had been
+rejected (never reached the remote), amending it to read
+`SUPABASE_SECRET_KEY` from the environment instead was safe; re-verified the
+script still works before re-pushing. Checked the rest of `scripts/` for the
+same pattern (`grep -rl sb_secret_`) — no other hits, this was isolated to
+the one file.
 
 ## Session 2026-08-06 (Claude, pt.2) — Sidebar reorder + Quote/Estimate toggle
 

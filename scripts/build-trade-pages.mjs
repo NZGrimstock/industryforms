@@ -21,6 +21,16 @@ function escJsonLd(s) {
   return JSON.stringify(String(s)).slice(1, -1).replace(/</g, '\\u003c')
 }
 
+// Mirrors ALTERNATIVES in build-alternative-pages.mjs — kept as a small
+// literal here too rather than a shared import, matching this file's existing
+// standalone/data-driven pattern (no shared modules between the build-*.mjs scripts).
+const COMPARE = [
+  { slug: 'tradify', name: 'Tradify' },
+  { slug: 'jobber', name: 'Jobber' },
+  { slug: 'servicem8', name: 'ServiceM8' },
+  { slug: 'fergus', name: 'Fergus' },
+]
+
 const TRADES = [
   {
     slug: 'plumbers',
@@ -367,7 +377,7 @@ ${t.relatedBlogSlugs.map(slug => `      <a href="../blog/${slug}.html" class="ca
 
 <footer class="relative z-10 bg-ink border-t border-white/[0.05] pt-16 pb-10 px-6">
   <div class="max-w-7xl mx-auto">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-16">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-8 mb-16">
       <div class="col-span-2 md:col-span-1">
         <a href="../index.html" class="flex items-center gap-2.5 mb-5">
           <img src="../Logo/Logo.png" alt="Industry Forms" class="h-16 w-auto brightness-0 invert opacity-70">
@@ -385,6 +395,12 @@ ${t.relatedBlogSlugs.map(slug => `      <a href="../blog/${slug}.html" class="ca
         <p class="text-[10px] font-bold tracking-widest uppercase text-white/25 mb-5">Solutions</p>
         <ul class="space-y-3">
 ${TRADES.map(o => `          <li><a href="${o.slug}.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">${escHtml(o.name)}</a></li>`).join('\n')}
+        </ul>
+      </div>
+      <div>
+        <p class="text-[10px] font-bold tracking-widest uppercase text-white/25 mb-5">Compare</p>
+        <ul class="space-y-3">
+${COMPARE.map(o => `          <li><a href="../alternatives/${o.slug}.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">vs ${escHtml(o.name)}</a></li>`).join('\n')}
         </ul>
       </div>
       <div>

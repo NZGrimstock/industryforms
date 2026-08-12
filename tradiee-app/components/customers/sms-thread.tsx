@@ -23,7 +23,7 @@ const DELIVERY_LABEL: Record<string, string> = {
 }
 
 // Threaded SMS view shown on the customer detail page. Inbound rows arrive
-// via the Twilio webhook (/api/sms/inbound) and we re-fetch on a 15s timer;
+// via the WebSMS webhook (/api/sms/webhook) and we re-fetch on a 15s timer;
 // good enough without realtime subscriptions and free of WS plumbing.
 export function SmsThread({ customerId, customerPhone, initial, twilioLive = true }: {
   customerId: string
