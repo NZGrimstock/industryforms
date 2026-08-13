@@ -31,6 +31,8 @@ interface Props {
   jobTotal: number
   quoteId: string | null
   alreadyInvoiced: number
+  /** Most recent non-void invoice on this job, for the "already fully invoiced" prompt. */
+  existingInvoice: { id: string; invoice_number: string } | null
   actualLines: { description: string; quantity: number; unit: string; unit_price: number; type: 'material' | 'labour' }[]
   actualTotal: number
   jobStatuses: { key: string; label: string; is_terminal?: boolean }[]
@@ -38,12 +40,15 @@ interface Props {
 
 type JobDialog = 'schedule' | 'assign' | 'both' | 'note' | 'timesheet' | null
 
-export function JobDetailClient({ job, companyId, profileId, team, assignees, projectAddress, sheetData, gstRate, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, actualLines, actualTotal, jobStatuses }: Props) {
+export function JobDetailClient({ job, companyId, profileId, team, assignees, projectAddress, sheetData, gstRate, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, existingInvoice, actualLines, actualTotal, jobStatuses }: Props) {
   const supabase = createClient()
   const db = useContext(PowerSyncContext)
   const router = useRouter()
   const { toast } = useToast()
   const [activeDialog, setActiveDialog] = useState<JobDialog>(null)
+  // Set when an invoice was requested on a job that's already billed in full;
+  // holds the basis so "Create another" can resume the same request.
+  const [fullyInvoicedBasis, setFullyInvoicedBasis] = useState<'quote' | 'actuals' | 'progress' | null>(null)
   const [subOpen, setSubOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -196,7 +201,7 @@ export function JobDetailClient({ job, companyId, profileId, team, assignees, pr
 
   // Invoice from the dropdown. Quote/Actuals mark the job complete first (matches
   // the old "Complete & invoice"); a progress claim does NOT (the job is mid-flight).
-  async function createInvoice(basis: 'quote' | 'actuals' | 'progress') {
+  async function createInvoice(basis: 'quote' | 'actuals' | 'progress', force = false) {
     const isProgress = basis === 'progress'
     const pct = parseFloat(progressPct) / 100
     const EPS = 0.01
@@ -234,7 +239,10 @@ export function JobDetailClient({ job, companyId, profileId, team, assignees, pr
 
     const projected = alreadyInvoiced + subtotal
     if (lineItemsToInsert.length === 0) {
-      if (!confirm(`This job's quoted value (${formatCurrency(jobTotal)}) is already fully invoiced.\n\nCreate another invoice for variations / extra work? You'll add the extra line items on the invoice.`)) return
+      // Already billed in full. Offer the existing invoice rather than silently
+      // making an empty second one — dismissing the dialog does nothing, so a
+      // stray Esc can't burn an invoice number or complete the job.
+      if (!force) { setFullyInvoicedBasis(basis); return }
     } else if (jobTotal > 0 && projected > jobTotal + EPS) {
       if (!confirm(`This will bring total invoiced to ${formatCurrency(projected)} — ${formatCurrency(projected - jobTotal)} above the quoted ${formatCurrency(jobTotal)}.\n\nBill above the quote (e.g. for extra time or variations)?`)) return
     }
@@ -402,6 +410,34 @@ export function JobDetailClient({ job, companyId, profileId, team, assignees, pr
             <Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Already invoiced in full */}
+      <Dialog open={fullyInvoicedBasis !== null} onClose={() => setFullyInvoicedBasis(null)} title="Already invoiced">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            An invoice has already been generated for the full amount of this job
+            {existingInvoice ? <> (<span className="font-medium text-gray-900">{existingInvoice.invoice_number}</span>)</> : null}.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {existingInvoice && (
+              <Button type="button" onClick={() => router.push(`/invoices/${existingInvoice.id}`)}>
+                Go to invoice
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const basis = fullyInvoicedBasis
+                setFullyInvoicedBasis(null)
+                if (basis) createInvoice(basis, true)
+              }}
+            >
+              Create another invoice
+            </Button>
+          </div>
+        </div>
       </Dialog>
 
       {/* Add note */}

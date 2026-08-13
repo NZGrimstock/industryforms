@@ -531,7 +531,7 @@ export default function TimesheetsScreen() {
             <Text style={styles.modalTitle}>Start job timer</Text>
             <TouchableOpacity onPress={() => setShowStartTimer(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
             {tripFollowup && (
               <View style={{ backgroundColor: '#fff7ed', borderRadius: 10, padding: 12, marginBottom: 16, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -587,7 +587,7 @@ export default function TimesheetsScreen() {
             <Text style={styles.modalTitle}>Auto-track schedule</Text>
             <TouchableOpacity onPress={() => setShowTradingHours(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>
               Set trading hours to automatically start and stop GPS tracking. The app must be opened within the window for the schedule to take effect.

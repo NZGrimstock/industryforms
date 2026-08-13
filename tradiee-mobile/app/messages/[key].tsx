@@ -245,7 +245,7 @@ export default function ThreadScreen() {
 
   // sms
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <SafeAreaView style={s.container} edges={['bottom']}>
         <Stack.Screen options={{
           title: thread.customer?.name ?? 'Thread',

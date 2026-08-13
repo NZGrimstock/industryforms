@@ -338,7 +338,7 @@ export default function CustomerDetailScreen() {
 
       <Modal visible={showEdit} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowEdit(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Edit Customer</Text>
             <TouchableOpacity onPress={() => setShowEdit(false)}>
@@ -394,7 +394,7 @@ export default function CustomerDetailScreen() {
 
       <Modal visible={showSite} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowSite(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{editingSite ? 'Edit Site' : 'Add Site'}</Text>
             <TouchableOpacity onPress={() => setShowSite(false)}>

@@ -156,7 +156,7 @@ export default function TodosScreen() {
               <Text style={s.modalClose}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ padding: 16, gap: 14 }}>
             <TextInput
               style={[s.input, { minHeight: 64, textAlignVertical: 'top', paddingTop: 12 }]}

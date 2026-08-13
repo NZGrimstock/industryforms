@@ -194,7 +194,7 @@ export default function EnquiriesScreen() {
               <Text style={s.modalClose}>Cancel</Text>
             </TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
               <TextInput style={s.input} value={firstName} onChangeText={v => updateName(v, lastName)} placeholder="First name *" placeholderTextColor="#6b7280" autoFocus />
               <TextInput style={s.input} value={lastName} onChangeText={v => updateName(firstName, v)} placeholder="Last name" placeholderTextColor="#6b7280" />

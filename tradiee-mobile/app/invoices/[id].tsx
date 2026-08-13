@@ -609,7 +609,7 @@ export default function InvoiceDetailScreen() {
       {/* Record payment modal */}
       <Modal visible={showPayment} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => !recording && setShowPayment(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Record Payment</Text>
               <TouchableOpacity onPress={() => !recording && setShowPayment(false)}>
@@ -664,7 +664,7 @@ export default function InvoiceDetailScreen() {
 
       <Modal visible={showEdit} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowEdit(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Edit Invoice</Text>
             <TouchableOpacity onPress={() => setShowEdit(false)}>

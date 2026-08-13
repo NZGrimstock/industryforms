@@ -26,3 +26,33 @@ export function jobTotal(quoteTotal: number | string | null | undefined, invoice
 export function toInvoice(total: number, invoiced: number): number {
   return Math.max(0, total - invoiced)
 }
+
+/**
+ * Which confirmation (if any) must be shown before creating another invoice
+ * against a job. Pure so both the API route and the web client agree, and so
+ * the ordering below is testable — see scripts/check-invoice-guard.mjs.
+ *
+ *  'fully-invoiced' — the job is already billed to its quoted total. Offer the
+ *                     existing invoice; creating another is for variations.
+ *  'over-quote'     — this invoice would push the total above the quote.
+ *  null             — go ahead.
+ *
+ * Order matters. 'fully-invoiced' MUST be checked first: billing "the full
+ * amount" on an already-complete job produces subtotal 0, which fails the
+ * over-quote test's `subtotal > EPS`, so checking over-quote first let a
+ * second empty draft invoice through with no prompt at all.
+ */
+export const INVOICE_EPS = 0.01
+
+export function invoiceGuard(
+  { jobTotal, alreadyInvoiced, subtotal, force = false }:
+  { jobTotal: number; alreadyInvoiced: number; subtotal: number; force?: boolean }
+): 'fully-invoiced' | 'over-quote' | null {
+  if (force) return null
+  // A job with no quoted ceiling (time-and-materials) has nothing to compare
+  // against, so neither guard can fire — same reasoning as jobTotal() above.
+  if (jobTotal <= INVOICE_EPS) return null
+  if (alreadyInvoiced + INVOICE_EPS >= jobTotal) return 'fully-invoiced'
+  if (subtotal > INVOICE_EPS && alreadyInvoiced + subtotal > jobTotal + INVOICE_EPS) return 'over-quote'
+  return null
+}

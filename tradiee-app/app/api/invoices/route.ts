@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
 import { resolveCompanyUser } from '@/lib/api-auth'
 import { nextDocNumber } from '@/lib/numbering'
+import { invoiceGuard } from '@/lib/job-financials'
 
 const bodySchema = z.object({
   job_id: z.string().uuid(),
@@ -76,11 +77,11 @@ export async function POST(req: NextRequest) {
 
   const { data: priorInvoices } = await service
     .from('invoices')
-    .select('subtotal, status')
+    .select('id, invoice_number, subtotal, status, created_at')
     .eq('job_id', job_id)
-  const alreadyInvoiced = (priorInvoices ?? [])
-    .filter(i => i.status !== 'void')
-    .reduce((s, i) => s + Number(i.subtotal ?? 0), 0)
+    .order('created_at', { ascending: false })
+  const liveInvoices = (priorInvoices ?? []).filter(i => i.status !== 'void')
+  const alreadyInvoiced = liveInvoices.reduce((s, i) => s + Number(i.subtotal ?? 0), 0)
 
   const EPS = 0.01
   let lines: Line[] = []
@@ -141,8 +142,20 @@ export async function POST(req: NextRequest) {
     subtotal = lines.reduce((s, l) => s + l.line_total, 0)
   }
 
-  // Over-invoicing guard — the app confirms with the user and retries with force
-  if (!force && jobTotal > EPS && subtotal > EPS && alreadyInvoiced + subtotal > jobTotal + EPS) {
+  // Both guards (and critically their ordering) live in lib/job-financials.ts
+  // so the web client can't drift from this route. The app confirms with the
+  // user and retries with force=true.
+  const guard = invoiceGuard({ jobTotal, alreadyInvoiced, subtotal, force })
+  if (guard === 'fully-invoiced') {
+    const existing = liveInvoices[0] ?? null
+    return NextResponse.json({
+      error: `An invoice has already been generated for the full amount of this job${existing ? ` (${existing.invoice_number})` : ''}.`,
+      confirm: true,
+      alreadyFullyInvoiced: true,
+      existingInvoice: existing ? { id: existing.id, invoice_number: existing.invoice_number } : null,
+    }, { status: 409 })
+  }
+  if (guard === 'over-quote') {
     const over = alreadyInvoiced + subtotal - jobTotal
     return NextResponse.json({
       error: `This would bring total invoiced to $${(alreadyInvoiced + subtotal).toFixed(2)} — $${over.toFixed(2)} above the quoted $${jobTotal.toFixed(2)}.`,

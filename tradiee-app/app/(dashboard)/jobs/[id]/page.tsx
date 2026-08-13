@@ -175,9 +175,15 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     { label: 'Outstanding', value: financialOutstanding, accent: financialOutstanding > 0 ? 'warn' : 'neutral' },
   ]
   // Sum of invoiced value excl. GST (excluding voided invoices) — used to prevent over-invoicing
-  const alreadyInvoiced = (invoicesRes.data ?? [])
-    .filter(i => i.status !== 'void')
-    .reduce((sum, i) => sum + Number(i.subtotal ?? 0), 0)
+  const liveInvoices = (invoicesRes.data ?? []).filter(i => i.status !== 'void')
+  const alreadyInvoiced = liveInvoices.reduce((sum, i) => sum + Number(i.subtotal ?? 0), 0)
+  // Newest live invoice — what the "already fully invoiced" prompt links to.
+  // invoicesRes has no explicit order, so pick by invoice_number rather than
+  // trusting row order.
+  const existingInvoice = liveInvoices.length > 0
+    ? [...liveInvoices].sort((a, b) => String(b.invoice_number).localeCompare(String(a.invoice_number)))
+        .map(i => ({ id: i.id as string, invoice_number: i.invoice_number as string }))[0]
+    : null
 
   // Actual line items for "invoice from actuals" (logged materials + billable labour)
   const actualMaterialLines = (materialsRes.data ?? [])
@@ -307,6 +313,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               jobTotal={estimatedSubtotal}
               quoteId={job.quote_id ?? null}
               alreadyInvoiced={alreadyInvoiced}
+              existingInvoice={existingInvoice}
               actualLines={actualLines}
               actualTotal={actualTotal}
               jobStatuses={jobStatuses}

@@ -800,6 +800,26 @@ export default function JobDetailScreen() {
         body: JSON.stringify(payload),
       })
       const inv = await res.json()
+      // Job already billed in full: offer the existing invoice first, since
+      // wanting to look at it is far more likely than wanting a second one.
+      // "No" still allows a second invoice (variations / extra work).
+      if (res.status === 409 && inv.alreadyFullyInvoiced) {
+        setInvoicing(false)
+        Alert.alert(
+          'Already invoiced',
+          `${inv.error}\n\nGo to that invoice?`,
+          [
+            { text: 'No, create another', onPress: () => createInvoice(true) },
+            ...(inv.existingInvoice
+              ? [{
+                  text: 'Yes, go to invoice',
+                  onPress: () => { setShowInvoice(false); router.push(`/invoices/${inv.existingInvoice.id}`) },
+                }]
+              : []),
+          ]
+        )
+        return
+      }
       if (res.status === 409 && inv.confirm) {
         setInvoicing(false)
         Alert.alert('Bill above the quote?', `${inv.error}\n\nBill above the quote (e.g. extra time or variations)?`, [

@@ -67,8 +67,9 @@ Non-trivial logic leaves one runnable `scripts/check-*.mjs` behind — plain
 `node`, `assert`-based, no framework. Existing ones:
 
 - `node scripts/check-sync-rules.mjs` (repo root)
-- `node scripts/check-job-financials.mjs`, `check-statement.mjs`,
-  `check-job-thread-recipients.mjs`, `check-xero.mjs` (from `tradiee-app/`)
+- `node scripts/check-job-financials.mjs`, `check-invoice-guard.mjs`,
+  `check-statement.mjs`, `check-job-thread-recipients.mjs`, `check-xero.mjs`
+  (from `tradiee-app/`)
 - `node scripts/check-invoice-numbering.mjs` — needs local Supabase running,
   unlike the pure-JS ones above
 - `node scripts/check-map-escaping.mjs` (from `tradiee-mobile/`)

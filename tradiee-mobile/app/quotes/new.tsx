@@ -460,7 +460,7 @@ export default function NewQuoteScreen() {
               <Text style={s.modalClose}>Done</Text>
             </TouchableOpacity>
           </View>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {!showNewCustomer ? (
             <>
               <View style={s.searchBox}>

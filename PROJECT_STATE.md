@@ -173,6 +173,61 @@ Optional next steps flagged during recent sessions; none are in-progress:
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
 
+## Session 2026-08-12 (Claude, pt.2) — Android keyboard covering forms; duplicate invoice on a fully-invoiced job
+
+Two user-reported bugs, both root-caused rather than patched at the reported spot.
+
+**[Android] Keyboard covered the form on the customer-details screen — and 9
+other screens.** `KeyboardAvoidingView` was mounted everywhere, but with
+`behavior={Platform.OS === 'ios' ? 'padding' : undefined}` — i.e. **no
+avoidance at all on Android**, which is the only platform actually shipping
+(iOS isn't submitted). `AndroidManifest.xml` does set
+`windowSoftInputMode="adjustResize"`, which is why most of the app looks fine;
+but `adjustResize` does not reach content inside a React Native `<Modal>`, and
+these forms are all modal-hosted, so nothing moved. Fixed at all **13 sites
+across 10 screens** (`customers/new`, `customers/[id]` ×2, `enquiries`,
+`invoices/[id]` ×2, `messages/[key]`, `profile`, `quotes/new`, `signup`,
+`timesheets` ×2, `todos`) rather than just the reported one — it's an
+identical one-token change and the other nine were the same bug waiting to be
+reported. `'height'` matches the 7 screens that already handled Android
+correctly (`jobs/[id]`, `jobs/new`, `login`, `quotes/[id]`, …).
+
+**[Both apps] A fully-invoiced job would silently generate a second empty
+draft invoice.** Root cause is precise: in `app/api/invoices/route.ts` the
+`type='full'` path sets `subtotal = 0` when nothing is left to bill (correct —
+a further invoice is for variations, so it starts empty), but the
+over-invoicing guard below it tested `subtotal > EPS`, which is then false. So
+the guard never fired and a second invoice was created with no prompt,
+consuming a job-derived invoice number and completing the job. Web wasn't
+affected the same way (it has its own `confirm()` and does **not** call this
+route — the two clients duplicate invoice-creation logic, which is worth
+knowing but was out of scope to unify here).
+
+Fixed by extracting both guards and, critically, **their ordering** into
+`invoiceGuard()` in `lib/job-financials.ts`, used by the API route so the two
+clients can't drift. New `'fully-invoiced'` guard is checked **before**
+`'over-quote'` — the whole bug was that the more general check ran first and
+its `subtotal > EPS` test masked the specific case.
+
+Per the user's spec, the prompt now offers the existing invoice: mobile shows
+a two-button `Alert` ("No, create another" / "Yes, go to invoice"), web shows
+a `Dialog` with "Go to invoice" / "Create another invoice". Web deliberately
+uses the existing `Dialog` rather than `confirm()`: with `confirm()`, "No =
+create another" means a stray Esc silently burns an invoice number and
+completes the job. Dismissing the dialog does nothing. The API returns the
+existing invoice's id/number on the 409 so both clients can link to it;
+`page.tsx` passes the newest live invoice to the web client as a prop.
+
+**Runnable check**: `node scripts/check-invoice-guard.mjs` (from
+`tradiee-app/`) — the exact shipped bug (fully invoiced + `subtotal: 0` must
+still prompt), the guard ordering, T&M jobs with no quoted ceiling staying
+unblocked, `force` retries, and sub-cent float boundaries. All passing.
+
+Verified: `tsc` clean both apps, `eslint` clean on touched web files, the new
+check plus the existing `check-job-financials.mjs` both pass. **Not verified
+on a device or against real data** — the Android keyboard fix in particular
+needs a real phone to confirm, since that's the whole point of the bug.
+
 ## Session 2026-08-12 (Claude) — Admin ↔ technician job messaging
 
 Built the two-way in-app messaging feature scoped in `JOB_MESSAGING_SCOPE.md`.
