@@ -13,6 +13,7 @@ import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
 import { JobDetailClient } from './client'
+import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobMaterials } from './materials'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
@@ -52,11 +53,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
-    supabase.from('job_notes').select('*, profiles(full_name)').eq('job_id', id).order('created_at', { ascending: false }),
+    // Notes and messages share the job_notes table, split by `kind` (migration
+    // 20260812100000). Messages must never reach `sheetData` below — the job
+    // sheet is a printed document and admin↔tech chatter doesn't belong on it.
+    supabase.from('job_notes').select('*, profiles(full_name)').eq('job_id', id).eq('kind', 'note').order('created_at', { ascending: false }),
     supabase.from('timesheets').select('*, profiles(full_name)').eq('job_id', id).order('started_at', { ascending: false }),
     supabase.from('invoices').select('id, invoice_number, status, total, amount_paid, subtotal').eq('job_id', id),
     supabase.from('profiles').select('id, full_name').eq('company_id', profile!.company_id).eq('is_active', true),
@@ -79,6 +83,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       ? supabase.from('quote_line_items').select('quantity, unit_price, unit_cost, description, unit, type, price_list_item_id, sort_order').eq('quote_id', job.quote_id).order('sort_order')
       : Promise.resolve({ data: null }),
     supabase.from('jobs').select('id, job_number, title').eq('company_id', profile!.company_id).order('job_number'),
+    // Ascending — a conversation reads oldest-first, unlike the notes list.
+    supabase.from('job_notes').select('id, body, author_id, created_at, profiles(full_name)').eq('job_id', id).eq('kind', 'message').order('created_at', { ascending: true }),
   ])
 
   const customerSites = customerSitesRes.data
@@ -460,6 +466,23 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             />
           </CardContent>
         </Card>}
+
+        {/* Messages — admin↔technician thread. Sits above Job notes: it's the
+            time-sensitive one. Notes stay the durable record below. */}
+        <JobMessagesCard
+          jobId={id}
+          profileId={user!.id}
+          messages={((messagesRes.data ?? []) as unknown[]).map(m => {
+            const row = m as { id: string; body: string; author_id: string | null; created_at: string; profiles: { full_name: string } | { full_name: string }[] | null }
+            return {
+              id: row.id,
+              body: row.body,
+              author_id: row.author_id,
+              created_at: row.created_at,
+              profiles: Array.isArray(row.profiles) ? (row.profiles[0] ?? null) : row.profiles,
+            } satisfies JobMessage
+          })}
+        />
 
         {/* Notes */}
         <Card>

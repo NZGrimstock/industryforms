@@ -147,10 +147,12 @@ export function JobDetailClient({ job, companyId, profileId, team, assignees, pr
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
     if (db) {
-      await db.execute('INSERT INTO job_notes (id, job_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)', [id, job.id, profileId, noteBody, now])
+      await db.execute('INSERT INTO job_notes (id, job_id, author_id, body, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)', [id, job.id, profileId, noteBody, 'note', now])
     }
     if (navigator.onLine) {
-      const { error } = await supabase.from('job_notes').upsert({ id, job_id: job.id, author_id: profileId, body: noteBody, created_at: now })
+      // kind is explicit rather than relying on the column default, so the
+      // offline local row above and the synced row always agree.
+      const { error } = await supabase.from('job_notes').upsert({ id, job_id: job.id, author_id: profileId, body: noteBody, kind: 'note', created_at: now })
       if (error) { toast(error.message, 'error'); setLoading(false); return }
       toast('Note added')
       router.refresh()

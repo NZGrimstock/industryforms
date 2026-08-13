@@ -31,6 +31,15 @@ signing, build process, database) that the dated session logs can contradict.
      (the sample invoice/quote messages + expected-reply examples prepared
      during the original short-code application are still accurate and
      ready to reuse if so).
+- **Job messaging (2026-08-12) needs a migration push + a two-device test.**
+  `supabase db push --linked` to apply `20260812100000_job_messaging.sql`
+  (adds `job_notes.kind`; the trailing `update job_notes set id = id` is
+  deliberate — it forces existing rows through the WAL so PowerSync devices
+  actually receive the new column). Then send a message from the web
+  dashboard and confirm it (a) arrives as a push on an assigned technician's
+  phone, (b) opens the job when tapped, and (c) **does not appear on the job
+  sheet PDF**. Push delivery is the one part that can't be verified without
+  real devices.
 - **Promote v7 from Internal testing → Production** in Play Console. A
   versionCode can only be uploaded once app-wide, so this is *Promote release*,
   not a re-upload.
@@ -163,6 +172,105 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-12 (Claude) — Admin ↔ technician job messaging
+
+Built the two-way in-app messaging feature scoped in `JOB_MESSAGING_SCOPE.md`.
+
+**The architectural call: messages are `job_notes` rows with `kind='message'`,
+not a new table.** `job_notes` already had the exact shape (`job_id`,
+`author_id`, `body`, `created_at`), was already in the `powersync` publication
+and BOTH `sync-rules.yaml` streams, was already in both apps' PowerSync client
+schemas, and its RLS already scoped SELECT to owner/admin-or-assignee with
+INSERT open to any company member — exactly the visibility a job thread wants.
+A new table would have meant redoing all of it, **including the publication
+add + backfill whose omission caused the 2026-08-02 outage**. Reusing cost
+zero of that: `sync-rules.yaml` was not touched at all (`check-sync-rules.mjs`
+still passes, 45 queries).
+
+**The one real trap, and it's the same trap as 2026-08-02**: `ALTER TABLE ADD
+COLUMN` does **not** re-emit existing rows to logical replication, so every
+already-synced `job_notes` row would have reached devices with no `kind` at
+all and a `kind = 'note'` filter would have silently matched nothing — every
+existing note vanishing from the app. Handled two ways, belt and braces:
+migration `20260812100000_job_messaging.sql` ends with `update job_notes set
+id = id` to force the rows through the WAL (safe as a plain UPDATE here,
+unlike the 2026-08-02 fix — `job_notes` has no `updated_at` and no triggers),
+**and** the mobile PowerSync query tolerates `kind IS NULL` for notes, since a
+device can sit offline for days holding pre-migration rows.
+
+**Chatter must never reach the job sheet.** `job_notes` renders on the
+job-sheet PDF (`components/pdf/job-sheet-pdf.tsx:279`), so the `kind` filter
+and the column landed in the same commit — there is no window where the
+column exists but the PDF is unfiltered. Web `page.tsx` now runs two separate
+queries (`kind='note'` desc for the notes list + job sheet, `kind='message'`
+asc for the thread); mobile filters its local query. Both write paths set
+`kind` explicitly rather than leaning on the column default.
+
+**Files**: migration above; `POST /api/jobs/[id]/messages` (new — goes through
+a server route rather than a direct client insert because the push step needs
+the service client to read others' `expo_push_token`, matching how
+`/api/sms/send` works; re-checks the RLS predicate manually since the service
+client bypasses RLS); `notifyJobThread()` + the pure `jobThreadRecipients()`
+in `lib/push.ts`; `messages-card.tsx` (web, above the Job notes card);
+Messages section in `tradiee-mobile/app/jobs/[id].tsx` (above Notes); `kind`
+added to both PowerSync client schemas.
+
+**Push routing was free** — `data.screen: 'job'` is already handled by the
+mobile notification response listener (`app/_layout.tsx:137`), so tapping
+opens the job with no new code. No new notification category: the lock-screen
+Reply/Quote/Call actions on `inbox_message` are customer-SMS specific.
+Recipients are *every participant except the author* (all owner/admins + all
+assignees) rather than branching on who wrote it — simpler and more correct,
+since a second worker on a multi-assignee job needs the conversation too, and
+it exactly matches the read visibility RLS already grants, so nobody is ever
+pushed a message they couldn't open.
+
+**Runnable check**: `node scripts/check-job-thread-recipients.mjs` (from
+`tradiee-app/`) covers the recipient branch — author excluded, unassigned
+staff excluded (the information-leak case: a push body would surface a job's
+contents to someone RLS blocks), all assignees included, owner/admin always
+included, null push tokens dropped before they reach Expo. All passing.
+
+**Deliberately not built** (documented cuts, not oversights):
+- **Unread badges / read state.** `job_thread_reads` from the scope doc was
+  skipped — push already tells you something arrived, and an unread badge
+  needs UI in both apps to be worth anything. Adding the table now would be
+  dead schema. Small follow-up if wanted.
+- **Author names on mobile.** `profiles` is not in the mobile PowerSync client
+  schema, so a name can't resolve offline, and adding it would mean the
+  sync-rule/publication changes this whole design avoided. Mobile aligns
+  bubbles by author instead (mine vs theirs); web shows names (server-side
+  join). Fine for the 2-3 people on one job.
+- **Offline send on mobile.** Messages need the network (they go through the
+  API route). Consistent with mobile's existing `addNote`, which also inserts
+  straight to Supabase — and arguably correct, since a message that can't be
+  delivered shouldn't look sent.
+- A global cross-job DM inbox. Messages hang off a job or they don't exist.
+
+**A live check caught a wrong assumption.** `job_notes` turns out to carry a
+`company_id` column (migration 022) that the `admin_company` sync-rules stream
+**joins on** — so a message inserted with a null `company_id` would sync to
+staff (that stream joins on `job_id`) but never reach owner/admin devices.
+The API route doesn't set it. Verified against real Postgres that this is
+fine: migration 022 also installs a `set_company_id` BEFORE INSERT trigger
+that derives it from the parent job. Worth knowing before anyone adds another
+job_notes write path — omitting `company_id` is only safe because of that
+trigger. The same discovery corrected a claim in this migration's own comment,
+which asserted job_notes had no triggers.
+
+**Verification**: `tsc --noEmit` clean on both apps; `eslint` clean on every
+touched web file (mobile has no eslint config in this repo — `tsc` is its
+gate); `check-sync-rules.mjs` and the new recipient check both pass. The
+migration was applied to a real local Postgres and the catalog inspected
+directly — `kind text not null default 'note'`, the
+`kind in ('note','message')` check constraint, and `job_notes_job_kind_idx`
+all present, plus the `set_company_id` trigger above.
+**Not verified**: the row-level behaviour test (insert a note + a message,
+confirm the split) was cut short when Docker Desktop killed the local stack
+mid-run — it died twice this session, unrelated to this work. And **push
+delivery is unverified** and can't be: it needs two real devices with Expo
+tokens. See the action item above before trusting it in production.
 
 ## Session 2026-08-11 (Claude) — SMS provider swap Twilio → WebSMS; Tradify/Jobber/ServiceM8/Fergus comparison pages
 

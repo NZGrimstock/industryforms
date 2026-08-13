@@ -56,6 +56,10 @@ const job_notes = new Table({
   job_id: column.text,
   author_id: column.text,
   body: column.text,
+  // 'note' | 'message' — see migration 20260812100000. Local rows synced
+  // before that migration may still read null; client queries filtering for
+  // notes must tolerate that (`kind is null or kind = 'note'`).
+  kind: column.text,
   created_at: column.text,
 })
 

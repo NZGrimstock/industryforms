@@ -106,6 +106,14 @@ export default function JobDetailScreen() {
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [messageText, setMessageText] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+  // Only used to align message bubbles (mine vs theirs). Author *names* aren't
+  // shown on mobile: `profiles` isn't in the PowerSync client schema, so a name
+  // can't be resolved offline, and adding that table would mean sync-rule and
+  // publication changes this feature deliberately avoided (see
+  // JOB_MESSAGING_SCOPE.md). Few enough people are on one job for this to read fine.
+  const [userId, setUserId] = useState<string | null>(null)
   const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
   const [savingMaterial, setSavingMaterial] = useState(false)
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
@@ -308,11 +316,30 @@ export default function JobDetailScreen() {
     Linking.openURL(url).catch(() => Alert.alert('Could not open maps', jobAddress ?? ''))
   }
 
+  // Notes and messages share job_notes, split by `kind` (migration
+  // 20260812100000). The `kind is null` tolerance matters: a device that
+  // synced job_notes rows before that migration holds them without the
+  // column, and a bare `kind = 'note'` would make every old note vanish
+  // from the app until it resynced.
   const { data: notes, refresh: refreshNotes } = useQuery<Note>(
     `SELECT id, body, author_id, created_at FROM job_notes
-     WHERE job_id = ? ORDER BY created_at DESC`,
+     WHERE job_id = ? AND (kind IS NULL OR kind = 'note')
+     ORDER BY created_at DESC`,
     [id]
   )
+
+  // Ascending — a conversation reads oldest-first. No null tolerance here:
+  // a row without `kind` is never a message.
+  const { data: messages, refresh: refreshMessages } = useQuery<Note>(
+    `SELECT id, body, author_id, created_at FROM job_notes
+     WHERE job_id = ? AND kind = 'message'
+     ORDER BY created_at ASC`,
+    [id]
+  )
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+  }, [])
 
   const { data: materials, refresh: refreshMaterials } = useQuery<Material>(
     `SELECT id, description, quantity, unit, unit_price
@@ -644,12 +671,41 @@ export default function JobDetailScreen() {
       job_id: id,
       author_id: user?.id,
       body: noteText.trim(),
+      // Explicit rather than relying on the column default, so a note is
+      // never mistaken for a message if the default ever changes.
+      kind: 'note',
     })
     setSavingNote(false)
     if (error) { Alert.alert('Error', error.message); return }
     setNoteText('')
     setShowAddNote(false)
     refreshNotes?.()
+  }
+
+  // Messages go through the API route rather than a direct Supabase insert
+  // (which RLS would allow) because the server side also has to push the
+  // other people on this job — see app/api/jobs/[id]/messages/route.ts.
+  async function sendMessage() {
+    if (!messageText.trim() || sendingMessage) return
+    setSendingMessage(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not signed in')
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/jobs/${id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ body: messageText.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Could not send message')
+      setMessageText('')
+      refreshMessages?.()
+    } catch (e) {
+      Alert.alert('Could not send', e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setSendingMessage(false)
+    }
   }
 
   async function updateStatus(newStatus: string) {
@@ -1238,6 +1294,49 @@ export default function JobDetailScreen() {
           </View>
         </View>
 
+        {/* Messages — the admin↔technician thread for this job. Distinct from
+            Notes below: notes are the durable job record and print on the job
+            sheet, messages are the conversation and deliberately don't. */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Messages</Text>
+          </View>
+
+          {(messages ?? []).length === 0 && (
+            <Text style={styles.emptyText}>No messages yet</Text>
+          )}
+          {(messages ?? []).map(m => {
+            const mine = m.author_id === userId
+            return (
+              <View key={m.id} style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
+                <View style={[styles.msgBubble, mine ? styles.msgBubbleMine : styles.msgBubbleTheirs]}>
+                  <Text style={mine ? styles.msgBodyMine : styles.msgBody}>{m.body}</Text>
+                  <Text style={mine ? styles.msgMetaMine : styles.msgMeta}>{formatDateTime(m.created_at)}</Text>
+                </View>
+              </View>
+            )
+          })}
+
+          <View style={styles.msgComposer}>
+            <TextInput
+              style={styles.msgInput}
+              multiline
+              placeholder="Message the team…"
+              placeholderTextColor="#9ca3af"
+              value={messageText}
+              onChangeText={setMessageText}
+              maxLength={2000}
+            />
+            <TouchableOpacity
+              style={[styles.saveNoteBtn, (!messageText.trim() || sendingMessage) && { opacity: 0.5 }]}
+              onPress={sendMessage}
+              disabled={!messageText.trim() || sendingMessage}
+            >
+              <Text style={styles.saveNoteBtnText}>{sendingMessage ? 'Sending…' : 'Send'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Notes */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1626,6 +1725,18 @@ const styles = StyleSheet.create({
   cancelText: { fontSize: 15, color: '#6b7280', paddingVertical: 4 },
   saveNoteBtn: { backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6 },
   saveNoteBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  msgRow: { flexDirection: 'row', marginBottom: 8 },
+  msgRowMine: { justifyContent: 'flex-end' },
+  msgRowTheirs: { justifyContent: 'flex-start' },
+  msgBubble: { maxWidth: '80%', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8 },
+  msgBubbleMine: { backgroundColor: '#f97316', borderBottomRightRadius: 4 },
+  msgBubbleTheirs: { backgroundColor: '#f3f4f6', borderBottomLeftRadius: 4 },
+  msgBody: { fontSize: 14, color: '#374151', lineHeight: 20 },
+  msgBodyMine: { fontSize: 14, color: '#fff', lineHeight: 20 },
+  msgMeta: { fontSize: 11, color: '#6b7280', marginTop: 3 },
+  msgMetaMine: { fontSize: 11, color: '#ffedd5', marginTop: 3 },
+  msgComposer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 10 },
+  msgInput: { flex: 1, fontSize: 15, color: '#111827', backgroundColor: '#f9fafb', borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 8, maxHeight: 100 },
   noteCard: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#f9fafb' },
   noteBody: { fontSize: 14, color: '#374151', lineHeight: 20 },
   noteMeta: { fontSize: 12, color: '#6b7280', marginTop: 4 },
