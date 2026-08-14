@@ -238,7 +238,7 @@ ${a.faqs.map(f => `        { "@type": "Question", "name": "${escJsonLd(f.q)}", "
   <p class="text-[10px] font-bold tracking-widest uppercase text-brand mb-4">${h.competitor} Alternative</p>
   <h1 class="font-display font-bold text-4xl md:text-5xl leading-[1.05] tracking-tight text-ink mb-5">${h.heading}</h1>
   <p class="text-lg text-ink/50 max-w-2xl mx-auto leading-relaxed">${h.intro}</p>
-  <a href="https://app.industryforms.app" class="btn-brand bg-brand text-white font-semibold text-sm px-6 py-3.5 rounded-full inline-flex items-center gap-2 mt-8">Start 4-Week Free Trial <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
+  <a href="https://app.industryforms.app" class="btn-brand bg-brand text-white font-semibold text-sm px-6 py-3.5 rounded-full inline-flex items-center gap-2 mt-8">Start Free — 28 Days <i data-lucide="arrow-right" class="w-4 h-4"></i></a>
 </header>
 
 <main id="main" class="max-w-3xl mx-auto px-6 pb-24">

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Wrench, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
@@ -19,6 +19,12 @@ export default function SignupPage() {
   const [tradeType, setTradeType] = useState('')
   const [country, setCountry] = useState('NZ')
   const [agreed, setAgreed] = useState(false)
+
+  // Prefill from the marketing site's hero email capture form (?email=).
+  useEffect(() => {
+    const prefill = new URLSearchParams(window.location.search).get('email')
+    if (prefill) setEmail(prefill)
+  }, [])
 
   const TRADE_TYPES = [
     'Builder / General contractor',
