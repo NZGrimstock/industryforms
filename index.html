@@ -251,6 +251,21 @@
     pointer-events: none;
   }
   .btn-brand:hover { transform: translateY(-2px); box-shadow: 0 10px 36px -6px rgba(232,114,42,0.45); }
+
+  /* Hero email capture — shrink the input's share of the row so the
+     "Start Free Trial" button isn't squeezed. Tailwind's sm: width/flex
+     variants aren't in the static build (see the styles.css comment
+     elsewhere), so this is plain CSS. */
+  @media (min-width: 640px) {
+    .hero-email-input { flex: 0 1 190px; }
+    .hero-email-submit { flex: 1 1 auto; }
+  }
+
+  /* Xero brand blue (#13B5EA per developer.xero.com) — a wordmark, not
+     their official partner badge (that requires their certified-partner
+     program). The circular X mark is our own, not a reproduction of
+     their logo icon. */
+  .xero-wordmark { color: #13B5EA; }
   .btn-brand:active { transform: translateY(0); }
 
   .btn-ink {
@@ -470,13 +485,14 @@
         The no-BS app that logs your drives, chases your overdue invoices via SMS, and actually works when you're out of cell reception. Invoices sync straight to Xero.
       </p>
 
+      <p class="reveal reveal-d3 font-display font-bold text-ink mb-3">From $29/month <span class="font-sans font-normal text-ink/40 text-sm">· No credit card · 28 days free</span></p>
+
       <form action="https://app.industryforms.app/signup" method="get" class="reveal reveal-d3 hero-email-form flex flex-col sm:flex-row items-stretch gap-2.5 max-w-lg" novalidate>
-        <input type="email" name="email" required placeholder="your@email.co.nz" autocomplete="email" aria-label="Work email" class="bg-white/85 backdrop-blur-sm border border-black/[0.08] shadow-glass rounded-full px-5 py-4 text-sm text-ink placeholder-ink/35 outline-none flex-1 min-w-0">
-        <button type="submit" class="btn-brand bg-brand text-white font-semibold px-7 py-4 rounded-full text-sm inline-flex items-center justify-center gap-2 shadow-brand whitespace-nowrap flex-shrink-0">
-          Start Free <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        <input type="email" name="email" required placeholder="your@email.co.nz" autocomplete="email" aria-label="Work email" class="hero-email-input bg-white/85 backdrop-blur-sm border border-black/[0.08] shadow-glass rounded-full px-5 py-4 text-sm text-ink placeholder-ink/35 outline-none min-w-0">
+        <button type="submit" class="hero-email-submit btn-brand bg-brand text-white font-semibold px-7 py-4 rounded-full text-sm inline-flex items-center justify-center gap-2 shadow-brand whitespace-nowrap">
+          Start Free Trial <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </button>
       </form>
-      <p class="reveal reveal-d3 text-xs text-ink/40 mt-3">From $29/month · No credit card · 28 days free</p>
       <a href="mailto:support@industryforms.co.nz?subject=Help%20me%20get%20set%20up" class="reveal reveal-d3 inline-flex items-center gap-2 text-sm font-medium text-ink/55 hover:text-ink transition-colors mt-4 group">
         <span class="w-9 h-9 rounded-full bg-white/80 border border-black/[0.07] flex items-center justify-center shadow-glass group-hover:shadow-glass-lg transition-shadow flex-shrink-0">
           <i data-lucide="user" class="w-3.5 h-3.5 text-ink"></i>
@@ -656,7 +672,10 @@
   <div class="reveal max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12 text-center">
     <p class="text-[11px] font-bold tracking-widest uppercase text-ink/35 flex-shrink-0">Works with the tools you already use</p>
     <div class="flex flex-wrap items-center justify-center gap-x-10 gap-y-3">
-      <span class="font-display font-bold text-lg text-ink/55">Xero</span>
+      <span class="xero-wordmark inline-flex items-center gap-2 font-display font-bold text-lg">
+        <svg viewBox="0 0 32 32" class="w-6 h-6 flex-shrink-0" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#13B5EA"/><path d="M9 9l14 14M23 9L9 23" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>
+        Xero
+      </span>
       <span class="font-display font-bold text-lg text-ink/55">Stripe</span>
       <span class="font-display font-bold text-lg text-ink/55">Google Calendar</span>
     </div>
