@@ -92,19 +92,49 @@ type TerminalLocationCompany = {
 
 // Tap to Pay direct charges require the Location + reader to live on the
 // connected account, not the platform. Created once, lazily, on first use.
-// Address is best-effort from the freeform companies.address field — Stripe
-// rejects with a clear 400 if a country needs more structure than that, which
-// surfaces straight to the caller rather than failing silently.
+//
+// The address must be STRUCTURED: Stripe requires address[city] for NZ and AU
+// Locations (it failed live with "Missing required address field for a
+// Location in NZ: address[city]"). `companies.address` is a single free-text
+// line with no city/postcode of its own, so there is nothing here to populate
+// it from — and parsing a city out of free text would write a guessed value
+// onto the merchant's Stripe compliance record, which is worse than failing.
+//
+// Instead reuse the structured address Stripe already collected and verified
+// from the merchant during Express onboarding. It's authoritative, it needs no
+// new columns or settings UI, and the caller has already gated on
+// charges_enabled so onboarding is complete by the time we get here.
 export async function ensureTerminalLocation(company: TerminalLocationCompany): Promise<string> {
   if (company.stripe_terminal_location_id) return company.stripe_terminal_location_id
 
-  const location = await getStripe().terminal.locations.create(
+  const stripe = getStripe()
+  const acct = await stripe.accounts.retrieve(company.stripe_account_id)
+  // Business accounts carry `company.address`, sole traders `individual.address`;
+  // `business_profile.support_address` is the last resort.
+  const verified =
+    acct.company?.address ??
+    acct.individual?.address ??
+    acct.business_profile?.support_address ??
+    null
+
+  if (!verified?.line1 || !verified?.city) {
+    throw new Error(
+      'Stripe needs your full business address (including city) before Tap to Pay will work. ' +
+      'Open Settings → Subscription → payouts and complete your address with Stripe, then try again.'
+    )
+  }
+
+  const location = await stripe.terminal.locations.create(
     {
       display_name: company.name ?? 'IndustryForms',
       phone: company.phone ?? undefined,
       address: {
-        country: company.country === 'AU' ? 'AU' : 'NZ',
-        line1: company.address ?? undefined,
+        country: verified.country ?? (company.country === 'AU' ? 'AU' : 'NZ'),
+        line1: verified.line1,
+        line2: verified.line2 ?? undefined,
+        city: verified.city,
+        state: verified.state ?? undefined,
+        postal_code: verified.postal_code ?? undefined,
       },
     },
     { stripeAccount: company.stripe_account_id }

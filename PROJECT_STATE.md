@@ -173,6 +173,48 @@ Optional next steps flagged during recent sessions; none are in-progress:
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
 
+## Session 2026-08-12 (Claude, pt.3) — Tap to Pay: Stripe Terminal Location missing address[city]
+
+**The 2026-08-07 try/catch fix paid off exactly as intended.** That session
+added error handling to `app/api/stripe/terminal/*` so the real Stripe error
+would surface instead of the generic "Could not resolve a Terminal location",
+and noted the underlying cause couldn't be confirmed without a live sandbox.
+It surfaced on a real device this session: **"Missing required address field
+for a Location in NZ: address[city]."**
+
+**Root cause**: `ensureTerminalLocation()` in `lib/connect.ts` built the
+Location address from `companies.address` alone — `{ country, line1 }`. Stripe
+requires a *structured* address with `address[city]` for NZ (and AU)
+Locations. `companies` has a single free-text `address text` column and **no
+city/postcode columns anywhere** (confirmed across all migrations), so there
+was nothing to populate it from.
+
+**Fix**: read the structured address Stripe already collected and verified
+from the merchant during Express onboarding —
+`accounts.retrieve()` → `company.address` (business) → `individual.address`
+(sole trader) → `business_profile.support_address`. Deliberately **not**
+parsing a city out of the free-text field: a guessed value would be written
+onto the merchant's Stripe compliance record, which is worse than failing.
+Also avoids adding address columns + settings UI for data the merchant has
+already given Stripe. Safe by the time it runs — the route gates on
+`charges_enabled`, so onboarding is complete.
+
+If Stripe holds no usable address, the user now gets an actionable message
+("complete your address with Stripe, then try again") rather than a raw API
+error.
+
+No runnable check added: the logic is a three-way `??` fallback plus a
+null guard, and a test asserting `a ?? b ?? c` picks `a` would be theatre.
+The part that can actually fail — whether Stripe accepts the resulting
+address — is only verifiable against Stripe.
+
+**Unverified**: not exercised against a real Stripe account (the Stripe MCP
+connector needs auth this session couldn't perform, and there's still no live
+Terminal sandbox). Next Tap to Pay attempt either works or returns the new
+actionable message. **Worth checking first**: whether this company's
+connected account actually has a city on file in Stripe — if it doesn't, the
+fix is correct but the merchant still has to complete their Stripe address.
+
 ## Session 2026-08-12 (Claude, pt.2) — Android keyboard covering forms; duplicate invoice on a fully-invoiced job
 
 Two user-reported bugs, both root-caused rather than patched at the reported spot.
