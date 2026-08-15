@@ -125,6 +125,14 @@ export async function POST(req: NextRequest) {
       client_secret: pi.client_secret,
       id: pi.id,
       amount: cents,
+      // Diagnostic context, echoed back so a client-side "No such
+      // payment_intent" can name the account and mode the PI was actually
+      // created in. That error means the Terminal SDK looked somewhere else —
+      // a different connected account, or the other livemode — and without
+      // these two values there's no way to tell which from the device.
+      // Same reasoning as the 2026-08-07 try/catch work on these routes.
+      account: options.stripeAccount ?? null,
+      livemode: pi.livemode,
     })
   } catch (e) {
     console.error('Terminal PaymentIntent error:', e)

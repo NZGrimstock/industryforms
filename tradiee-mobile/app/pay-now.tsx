@@ -230,7 +230,27 @@ export default function PayNowScreen() {
 
       const paymentIntent = await fetchTerminalPaymentIntent(API_BASE, selected.id)
       const retrieved = await retrievePaymentIntent(paymentIntent.client_secret)
-      if (retrieved.error) throw retrieved.error
+      if (retrieved.error) {
+        // "No such payment_intent" here does NOT mean the PaymentIntent is
+        // missing — it was just created successfully. It means the Terminal
+        // SDK is looking in a different place than the server wrote to:
+        // another connected account, or the other livemode. The SDK's account
+        // binding comes from the connection token it was initialized with, and
+        // the SDK is initialized once per app process (app/_layout.tsx) and
+        // never re-bound — so it can be stale after Connect onboarding
+        // finishes, or after signing into a different company without a
+        // restart. Naming both sides turns a dead end into a one-look fix.
+        const msg = String(retrieved.error.message ?? '')
+        if (/no such payment_intent/i.test(msg)) {
+          throw new Error(
+            `${msg}\n\nCreated on ${paymentIntent.account ?? 'the platform account'} in ` +
+            `${paymentIntent.livemode ? 'live' : 'test'} mode, but the Tap to Pay reader ` +
+            `session is looking elsewhere. Fully close and reopen the app to re-link it; ` +
+            `if that doesn't help, the app and Stripe keys are in different modes.`
+          )
+        }
+        throw retrieved.error
+      }
       if (!retrieved.paymentIntent) throw new Error('Stripe did not return a PaymentIntent.')
 
       setStage('collecting')

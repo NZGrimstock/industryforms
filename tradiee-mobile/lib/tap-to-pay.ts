@@ -70,5 +70,11 @@ export async function fetchTerminalPaymentIntent(apiBase: string, invoiceId: str
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error ?? 'PaymentIntent failed')
   }
-  return res.json() as Promise<{ client_secret: string; id: string; amount: number }>
+  // `account`/`livemode` are diagnostic only — see the route. They let the
+  // caller say WHICH account and mode a PaymentIntent was created in when the
+  // Terminal SDK then fails to find it.
+  return res.json() as Promise<{
+    client_secret: string; id: string; amount: number
+    account: string | null; livemode: boolean
+  }>
 }
