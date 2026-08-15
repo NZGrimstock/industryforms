@@ -6,6 +6,13 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **Apply `20260815100000_lock_job_once_fully_invoiced.sql` to production**
+  with `supabase db push --linked`. Verified against real local Postgres
+  (12-case pass, see 2026-08-15 session entry) but not yet applied remotely.
+  After applying, do one real click-through: fully invoice a real (or
+  throwaway) job, confirm materials/timesheets/notes are rejected with the
+  new message, confirm a technician can still message on it, and confirm the
+  Unlock button (owner/admin, both apps) actually restores editing.
 - **SMS provider swapped Twilio → WebSMS 2026-08-11.** Vercel production env
   vars are now set (confirmed 2026-08-12) — sending live from WebSMS's shared
   **group-pool short code 34567** (their standard offer below 3000 msgs/month;
@@ -172,6 +179,109 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-15 (Claude) — Lock a job once it's invoiced in full
+
+User picked "full freeze" (everything locks except messages) with an
+owner/admin unlock escape hatch, from an explicit scope question — the two
+readings ("lock billing data only" vs "lock everything") would have produced
+very different code, so this wasn't guessed at.
+
+**Enforced with a DB trigger, not app-level checks** — deliberately mirrors
+`20260807110000_lock_invoice_financials_to_draft.sql` (which locks a *sent*
+invoice's own fields) applied to the job side instead. A trigger is a hard
+stop regardless of write path — web, mobile online, mobile's PowerSync
+sync-on-reconnect, or a direct API call — where an app-level check only
+covers the one path it's written into. It also gives a friendly custom error
+message; a bare RLS denial would just say "new row violates row-level
+security policy."
+
+**"Fully invoiced"** = job has a `quote_id` and live (non-void) invoice
+subtotals sum to at least the quote total, same EPS as `invoiceGuard()` in
+`lib/job-financials.ts` — the two are deliberately kept in sync rather than
+sharing code (SQL trigger vs TS), flagged in both places' comments as a drift
+risk to watch.
+
+**Migration** `20260815100000_lock_job_once_fully_invoiced.sql`:
+- New `jobs.invoice_lock_override` (the escape hatch).
+- `job_is_locked(job_id)` — the one predicate every trigger below calls.
+- One generic `block_write_if_job_locked()` trigger, applied via a `DO` loop
+  to `job_materials`, `timesheets`, `job_visits`, `job_assignees`,
+  `job_photos`, `form_submissions`, `compliance_documents`,
+  `purchase_orders`, `progress_claims` — one function instead of nine
+  near-identical trigger bodies.
+- `job_notes` gets its own trigger: `kind='message'` rows are always
+  writable (that's the whole point of the 2026-08-12 messaging feature),
+  only `kind='note'` rows lock.
+- `jobs` itself gets a narrower trigger, `block_job_edit_if_locked()`, using
+  a `jsonb` diff rather than hand-listing every other column (so it doesn't
+  quietly stop covering a column a future migration adds). Two carve-outs:
+  - **A bare status-only change is allowed even when locked.** On mobile,
+    completing a job runs its status UPDATE **after** the invoice that
+    creates the lock — deliberately, per an existing code comment: "a failed
+    invoice must not complete the job." Traced every write path on both
+    platforms before writing this trigger specifically because of that
+    ordering; without the carve-out, completing a job via mobile would have
+    immediately locked itself out of the one write that legitimately follows.
+  - Toggling `invoice_lock_override` itself is always allowed — otherwise
+    nothing could ever unlock a locked job.
+- Same WAL-backfill trap as every prior sync-sensitive migration this
+  project has hit: `ALTER TABLE ADD COLUMN` doesn't backfill existing rows
+  through logical replication, so a no-op `update jobs set id = id` forces
+  them through. Unlike `job_notes` (2026-08-12, no `updated_at`), `jobs`
+  **does** have an `updated_at`-bumping trigger, so the backfill runs under
+  `session_replication_role = 'replica'` to avoid falsely touching every
+  job's timestamp — the exact mistake the 2026-08-02 outage fix was written
+  to avoid.
+- `sync-rules.yaml` needed **no edit** — both streams already `SELECT
+  jobs.*`, so the new column reaches devices automatically.
+
+**UI**: web gets a `JobLockBanner` component (banner + Unlock/Re-lock,
+owner/admin only) computed server-side in `page.tsx` by reusing
+`invoiceGuard()` against data the page already fetches. Mobile needed a
+different approach — **quotes are deliberately never synced to staff
+devices** (`sync-rules.yaml`'s own header comment: "Never quotes/invoices"),
+so a technician's phone has no local data to compute "fully invoiced" from
+at all. New `GET /api/jobs/[id]/lock-status` (server-side, same
+`invoiceGuard()` reuse) exists specifically for this — it's mobile-only,
+web doesn't call it. Every other write action's existing error handling
+(`toast`/`Alert.alert` on failure) already surfaces the trigger's message
+verbatim, so individual "Add" buttons across `materials.tsx`,
+`photo-upload.tsx`, `visits-card.tsx` etc. were deliberately **not**
+disabled one by one — the banner is the primary signal, the trigger's
+friendly error is the fallback if someone tries anyway. `invoice_lock_override`
+added to both apps' PowerSync client schemas for completeness, though
+neither app reads it locally today.
+
+**Caught while writing the mobile side**: a first draft used `confirm()` for
+the unlock prompt — that's a browser API with no equivalent in React Native
+and would have crashed the app on first tap. Caught before it shipped;
+replaced with `Alert.alert`'s two-button form.
+
+Verified: `tsc --noEmit` and `eslint` clean on every touched file across both
+apps; `check-sync-rules.mjs` (still 45 queries, still passing — no rules
+edit was needed) and the existing `check-invoice-guard.mjs` /
+`check-job-financials.mjs` all pass unchanged.
+
+**The trigger itself was verified against real local Postgres**, not just
+typechecked — local Supabase came up successfully this attempt (it had
+failed twice earlier in the session, see the pt.1/pt.2 entries above; Docker
+Desktop's engine, not this migration). Ran a 12-case transaction against a
+real seeded job (rolled back after, no data persisted): unlocked before any
+invoice → material insert succeeds → insert a full-amount invoice → job
+reports locked → material insert **and** delete both rejected with the
+friendly message → **the mobile-ordering carve-out confirmed for real: a
+bare status-only update still succeeds while locked** → a status change
+bundled with any other field change is rejected → a `kind='message'` insert
+succeeds while locked → a `kind='note'` insert is rejected → toggling
+`invoice_lock_override` succeeds and immediately unlocks → a material insert
+succeeds again post-unlock. Every case behaved exactly as designed on the
+first real run — no fixes needed after the trigger logic itself, only a
+missing `title` column in the test fixture's own `quotes` insert (schema
+requirement I didn't know about, not a bug in the feature).
+
+Not yet applied to production — `supabase db push --linked` is still owed
+(see Action items).
 
 ## Session 2026-08-13 (Claude) — Sidebar toggle placement; completed jobs reinstated; Stripe disconnect/reconnect
 

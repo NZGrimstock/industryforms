@@ -108,6 +108,13 @@ export default function JobDetailScreen() {
   const [savingNote, setSavingNote] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
+  // Fetched from the server, not computed locally: quotes are deliberately
+  // not synced to staff devices (sync-rules.yaml — "Never quotes/invoices"),
+  // so there is no local data to compute "fully invoiced" from on a
+  // technician's phone. See app/api/jobs/[id]/lock-status/route.ts.
+  const [lockStatus, setLockStatus] = useState<{ locked: boolean; overridden: boolean } | null>(null)
+  const [togglingLock, setTogglingLock] = useState(false)
   // Only used to align message bubbles (mine vs theirs). Author *names* aren't
   // shown on mobile: `profiles` isn't in the PowerSync client schema, so a name
   // can't be resolved offline, and adding that table would mean sync-rule and
@@ -337,9 +344,52 @@ export default function JobDetailScreen() {
     [id]
   )
 
+  async function refreshLockStatus() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    try {
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/jobs/${id}/lock-status`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (res.ok) setLockStatus(await res.json())
+    } catch {
+      // Non-fatal: no banner, but the DB trigger still enforces the lock —
+      // this endpoint is discovery/UX only.
+    }
+  }
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
-  }, [])
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return
+      supabase.from('profiles').select('role').eq('id', session.user.id).single()
+        .then(({ data }) => setRole(data?.role ?? null))
+    })
+    refreshLockStatus()
+  }, [id])
+
+  function toggleJobLock(next: boolean) {
+    if (role !== 'owner' && role !== 'admin') return
+    const run = async () => {
+      setTogglingLock(true)
+      const { error } = await supabase.from('jobs').update({ invoice_lock_override: next }).eq('id', id)
+      setTogglingLock(false)
+      if (error) { Alert.alert('Error', error.message); return }
+      await refreshLockStatus()
+    }
+    // Alert.alert is the RN equivalent of window.confirm — there is no
+    // synchronous confirm() on this platform.
+    if (next) {
+      Alert.alert(
+        'Unlock this job?',
+        'It will become editable again even though it has been invoiced in full.',
+        [{ text: 'Cancel', style: 'cancel' }, { text: 'Unlock', onPress: run }]
+      )
+    } else {
+      run()
+    }
+  }
 
   const { data: materials, refresh: refreshMaterials } = useQuery<Material>(
     `SELECT id, description, quantity, unit, unit_price
@@ -949,6 +999,29 @@ export default function JobDetailScreen() {
             <Text style={styles.metaLabel}>Created</Text>
             <Text style={styles.metaValue}>{formatDate(job.created_at)}</Text>
           </View>
+
+          {/* Fully-invoiced lock banner — the DB trigger (migration
+              20260815100000) is the real enforcement; this is discovery plus
+              the owner/admin escape hatch. */}
+          {lockStatus?.overridden ? (
+            <View style={[styles.lockBanner, styles.lockBannerWarn]}>
+              <Text style={styles.lockBannerText}>Unlocked by an admin — editable even though invoiced in full.</Text>
+              {(role === 'owner' || role === 'admin') && (
+                <TouchableOpacity onPress={() => toggleJobLock(false)} disabled={togglingLock}>
+                  <Text style={styles.lockBannerAction}>{togglingLock ? '…' : 'Re-lock'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : lockStatus?.locked ? (
+            <View style={styles.lockBanner}>
+              <Text style={styles.lockBannerText}>Invoiced in full — locked. Only messages can still be sent.</Text>
+              {(role === 'owner' || role === 'admin') && (
+                <TouchableOpacity onPress={() => toggleJobLock(true)} disabled={togglingLock}>
+                  <Text style={styles.lockBannerAction}>{togglingLock ? '…' : 'Unlock'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
 
           {/* Sign-off only applies while the job is still open, but Invoice stays
               available after completion — invoicing no longer changes status, so
@@ -1745,6 +1818,10 @@ const styles = StyleSheet.create({
   cancelText: { fontSize: 15, color: '#6b7280', paddingVertical: 4 },
   saveNoteBtn: { backgroundColor: '#f97316', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 6 },
   saveNoteBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  lockBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: '#f3f4f6', borderRadius: 10, padding: 10, marginTop: 10 },
+  lockBannerWarn: { backgroundColor: '#fffbeb' },
+  lockBannerText: { flex: 1, fontSize: 12.5, color: '#4b5563' },
+  lockBannerAction: { fontSize: 13, fontWeight: '600', color: '#f97316' },
   msgRow: { flexDirection: 'row', marginBottom: 8 },
   msgRowMine: { justifyContent: 'flex-end' },
   msgRowTheirs: { justifyContent: 'flex-start' },

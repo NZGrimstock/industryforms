@@ -13,6 +13,8 @@ const jobs = new Table({
   tags: column.text,
   created_at: column.text,
   updated_at: column.text,
+  // Migration 20260815100000 — the fully-invoiced lock escape hatch.
+  invoice_lock_override: column.integer,
 })
 
 const customers = new Table({

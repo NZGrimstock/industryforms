@@ -11,9 +11,10 @@ import { StatusBadge } from '@/components/ui/badge'
 import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
-import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
+import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard } from '@/lib/job-financials'
 import { JobDetailClient } from './client'
 import { JobMessagesCard, type JobMessage } from './messages-card'
+import { JobLockBanner } from './lock-banner'
 import { JobMaterials } from './materials'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
@@ -167,6 +168,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { invoiced: financialInvoiced, paid: financialPaid, outstanding: financialOutstanding } = summarizeInvoices(invoicesRes.data ?? [])
   const financialJobTotal = jobTotal(jobQuote?.total, financialInvoiced)
   const financialToInvoice = toInvoice(financialJobTotal, financialInvoiced)
+  // Same predicate as invoiceGuard()'s 'fully-invoiced' branch — kept in sync
+  // deliberately (see lib/job-financials.ts comment) rather than duplicated
+  // ad hoc, since the DB trigger (migration 20260815100000) enforces the real
+  // lock; this is only for the UI banner and disabling the unlock toggle.
+  const jobLocked = invoiceGuard({ jobTotal: financialJobTotal, alreadyInvoiced: financialInvoiced, subtotal: 0 }) === 'fully-invoiced'
+    && !job.invoice_lock_override
   const jobFinancialStats: FinancialStat[] = [
     { label: 'Job total', value: financialJobTotal },
     { label: 'Invoiced', value: financialInvoiced },
@@ -323,6 +330,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6 items-start">
         <div className="space-y-6 min-w-0">
+
+        <JobLockBanner jobId={id} locked={jobLocked} overridden={job.invoice_lock_override} role={profile!.role} />
 
         {job.description && (
           <Card>

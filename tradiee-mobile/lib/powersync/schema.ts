@@ -12,6 +12,11 @@ const jobs = new Table({
   site_id: column.text,
   created_at: column.text,
   updated_at: column.text,
+  // Migration 20260815100000 — the fully-invoiced lock escape hatch. Not
+  // read locally (staff devices have no local quote data to compute "fully
+  // invoiced" from, see app/api/jobs/[id]/lock-status/route.ts) but still
+  // declared so a local write to it isn't rejected by the client schema.
+  invoice_lock_override: column.integer,
 })
 
 const customers = new Table({
