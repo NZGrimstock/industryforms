@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, connectOptions } from '@/lib/stripe'
 
 const REFUND_WINDOW_HOURS = 24
 const bodySchema = z.object({ bookingId: z.string().uuid() })
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient()
   const { data: booking } = await service.from('bookings')
-    .select('id, company_id, status, starts_at, deposit_paid, deposit_refunded, stripe_payment_intent_id')
+    .select('id, company_id, status, starts_at, deposit_paid, deposit_refunded, stripe_payment_intent_id, companies(stripe_account_id, stripe_charges_enabled)')
     .eq('id', bookingId).single()
   if (!booking || booking.company_id !== profile.company_id) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -45,10 +45,14 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe()
+  const company = booking.companies as unknown as { stripe_account_id: string | null; stripe_charges_enabled: boolean | null } | null
+  // The deposit was charged with connectOptions(company) (see deposit-intent/route.ts) —
+  // a Connect-onboarded company's PaymentIntent lives on the connected account, so the
+  // refund must be scoped there too or Stripe returns "No such payment_intent".
   await stripe.refunds.create({
     payment_intent: booking.stripe_payment_intent_id,
     amount: Math.round(refundable * 100),
-  })
+  }, connectOptions(company))
 
   await service.from('bookings').update({
     deposit_refunded: Number(booking.deposit_refunded) + refundable,
