@@ -150,13 +150,13 @@ export default async function TapToPayHelpPage() {
             <p>Go to <strong>app.industryforms.app</strong> and log in with your usual email and password.</p>
           </Step>
 
-          <Step n={2} title="Open Settings → Subscription">
-            <p>Click <strong>Settings</strong> in the left-hand menu, then click the <strong>Subscription</strong> tab along the top.</p>
+          <Step n={2} title="Open Settings → Integrations">
+            <p>Click <strong>Settings</strong> in the left-hand menu, then click the <strong>Integrations</strong> tab along the top.</p>
           </Step>
 
           <Step n={3} title="Find &quot;Get paid — card payments&quot; and click Set up payouts">
-            <p>Scroll down until you see this box, then click the button:</p>
-            <Screen label="the Get paid box in Settings → Subscription">
+            <p>It&apos;s the first box on the page — click the button:</p>
+            <Screen label="the Get paid box in Settings → Integrations">
               <p className="text-sm font-bold text-gray-900 mb-1">Get paid — card payments</p>
               <p className="text-xs text-gray-500 mb-3">
                 Connect your own Stripe account so customer payments — online invoices, deposits and Tap to
@@ -369,7 +369,7 @@ export default async function TapToPayHelpPage() {
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700 align-top">
                 <tr>
-                  <td className="py-2.5 pr-4 italic">&quot;Complete payouts setup in Settings → Subscription before taking card payments.&quot;</td>
+                  <td className="py-2.5 pr-4 italic">&quot;Complete payouts setup in Settings → Integrations before taking card payments.&quot;</td>
                   <td className="py-2.5">You haven&apos;t finished this guide — go back to Part 1.</td>
                 </tr>
                 <tr>

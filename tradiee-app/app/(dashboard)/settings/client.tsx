@@ -796,6 +796,9 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
       {tab === 'integrations' && (
         <div className="space-y-6 max-w-2xl">
+          {/* Get paid — most important integration for most trades, so it goes first */}
+          <GetPaidCard />
+
           {/* Google Calendar */}
           <Card>
             <CardHeader><CardTitle>Google Calendar</CardTitle></CardHeader>
@@ -862,7 +865,6 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
 
       {tab === 'subscription' && (
         <div className="space-y-6 max-w-7xl">
-          <GetPaidCard />
           <BillingTab company={company} />
         </div>
       )}

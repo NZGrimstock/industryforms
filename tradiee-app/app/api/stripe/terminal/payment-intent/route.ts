@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const options = connectOptions(company)
   if (!options) {
     return NextResponse.json(
-      { error: 'Complete payouts setup in Settings → Subscription before taking card payments.' },
+      { error: 'Complete payouts setup in Settings → Integrations before taking card payments.' },
       { status: 409 }
     )
   }

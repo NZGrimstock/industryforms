@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   if (!connectOptions(company) || !company?.stripe_account_id) {
     return NextResponse.json(
-      { error: 'Complete payouts setup in Settings → Subscription before taking card payments.' },
+      { error: 'Complete payouts setup in Settings → Integrations before taking card payments.' },
       { status: 409 }
     )
   }

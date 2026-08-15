@@ -12,7 +12,7 @@
 // global one — fetchTerminalLocationId() replaces the old static
 // EXPO_PUBLIC_STRIPE_TERMINAL_LOCATION_ID env var. connection-token and
 // payment-intent both 409 with a clear message if the company hasn't finished
-// Connect onboarding yet (Settings → Subscription → Get paid).
+// Connect onboarding yet (Settings → Integrations → Get paid).
 
 import { supabase } from '@/lib/supabase'
 

@@ -15,7 +15,7 @@ type ConnectStatus = {
 // Stripe Connect (Express) onboarding entry point. Lets a company connect its
 // own Stripe account so customer payments settle to it directly. Status comes
 // from GET /api/stripe/connect/status; the button POSTs onboard and redirects
-// to Stripe's hosted flow (which returns to ?tab=subscription&connect=done).
+// to Stripe's hosted flow (which returns to ?tab=integrations&connect=done).
 // Which Stripe account is actually linked. Shown wherever an account exists —
 // without it "Payouts active" gives no way to tell WHICH account is taking the
 // money, which matters for anyone who has more than one.

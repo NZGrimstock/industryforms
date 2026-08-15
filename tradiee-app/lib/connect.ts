@@ -50,7 +50,7 @@ export async function createOnboardingLink(accountId: string): Promise<string> {
   const link = await getStripe().accountLinks.create({
     account: accountId,
     refresh_url: `${appUrl}/api/stripe/connect/onboard?refresh=1`,
-    return_url: `${appUrl}/settings?tab=subscription&connect=done`,
+    return_url: `${appUrl}/settings?tab=integrations&connect=done`,
     type: 'account_onboarding',
   })
   return link.url
@@ -152,7 +152,7 @@ export async function ensureTerminalLocation(company: TerminalLocationCompany): 
   if (!verified?.line1 || !verified?.city) {
     throw new Error(
       'Stripe needs your full business address (including city) before Tap to Pay will work. ' +
-      'Open Settings → Subscription → payouts and complete your address with Stripe, then try again.'
+      'Open Settings → Integrations → payouts and complete your address with Stripe, then try again.'
     )
   }
 

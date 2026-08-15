@@ -496,7 +496,7 @@ export const HELP_GUIDE: HelpPart[] = [
               'Wait for the green tick.',
               'Done — money goes straight to your bank.',
             ],
-            proTip: 'First time? An owner or admin must finish payout setup in web Settings → Subscription first. After that it just works.',
+            proTip: 'First time? An owner or admin must finish payout setup in web Settings → Integrations first. After that it just works.',
           },
           {
             id: 'phone-tap-to-pay-help',
