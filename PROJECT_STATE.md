@@ -173,6 +173,57 @@ Optional next steps flagged during recent sessions; none are in-progress:
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
 
+## Session 2026-08-13 (Claude) — Sidebar toggle placement; completed jobs reinstated; Stripe disconnect/reconnect
+
+Three user-requested changes.
+
+**Sidebar collapse/expand now share one spot.** The collapse chevron was in
+the header, the expand chevron in a separate footer block at the bottom, so
+the control jumped across the screen when you used it. Collapsed state now
+stacks the expand arrow under the logo mark in the same header; the footer
+block is gone.
+
+**Completed jobs are visible again, and the "All" pill is removed.** This
+reverts the 2026-08-07 behaviour where a job with `status = 'completed'` and
+at least one non-void invoice disappeared from Jobs entirely. Removed the
+post-fetch filter and the now-unused `invoices` query that fed it, plus the
+`__all__` sentinel and its pill (no `__all__` references remain anywhere).
+Behaviour now: **Active** hides terminal statuses as before, and **Completed**
+/ **Cancelled** each have their own pill (they come from `jobStatuses`, which
+includes terminal ones) — so finished work is one click away instead of
+findable only through Invoices. Mobile was never affected; that change was
+web-only.
+
+**Stripe payouts account can now be disconnected and reconnected, and shows
+which account is linked.**
+- `GET /api/stripe/connect/status` now returns `account_name` (Stripe dashboard
+  display name → business profile name → email) and `account_id`. Not
+  persisted — display-only, and a local copy would just go stale.
+- New `POST /api/stripe/connect/disconnect`, owner/admin only (it stops every
+  card payment the company can take, so not a staff action).
+- `disconnectAccount()` in `lib/connect.ts` **does not delete the Stripe
+  account** — it's an Express account that may hold a balance, pending payouts
+  and payment history, and Stripe refuses deletion with a non-zero balance
+  anyway. It only unlinks locally; the merchant keeps the account in their own
+  Stripe dashboard. Reconnecting is the normal onboarding flow, which creates a
+  fresh Express account.
+- **Critically it also clears `stripe_terminal_location_id`.** That column
+  points at a Terminal Location living on the *old* connected account, so
+  leaving it set would make the next Tap to Pay attempt reuse a location the
+  new account cannot see — the same class of cross-account mismatch currently
+  being chased in pt.3 above.
+- `companies.stripe_customer_id` is deliberately untouched: that's the
+  platform-side subscription customer, nothing to do with the connected account.
+- Disconnect is offered in both the "Payouts active" and "Setup incomplete"
+  states — a half-finished account attached to the wrong entity can only be
+  escaped by disconnecting it.
+
+Verified: `tsc --noEmit` and `eslint` clean across every touched file.
+**Not verified in a browser** — all three surfaces sit behind auth and the
+local Supabase stack is down (Docker Desktop killed the containers twice this
+session, see pt.1). Worth a click-through when it's back up, particularly the
+Completed pill actually listing invoiced jobs.
+
 ## Session 2026-08-12 (Claude, pt.3) — Tap to Pay: Stripe Terminal Location missing address[city]
 
 **The 2026-08-07 try/catch fix paid off exactly as intended.** That session
@@ -214,6 +265,28 @@ Terminal sandbox). Next Tap to Pay attempt either works or returns the new
 actionable message. **Worth checking first**: whether this company's
 connected account actually has a city on file in Stripe — if it doesn't, the
 fix is correct but the merchant still has to complete their Stripe address.
+
+**Update, same day — the address fix worked, next error in the chain
+appeared: "No such payment_intent."** That does NOT mean the PaymentIntent is
+missing — `/api/stripe/terminal/payment-intent` created it successfully. It
+means the Terminal SDK is looking somewhere it isn't: a different connected
+account, or the other livemode (test vs live). Traced the whole chain —
+`connectOptions()` (`lib/stripe.ts`) is used identically by all three Terminal
+routes (connection-token, location, payment-intent), so the server side is
+consistent. Found one genuine latent bug: `StripeTerminalInitializer`
+(`tradiee-mobile/app/_layout.tsx`) initialises the SDK **once per app process
+and never re-binds** — sign-out wipes PowerSync but never resets Terminal, so
+the account binding can go stale if Connect onboarding finishes mid-session or
+someone switches company without restarting. Couldn't confirm that's *this*
+failure though, so didn't ship it as the fix.
+
+Instead made the next attempt self-diagnosing, same move that cracked the
+address bug: `payment-intent` now echoes back `account` (the `stripeAccount`
+option actually used) and `livemode`; `pay-now.tsx` names both in the error
+when it sees "No such payment_intent" — *"Created on acct_x in live mode, but
+the reader session is looking elsewhere. Fully close and reopen the app…"*
+**Still unresolved** — needs a real retry to know whether it's the stale
+initializer or a live/test key mismatch.
 
 ## Session 2026-08-12 (Claude, pt.2) — Android keyboard covering forms; duplicate invoice on a fully-invoiced job
 

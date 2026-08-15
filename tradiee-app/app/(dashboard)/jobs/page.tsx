@@ -37,28 +37,26 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   // Board needs all active statuses; list can be filtered.
   // Default list view ("Active", no status param) hides terminal statuses
   // (completed/cancelled) so finished work doesn't clutter the working list —
-  // still reachable via their own status pill, or the explicit "All" pill.
+  // each one stays reachable via its own status pill.
   let query = supabase.from('jobs').select('*, customers(name), profiles(full_name), customer_sites(address)').eq('company_id', profile!.company_id)
   if (tab === 'recurring') query = query.eq('is_recurring', true)
-  if (view === 'list' && sp.status && sp.status !== '__all__') query = query.eq('status', sp.status)
+  if (view === 'list' && sp.status) query = query.eq('status', sp.status)
   else if (view === 'list' && !sp.status && terminalKeys.length) query = query.not('status', 'in', `(${terminalKeys.join(',')})`)
   if (view === 'list' && sp.q) query = query.or(`job_number.ilike.%${sp.q}%,title.ilike.%${sp.q}%,reference.ilike.%${sp.q}%`)
   if (view === 'board' && tab === 'jobs') query = query.not('status', 'in', '(cancelled)')
   const sortCol = SORTABLE.includes(sp.sort ?? '') ? sp.sort! : 'created_at'
   const asc = sp.sort ? sp.dir === 'asc' : false
   const sortParams = { view: 'list', ...(tab !== 'jobs' ? { tab } : {}), ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}) }
-  const [{ data: rawJobs }, nextJobNumber, { data: invoicedJobRows }] = await Promise.all([
+  const [{ data: rawJobs }, nextJobNumber] = await Promise.all([
     query.order(sortCol, { ascending: asc }),
     nextDocNumber(supabase, profile!.company_id, 'job'),
-    supabase.from('invoices').select('job_id').eq('company_id', profile!.company_id).not('job_id', 'is', null).neq('status', 'void'),
   ])
 
-  // A completed job that's been invoiced is done in every sense — from here
-  // it only needs to exist as an invoice, not as a job anymore. Applied
-  // across every filter/view (not just the default "Active" list), since the
-  // point is it's no longer findable as a job at all, only via Invoices.
-  const invoicedJobIds = new Set((invoicedJobRows ?? []).map(r => r.job_id))
-  const jobs = (rawJobs ?? []).filter(j => !(j.status === 'completed' && invoicedJobIds.has(j.id)))
+  // Completed jobs stay visible under their own status pill (reverted
+  // 2026-08-13). The 2026-08-07 behaviour — hiding a completed job entirely
+  // once it had a non-void invoice — meant finished work was only findable
+  // through Invoices, which lost the job record itself.
+  const jobs = rawJobs ?? []
 
   const viewLinks: Array<{ key: string; icon: React.ComponentType<{className?: string}>; label: string; href?: string }> = [
     { key: 'list', icon: List, label: 'List' },
@@ -90,7 +88,6 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
           {view === 'list' && (
             <div className="flex gap-1 overflow-x-auto">
               <Link href="/jobs?view=list" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${!sp.status ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Active</Link>
-              <Link href="/jobs?view=list&status=__all__" className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === '__all__' ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>All</Link>
               {jobStatuses.map(s => (
                 <Link key={s.key} href={`/jobs?view=list&status=${s.key}`} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${sp.status === s.key ? 'bg-[var(--accent,#f97316)] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   {s.label}

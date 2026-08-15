@@ -15,13 +15,16 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (!company?.stripe_account_id) {
-    return NextResponse.json({ connected: false, charges_enabled: false, payouts_enabled: false, details_submitted: false })
+    return NextResponse.json({ connected: false, charges_enabled: false, payouts_enabled: false, details_submitted: false, account_name: null, account_id: null })
   }
 
   // Pull fresh flags from Stripe (also persists them). Falls back to false on a
   // transient Stripe error rather than 500-ing the Settings page.
   const status = await syncAccountStatus(company.stripe_account_id).catch(() => ({
-    charges_enabled: false, payouts_enabled: false, details_submitted: false,
+    charges_enabled: false, payouts_enabled: false, details_submitted: false, account_name: null,
   }))
-  return NextResponse.json({ connected: true, ...status })
+  // account_id is shown so the merchant can match it against their own Stripe
+  // dashboard before disconnecting — the name alone is ambiguous if they have
+  // more than one account.
+  return NextResponse.json({ connected: true, account_id: company.stripe_account_id, ...status })
 }

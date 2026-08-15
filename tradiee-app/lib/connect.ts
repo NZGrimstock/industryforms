@@ -62,12 +62,21 @@ export async function syncAccountStatus(accountId: string): Promise<{
   charges_enabled: boolean
   payouts_enabled: boolean
   details_submitted: boolean
+  account_name: string | null
 }> {
   const account = await getStripe().accounts.retrieve(accountId)
   const status = {
     charges_enabled: !!account.charges_enabled,
     payouts_enabled: !!account.payouts_enabled,
     details_submitted: !!account.details_submitted,
+    // Whatever the merchant would recognise as "their" Stripe account, in the
+    // order Stripe's own dashboard prefers. Not persisted — it's display-only
+    // and would just go stale in our copy.
+    account_name:
+      account.settings?.dashboard?.display_name ??
+      account.business_profile?.name ??
+      account.email ??
+      null,
   }
   await createServiceClient()
     .from('companies')
@@ -78,6 +87,29 @@ export async function syncAccountStatus(accountId: string): Promise<{
     })
     .eq('stripe_account_id', accountId)
   return status
+}
+
+// Unlink the connected account from this company so a different one can be
+// connected. Deliberately does NOT delete the Stripe account: it's an Express
+// account that may hold a balance, pending payouts and years of payment
+// history, and Stripe refuses deletion with a non-zero balance anyway. The
+// merchant keeps full access to it in their own Stripe dashboard.
+//
+// `stripe_terminal_location_id` MUST be cleared too — it points at a Terminal
+// Location that lives on the OLD account, so leaving it would make the next
+// Tap to Pay attempt reuse a location the new account can't see.
+export async function disconnectAccount(companyId: string): Promise<void> {
+  const { error } = await createServiceClient()
+    .from('companies')
+    .update({
+      stripe_account_id: null,
+      stripe_charges_enabled: false,
+      stripe_payouts_enabled: false,
+      stripe_details_submitted: false,
+      stripe_terminal_location_id: null,
+    })
+    .eq('id', companyId)
+  if (error) throw new Error(`Failed to disconnect Stripe account: ${error.message}`)
 }
 
 type TerminalLocationCompany = {

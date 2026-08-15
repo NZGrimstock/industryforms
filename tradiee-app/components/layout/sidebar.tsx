@@ -112,8 +112,21 @@ export function Sidebar({ isStaff = false, unreadMessages = 0 }: { isStaff?: boo
         'h-16 flex items-center border-b border-gray-100 shrink-0',
         collapsed ? 'justify-center px-0' : 'px-4 justify-between'
       )}>
+        {/* Collapse and expand live in the same spot so the control doesn't
+            move when the sidebar toggles — collapsed stacks the arrow under
+            the mark, expanded sits it beside the wordmark. */}
         {collapsed ? (
-          <Image src="/Logo.png" alt="IndustryForms" width={36} height={20} className="object-contain" />
+          <div className="flex flex-col items-center gap-0.5">
+            <Image src="/Logo.png" alt="IndustryForms" width={36} height={20} className="object-contain" />
+            <button
+              onClick={() => setCollapsed(false)}
+              className="text-gray-400 hover:text-gray-700 transition-colors p-0.5 rounded"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         ) : (
           <>
             <Image src="/Logo.png" alt="IndustryForms" width={140} height={76} className="object-contain h-9 w-auto" />
@@ -121,6 +134,7 @@ export function Sidebar({ isStaff = false, unreadMessages = 0 }: { isStaff?: boo
               onClick={() => setCollapsed(true)}
               className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded shrink-0"
               title="Collapse sidebar"
+              aria-label="Collapse sidebar"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
