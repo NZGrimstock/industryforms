@@ -6,6 +6,12 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **Apply `20260816100000_credit_notes.sql` to production** with
+  `supabase db push --linked`, then do one real click-through: credit a real
+  invoice both ways (Stripe refund, account credit), apply account credit to
+  a draft invoice for the same customer, and sync a credit note + its
+  allocation to Xero if connected. See `CREDIT_NOTES.md` for what's already
+  verified vs not.
 - **Apply `20260815100000_lock_job_once_fully_invoiced.sql` to production**
   with `supabase db push --linked`. Verified against real local Postgres
   (12-case pass, see 2026-08-15 session entry) but not yet applied remotely.
@@ -179,6 +185,95 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-16 (Claude, pt.2) — Mobile visitors nudged toward the Android app on signup/login
+
+Marketing site CTAs ("Start Free Trial") all point straight at
+`app.industryforms.app/signup`, so a phone visitor clicking through was
+signing up in the web app's desktop-shaped form with zero indication a real
+app exists. New `components/mobile-app-nudge.tsx`, dropped into `/signup`
+and `/login`.
+
+**Pure CSS (`md:hidden`), no user-agent sniffing, no client JS for
+detection** — the same responsive convention already used everywhere in this
+codebase (sidebar collapse, etc.). Viewport width is a reliable enough proxy
+here since nothing about this feature needs to distinguish device *type*,
+only screen size.
+
+**Deliberately not a hard block or auto-redirect.** Initial company setup
+(price list, business settings) is genuinely a desktop-shaped task even for
+an owner who'll live in the phone app day-to-day, and blocking or bouncing a
+mobile visitor away from signup would cost real conversions over device
+friction — contradicts the "no pushy sales tactics" positioning already
+established for this product (`PROJECT_BRIEF.md`). It tells, doesn't gate:
+Android Play Store link, honest "iPhone app is coming soon" note (matches
+the marketing site's own existing framing), and the form underneath still
+works if they'd rather continue on the phone.
+
+Verified live in a real browser at both breakpoints (375px and desktop),
+not just typechecked — banner renders correctly on `/signup` at mobile
+width, confirmed absent on `/login` at desktop width.
+
+## Session 2026-08-16 (Claude) — Credit notes: refund or account credit, applied to a future invoice
+
+Full design in `CREDIT_NOTES.md` — this is the summary. Two scope questions
+were asked up front (refund-vs-account-credit choice, and whether to push
+real Xero Credit Notes) since the two readings would have produced very
+different code on a money-critical feature; user picked the fuller option
+both times, so this shipped as a genuinely complete feature, not a stub.
+
+**New tables**: `credit_notes`, `credit_note_applications` (a join table,
+since one credit note can be split across several future invoices and one
+invoice can draw from several credit notes). Reuses the existing generic
+`assign_doc_number()` trigger for `CN-0001`-style numbering rather than a
+bespoke counter — same pattern quotes/invoices/jobs/POs already use.
+Deliberately **not** added to `sync-rules.yaml`/PowerSync: invoices are
+already owner/admin-only and staff devices never sync quotes/invoices at
+all, so there's no mobile audience for this feature, and skipping sync
+entirely sidesteps the publication/backfill trap this project has hit twice.
+
+**A real gotcha, found only by inserting against real Postgres**:
+`doc_counters.kind` carries its own inline whitelist check constraint,
+completely separate from the generic numbering trigger, which gave no hint
+it existed. Every insert into `credit_notes` hard-failed until the migration
+also widened that constraint. Documented in root `CLAUDE.md` under "Adding a
+new document type" so the next new document type doesn't hit the same wall
+blind.
+
+**Money mechanics**: `lib/credit-notes.ts` — `maxCreditableAmount` (can't
+credit more than an invoice was ever billed), `maxRefundableAmount`
+(refunding is separately bounded by what actually went through Stripe on
+that invoice — a bank-transfer payment has nothing to reverse), and FIFO
+allocation across a customer's active credit notes when applying credit
+later. All amounts are GST-inclusive throughout, matching `invoice.total`
+and what a Stripe refund actually moves.
+
+**Xero**: pushes a real `ACCRECCREDIT` Credit Note (not a negative invoice —
+the accounting-correct document type), and best-effort pushes an Allocation
+when credit is applied, if both sides are already synced. Both manual
+actions, matching how this app has never auto-synced anything to Xero.
+
+**Applying credit is draft-only** — reuses the existing "Revert to draft"
+escape hatch rather than growing a second unlock path, since
+`invoice_line_items` are already locked to draft-only at the RLS layer.
+
+**Found and flagged, not fixed**: `app/api/bookings/refund/route.ts` doesn't
+pass `connectOptions(company)` to its Stripe refund call, unlike every
+PaymentIntent-creating route in this app. If a booking deposit was ever
+collected as a direct charge, refunding it would fail with "No such
+payment_intent" — the exact bug class root-caused in the 2026-08-12 Tap to
+Pay session. Out of scope for this pass; spawned as a background task
+(`task_8b53ec2c`) rather than silently fixed or silently ignored.
+
+**Verified against real local Postgres** (not just typechecked): sequential
+per-company `CN-` numbering, independent counters per company, both check
+constraints (`amount_applied <= amount`; a `refund` note can't carry
+`amount_applied > 0`) firing correctly, and confirmed a failed insert
+doesn't burn a document number. `tsc`/`eslint` clean; new
+`scripts/check-credit-notes.mjs` covers every boundary in the pure math.
+**Not verified**: an actual Stripe refund call and an actual Xero
+CreditNote/Allocation push — both need a live sandbox this session doesn't
+have. `supabase db push --linked` still owed.
 
 ## Session 2026-08-15 (Claude) — Lock a job once it's invoiced in full
 

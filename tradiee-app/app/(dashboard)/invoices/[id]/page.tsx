@@ -13,6 +13,8 @@ import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { RevertToJobButton } from '@/components/invoices/revert-to-job-button'
 import { InvoiceLinesProvider, InvoiceLinesCard, type InvoiceLine } from '@/components/invoices/invoice-lines'
+import { CreditNotesCard } from './credit-notes-card'
+import { maxCreditableAmount, maxRefundableAmount, availableCreditBalance } from '@/lib/credit-notes'
 import { Mail } from 'lucide-react'
 import Link from 'next/link'
 
@@ -31,10 +33,15 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
 
   if (!invoice) notFound()
 
-  const [priceItemsRes, kitsRes, { data: invoiceList }] = await Promise.all([
+  const [priceItemsRes, kitsRes, { data: invoiceList }, { data: creditNotesOnThisInvoice }, { data: customerCreditNotes }] = await Promise.all([
     supabase.from('price_list_items').select('id, code, name, unit, sell_price, cost_price, type, quantity_on_hand, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*, customer_group_prices(customer_group_id, sell_price)))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('invoices').select('id').eq('company_id', profile!.company_id).order('invoice_number'),
+    supabase.from('credit_notes').select('id, credit_note_number, amount, outcome, status, reason, external_id, created_at').eq('source_invoice_id', id).order('created_at', { ascending: false }),
+    // Every credit note issued for THIS customer, not just this invoice — this
+    // drives the "apply available credit" affordance below, which is a
+    // customer-account balance, not an invoice-scoped one.
+    supabase.from('credit_notes').select('amount, amount_applied, outcome, status').eq('customer_id', invoice.customer_id).eq('outcome', 'account_credit').neq('status', 'void'),
   ])
 
   const invoiceIdx = (invoiceList ?? []).findIndex(i => i.id === id)
@@ -42,6 +49,16 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const nextInvoiceHref = invoiceIdx >= 0 && invoiceIdx < (invoiceList?.length ?? 0) - 1 ? `/invoices/${invoiceList![invoiceIdx + 1].id}` : null
 
   const lines = [...(invoice.invoice_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+
+  const liveCreditsOnThisInvoice = (creditNotesOnThisInvoice ?? []).filter(c => c.status !== 'void')
+  const alreadyCredited = liveCreditsOnThisInvoice.reduce((s, c) => s + Number(c.amount), 0)
+  const creditable = maxCreditableAmount(Number(invoice.total), alreadyCredited)
+  const stripePaidTotal = ((invoice.payments ?? []) as Array<{ amount: number; method: string; stripe_payment_intent_id: string | null }>)
+    .filter(p => p.method === 'stripe' && p.stripe_payment_intent_id)
+    .reduce((s, p) => s + Number(p.amount), 0)
+  const alreadyRefunded = liveCreditsOnThisInvoice.filter(c => c.outcome === 'refund').reduce((s, c) => s + Number(c.amount), 0)
+  const refundable = maxRefundableAmount(stripePaidTotal, alreadyRefunded)
+  const availableCustomerCredit = availableCreditBalance((customerCreditNotes ?? []) as Parameters<typeof availableCreditBalance>[0])
   const co = profile?.companies as unknown as {name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null; logo_url: string | null} | null
   const gstRate = co?.default_gst_rate ?? 0.15
   const xeroConnected = !!co?.xero_tenant_id
@@ -111,6 +128,9 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               printData={printData}
               priceItems={priceItemsRes.data ?? []}
               kits={kitsRes.data ?? []}
+              creditable={creditable}
+              refundable={refundable}
+              availableCustomerCredit={availableCustomerCredit}
             />
           </div>
           <SaveInvoiceTemplateButton invoiceId={invoice.id} defaultName={invoice.reference || invoice.invoice_number} />
@@ -124,6 +144,9 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           invoiceId={invoice.id}
           initial={{ isRecurring: !!invoice.is_recurring, rule: invoice.recurrence_rule ?? null, next: invoice.recurrence_next ?? null, end: invoice.recurrence_end ?? null }}
         />
+
+        {/* Credits — only rendered when there's something to show */}
+        <CreditNotesCard creditNotes={creditNotesOnThisInvoice ?? []} xeroConnected={xeroConnected} />
 
         {/* Payments */}
         {(invoice.payments ?? []).length > 0 && (

@@ -45,11 +45,17 @@ interface Props {
   printData: InvoicePdfData
   priceItems?: PriceItem[]
   kits?: Kit[]
+  /** How much of this invoice can still be credited (invoice.total minus already-credited, floored at 0). */
+  creditable?: number
+  /** How much of this invoice was actually paid via Stripe and so can be refunded that way. */
+  refundable?: number
+  /** This customer's spendable account-credit balance, across every invoice — drives "Apply account credit". */
+  availableCustomerCredit?: number
 }
 
-type Dialog = 'line' | 'payment' | 'discount' | null
+type Dialog = 'line' | 'payment' | 'discount' | 'credit' | 'applyCredit' | null
 
-export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected, printData, priceItems = [], kits = [] }: Props) {
+export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesIncludeTax = false, xeroConnected, printData, priceItems = [], kits = [], creditable = 0, refundable = 0, availableCustomerCredit = 0 }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -80,6 +86,8 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   }
   const [paymentForm, setPaymentForm] = useState({ amount: (invoice.total - invoice.amount_paid).toString(), method: 'bank_transfer', notes: '' })
   const [discountForm, setDiscountForm] = useState({ value: (invoice.discount_value || 0).toString(), type: (invoice.discount_type ?? 'amount') as 'amount' | 'percent' })
+  const [creditForm, setCreditForm] = useState({ amount: creditable.toFixed(2), outcome: (refundable > 0 ? 'refund' : 'account_credit') as 'refund' | 'account_credit', reason: '' })
+  const [applyCreditAmount, setApplyCreditAmount] = useState(() => Math.min(availableCustomerCredit, invoice.total).toFixed(2))
 
   // Company-configured payment methods (fall back to built-ins when none set).
   const DEFAULT_METHODS = [
@@ -345,6 +353,48 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     setLoading(false)
   }
 
+  async function creditInvoice(e: React.FormEvent) {
+    e.preventDefault()
+    const amount = parseFloat(creditForm.amount) || 0
+    if (amount <= 0) { toast('Enter an amount to credit', 'error'); return }
+    setLoading(true)
+    const res = await fetch(`/api/invoices/${invoice.id}/credit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, outcome: creditForm.outcome, reason: creditForm.reason || undefined }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setLoading(false)
+    if (!res.ok) { toast(data.error ?? 'Could not credit this invoice', 'error'); return }
+    toast(creditForm.outcome === 'refund' ? 'Refunded via Stripe' : 'Account credit issued')
+    setActiveDialog(null)
+    router.refresh()
+  }
+
+  // Applies the customer's available account credit to THIS invoice — only
+  // reachable while draft (see apply-credit route header for why). A negative
+  // line item is what the server inserts; there is nothing for this client to
+  // update itself, unlike addSundries/recompute, since the amount touches
+  // more than one table (credit_note_applications + credit_notes.amount_applied)
+  // and belongs entirely to the server route.
+  async function applyCredit(e: React.FormEvent) {
+    e.preventDefault()
+    const amount = parseFloat(applyCreditAmount) || 0
+    if (amount <= 0) { toast('Enter an amount to apply', 'error'); return }
+    setLoading(true)
+    const res = await fetch(`/api/invoices/${invoice.id}/apply-credit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setLoading(false)
+    if (!res.ok) { toast(data.error ?? 'Could not apply credit', 'error'); return }
+    toast(`${formatCurrency(data.applied)} account credit applied`)
+    setActiveDialog(null)
+    router.refresh()
+  }
+
   async function sendEmail() {
     setLoading(true)
     const res = await fetch('/api/email/invoice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invoiceId: invoice.id }) })
@@ -413,6 +463,11 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   const canRevertToDraft = !isDraft && Number(invoice.amount_paid) === 0
 
   const canComplete = isDraft || canSendEmail || canSendText
+  // Crediting is for an invoice the customer has actually been issued —
+  // draft/void are excluded server-side too (the route 400s), this just
+  // keeps the button from appearing where it can never succeed.
+  const canCredit = !isDraft && invoice.status !== 'void' && creditable > 0.01
+  const canApplyCredit = isDraft && availableCustomerCredit > 0.01
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -424,6 +479,11 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
           <DropdownItem icon={<Plus />} onClick={addSundries}>Sundries</DropdownItem>
           <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('discount')}>{invoice.discount_amount > 0 ? 'Edit discount' : 'Discount'}</DropdownItem>
           <DropdownItem icon={<Briefcase />} disabled={!invoice.job_id} onClick={createFromJob}>From job</DropdownItem>
+          {canApplyCredit && (
+            <DropdownItem icon={<Tag />} onClick={() => setActiveDialog('applyCredit')}>
+              Apply account credit ({formatCurrency(availableCustomerCredit)} available)
+            </DropdownItem>
+          )}
         </Dropdown>
       )}
 
@@ -434,6 +494,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
 
       {xeroConnected && <Button variant="outline" size="sm" loading={loading} onClick={syncToXero}><RefreshCw className="h-4 w-4" />{invoice.external_id ? 'Re-sync Xero' : 'Sync to Xero'}</Button>}
       {canPay && <Button size="sm" onClick={() => setActiveDialog('payment')}><DollarSign className="h-4 w-4" /> Record payment</Button>}
+      {canCredit && <Button variant="outline" size="sm" onClick={() => setActiveDialog('credit')}><Tag className="h-4 w-4" /> Credit invoice</Button>}
       {canRevertToDraft && <Button variant="outline" size="sm" loading={loading} onClick={revertToDraft}><Undo2 className="h-4 w-4" /> Revert to draft</Button>}
       {isDraft && <Button variant="ghost" size="sm" onClick={deleteInvoice}><Trash2 className="h-4 w-4 text-red-400" /></Button>}
 
@@ -524,6 +585,43 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
           </div>
           <div><Label>Notes</Label><Input value={paymentForm.notes} onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))} /></div>
           <div className="flex gap-3"><Button type="submit" loading={loading}>Record payment</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
+        </form>
+      </Dialog>
+
+      <Dialog open={activeDialog === 'credit'} onClose={() => setActiveDialog(null)} title="Credit invoice">
+        <form onSubmit={creditInvoice} className="space-y-4">
+          <p className="text-sm text-gray-500">Up to {formatCurrency(creditable)} of this invoice can still be credited.</p>
+          <div><Label>Amount <span className="text-red-400">*</span></Label><Input type="number" min="0.01" max={creditable} step="0.01" value={creditForm.amount} onChange={e => setCreditForm(f => ({ ...f, amount: e.target.value }))} required /></div>
+          <div>
+            <Label>Outcome</Label>
+            <Select
+              value={creditForm.outcome}
+              onChange={e => setCreditForm(f => ({ ...f, outcome: e.target.value as 'refund' | 'account_credit' }))}
+              options={[
+                ...(refundable > 0.01 ? [{ value: 'refund', label: `Refund via Stripe (up to ${formatCurrency(refundable)})` }] : []),
+                { value: 'account_credit', label: 'Account credit — applied to a future invoice' },
+              ]}
+            />
+            {refundable <= 0.01 && (
+              <p className="text-xs text-gray-400 mt-1">Nothing on this invoice was paid via Stripe, so a Stripe refund isn&apos;t possible — only account credit is available.</p>
+            )}
+            {creditForm.outcome === 'refund' && (
+              <p className="text-xs text-gray-400 mt-1">Money moves immediately via Stripe. This can&apos;t be undone from here.</p>
+            )}
+            {creditForm.outcome === 'account_credit' && (
+              <p className="text-xs text-gray-400 mt-1">No money moves now — the customer gets a balance to apply to their next invoice.</p>
+            )}
+          </div>
+          <div><Label>Reason (optional)</Label><Input value={creditForm.reason} onChange={e => setCreditForm(f => ({ ...f, reason: e.target.value }))} placeholder="e.g. overcharged, work not completed" /></div>
+          <div className="flex gap-3"><Button type="submit" loading={loading}>{creditForm.outcome === 'refund' ? 'Refund' : 'Issue credit'}</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
+        </form>
+      </Dialog>
+
+      <Dialog open={activeDialog === 'applyCredit'} onClose={() => setActiveDialog(null)} title="Apply account credit">
+        <form onSubmit={applyCredit} className="space-y-4">
+          <p className="text-sm text-gray-500">This customer has {formatCurrency(availableCustomerCredit)} available. It&apos;ll be added as a negative line item.</p>
+          <div><Label>Amount to apply <span className="text-red-400">*</span></Label><Input type="number" min="0.01" max={Math.min(availableCustomerCredit, invoice.total)} step="0.01" value={applyCreditAmount} onChange={e => setApplyCreditAmount(e.target.value)} required /></div>
+          <div className="flex gap-3"><Button type="submit" loading={loading}>Apply credit</Button><Button type="button" variant="outline" onClick={() => setActiveDialog(null)}>Cancel</Button></div>
         </form>
       </Dialog>
     </div>

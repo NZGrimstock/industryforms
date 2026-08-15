@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
+import { MobileAppNudge } from '@/components/mobile-app-nudge'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -63,6 +64,7 @@ export default function LoginPage() {
         <div className="flex justify-center mb-8">
           <Image src="/Logo.png" alt="IndustryForms" width={200} height={109} className="object-contain h-14 w-auto" />
         </div>
+        <MobileAppNudge />
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           {mfaFactorId ? (
             <>

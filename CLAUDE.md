@@ -38,6 +38,18 @@ published.
 Prefer reusing an already-synced table over adding a new one — it skips all of
 the above. See `JOB_MESSAGING_SCOPE.md` for a worked example.
 
+## Adding a new document type (quote/invoice/job/po/...-style numbering)
+
+`doc_counters.kind` has its own inline whitelist check constraint
+(`kind in ('quote','invoice','job','po', ...)`, `20260716120000_unique_doc_numbers.sql`)
+**separate from** the generic `assign_doc_number()` trigger function, which is
+fully generic and gives no hint the whitelist exists. Reusing that trigger for
+a new document type (e.g. credit notes, `20260816100000_credit_notes.sql`)
+needs its own migration statement widening this constraint, or every insert
+hard-fails with a check-constraint error that looks unrelated to numbering.
+Found by actually inserting a row against real Postgres, not by reading the
+trigger.
+
 Mobile queries reading a newly-added column must tolerate `NULL` for it: a
 device can sit offline for days holding pre-migration rows.
 

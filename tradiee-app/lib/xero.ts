@@ -177,3 +177,84 @@ export async function syncInvoiceToXero({
 
   return res.Invoices?.[0]?.InvoiceID as string | undefined
 }
+
+// Pushes a credit note as a Xero ACCRECCREDIT (Accounts Receivable Credit
+// Note) — the accounting-correct counterpart to ACCREC invoices, distinct
+// from a plain negative invoice. Manually triggered from the credit note's
+// own "Sync to Xero" action, same as syncInvoiceToXero — this app never
+// auto-syncs to Xero in the background.
+//
+// A single line item ("Credit note reference: <source invoice number>")
+// rather than copying the source invoice's line items — the credit note
+// isn't crediting specific goods/services, it's crediting an amount, and a
+// single line keeps that unambiguous in Xero's UI.
+export async function syncCreditNoteToXero({ accessToken, tenantId, creditNote, customer, gstRate }: {
+  accessToken: string
+  tenantId: string
+  creditNote: {
+    id: string
+    credit_note_number: string
+    external_id?: string | null
+    date: string | null
+    amount: number
+    source_invoice_number: string
+    reason: string | null
+  }
+  customer: { name: string; email: string | null }
+  gstRate: number
+}): Promise<string | undefined> {
+  const contactId = await findOrCreateXeroContact(tenantId, accessToken, customer)
+  const taxRates = await loadXeroTaxTypesByRate(tenantId, accessToken)
+
+  const xeroCreditNote = {
+    ...(creditNote.external_id ? { CreditNoteID: creditNote.external_id } : {}),
+    Type: 'ACCRECCREDIT',
+    Contact: { ContactID: contactId },
+    CreditNoteNumber: creditNote.credit_note_number,
+    Date: creditNote.date ? creditNote.date.split('T')[0] : undefined,
+    LineAmountTypes: 'INCLUSIVE', // creditNote.amount is GST-inclusive, the customer-facing figure
+    LineItems: [{
+      Description: creditNote.reason
+        ? `Credit note: ${creditNote.reason} (ref. invoice ${creditNote.source_invoice_number})`
+        : `Credit note (ref. invoice ${creditNote.source_invoice_number})`,
+      Quantity: 1,
+      UnitAmount: Number(creditNote.amount),
+      TaxType: pickXeroTaxType(taxRates, gstRate * 100),
+    }],
+    Reference: creditNote.id,
+  }
+
+  const res = await xeroRequest('/CreditNotes', tenantId, accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ CreditNotes: [xeroCreditNote] }),
+  })
+
+  return res.CreditNotes?.[0]?.CreditNoteID as string | undefined
+}
+
+// Allocates a portion of an already-synced Xero credit note against an
+// already-synced Xero invoice — the Xero-native equivalent of a
+// credit_note_applications row. Both sides must already have a Xero
+// InvoiceID/CreditNoteID; the caller checks this and skips the Xero side
+// (while still recording the application locally) when either is missing —
+// applying account credit shouldn't be blocked on both documents happening
+// to already be synced.
+export async function allocateXeroCreditNote({ accessToken, tenantId, xeroCreditNoteId, xeroInvoiceId, amount, date }: {
+  accessToken: string
+  tenantId: string
+  xeroCreditNoteId: string
+  xeroInvoiceId: string
+  amount: number
+  date: string
+}): Promise<void> {
+  await xeroRequest(`/CreditNotes/${xeroCreditNoteId}/Allocations`, tenantId, accessToken, {
+    method: 'PUT',
+    body: JSON.stringify({
+      Allocations: [{
+        Invoice: { InvoiceID: xeroInvoiceId },
+        Amount: amount,
+        Date: date.split('T')[0],
+      }],
+    }),
+  })
+}

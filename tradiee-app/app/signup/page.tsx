@@ -5,6 +5,7 @@ import { Wrench, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/browser'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
+import { MobileAppNudge } from '@/components/mobile-app-nudge'
 
 export default function SignupPage() {
   const [loading, setLoading] = useState(false)
@@ -95,6 +96,7 @@ export default function SignupPage() {
           </div>
           <span className="text-xl font-bold text-gray-900">IndustryForms</span>
         </div>
+        <MobileAppNudge />
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <h1 className="text-lg font-semibold text-gray-900 mb-1">Create your account</h1>
           <p className="text-sm text-gray-500 mb-6">Free 28-day trial, no credit card required.</p>

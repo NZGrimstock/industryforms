@@ -76,6 +76,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     invoice_prefix: (company as Company & { invoice_prefix?: string }).invoice_prefix ?? 'INV-',
     job_prefix: (company as Company & { job_prefix?: string }).job_prefix ?? 'J-',
     po_prefix: (company as Company & { po_prefix?: string }).po_prefix ?? 'PO-',
+    credit_note_prefix: (company as Company & { credit_note_prefix?: string }).credit_note_prefix ?? 'CN-',
     prices_include_tax: (company as Company & { prices_include_tax?: boolean }).prices_include_tax ?? false,
     payment_instructions: (company as Company & { payment_instructions?: string }).payment_instructions ?? '',
     invoice_footer: (company as Company & { invoice_footer?: string }).invoice_footer ?? '',
@@ -562,6 +563,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                   <div><span className="text-xs text-gray-400">Invoices</span><Input value={companyForm.invoice_prefix} onChange={e => setC('invoice_prefix', e.target.value)} /></div>
                   <div><span className="text-xs text-gray-400">Jobs</span><Input value={companyForm.job_prefix} onChange={e => setC('job_prefix', e.target.value)} /></div>
                   <div><span className="text-xs text-gray-400">Purchase orders</span><Input value={companyForm.po_prefix} onChange={e => setC('po_prefix', e.target.value)} /></div>
+                  <div><span className="text-xs text-gray-400">Credit notes</span><Input value={companyForm.credit_note_prefix} onChange={e => setC('credit_note_prefix', e.target.value)} /></div>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Applied to newly created documents, e.g. {companyForm.quote_prefix}0001.</p>
               </div>
