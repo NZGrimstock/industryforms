@@ -114,7 +114,11 @@ export function ProgressClaims({
       gst,
       total,
       amount_paid: 0,
-      due_date: claim.due_date ?? new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
+      // due_date deliberately omitted — the compute_invoice_due_date() trigger
+      // fills it from the customer's/company's payment terms. claim.due_date
+      // is a different thing (when this claim milestone is due), not the
+      // invoice's payment due date; setting it here silently overrode
+      // whatever payment terms were actually configured.
       notes: `Progress claim: ${claim.name}`,
     }).select('id').single()
 

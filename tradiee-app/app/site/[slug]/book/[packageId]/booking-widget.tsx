@@ -29,34 +29,35 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
   // Some payment methods force a real top-level redirect (e.g. a 3D Secure
   // challenge) despite confirmPayment's redirect: 'if_required' — a full page
   // reload wipes all component state (bookingId, depositAmount, the mounted
-  // Payment Element), so recover what's needed from the URL instead of
-  // silently restarting the whole booking wizard from the slot picker with
-  // no acknowledgment of whether the deposit actually went through.
+  // Payment Element), so recover what's needed instead of silently
+  // restarting the whole booking wizard from the slot picker with no
+  // acknowledgment of whether the deposit actually went through.
+  //
+  // bookingId/amount/status come from /api/bookings/resolve-deposit-intent,
+  // not from URL params — a page can be reloaded with any query string an
+  // attacker likes, so trusting params here could resume payment against a
+  // booking that isn't actually the one this browser holds. Stripe.js also
+  // doesn't expose PaymentIntent.metadata client-side even with the real
+  // clientSecret, so this has to go through the server either way, which
+  // resolves it from Stripe's own record via the id Stripe appended.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const clientSecret = params.get('payment_intent_client_secret')
-    if (!clientSecret) return
+    const paymentIntentId = params.get('payment_intent')
+    if (!paymentIntentId) return
     const stripeAccountId = params.get('sa')
-    const returnedBookingId = params.get('bk')
-    const returnedDepositAmount = params.get('da')
 
     ;(async () => {
-      if (returnedBookingId) setBookingId(returnedBookingId)
-      if (returnedDepositAmount) setDepositAmount(Number(returnedDepositAmount))
-
-      const { loadStripe } = await import('@stripe/stripe-js')
-      const stripe = await loadStripe(
-        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-        stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
-      )
       window.history.replaceState(null, '', window.location.pathname)
-      if (!stripe) { setError('Stripe failed to load'); setStep('error'); return }
+      const qs = new URLSearchParams({ pi: paymentIntentId, ...(stripeAccountId ? { sa: stripeAccountId } : {}) })
+      const res = await fetch(`/api/bookings/resolve-deposit-intent?${qs}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Could not confirm payment status'); setStep('error'); return }
 
-      const { paymentIntent, error: piError } = await stripe.retrievePaymentIntent(clientSecret)
-      if (piError || !paymentIntent) { setError(piError?.message ?? 'Could not confirm payment status'); setStep('error'); return }
+      setBookingId(data.bookingId)
+      setDepositAmount(data.amount / 100)
 
-      if (paymentIntent.status === 'succeeded') { setFinalStatus('confirmed'); setStep('done') }
-      else if (paymentIntent.status === 'processing') setStep('pending')
+      if (data.status === 'succeeded') { setFinalStatus('confirmed'); setStep('done') }
+      else if (data.status === 'processing') setStep('pending')
       // Anything else (requires_payment_method, canceled, …) — re-enter the
       // deposit step so the payDeposit() effect below fires again; it reuses
       // the same open PaymentIntent rather than creating a fresh one.
@@ -163,13 +164,12 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
       const elements = elementsRef.current
       if (!stripe || !elements) throw new Error('Payment form not ready')
 
-      // Carries what's needed to resume on the redirect-return effect above
-      // (a full page reload wipes bookingId/depositAmount/stripeAccountId,
-      // none of which are otherwise recoverable from a fresh page load).
+      // Carries the connected account id needed to reload Stripe.js correctly
+      // on the redirect-return effect above — bookingId/depositAmount are
+      // recovered from the PaymentIntent itself there instead, not from URL
+      // params (see that effect's comment for why).
       const returnUrl = new URL(window.location.href)
-      if (bookingId) returnUrl.searchParams.set('bk', bookingId)
       if (stripeAccountIdRef.current) returnUrl.searchParams.set('sa', stripeAccountIdRef.current)
-      returnUrl.searchParams.set('da', String(depositAmount))
 
       const { error } = await stripe.confirmPayment({
         elements, redirect: 'if_required', confirmParams: { return_url: returnUrl.toString() },

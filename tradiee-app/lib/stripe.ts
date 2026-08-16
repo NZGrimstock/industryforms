@@ -35,10 +35,13 @@ export function connectOptions(company: ConnectCompany | null | undefined): Stri
   return undefined
 }
 
-// PaymentIntents that can still be paid — anything else (succeeded, canceled)
-// is terminal and needs a fresh PaymentIntent.
+// PaymentIntents safe to hand back for a fresh confirmation attempt.
+// Deliberately excludes 'processing' — Stripe rejects confirming a
+// PaymentIntent that's already processing, so reusing one there would hand
+// the client a clientSecret that's guaranteed to fail on submit. Anything
+// terminal (succeeded, canceled) needs a fresh PaymentIntent regardless.
 const OPEN_PAYMENT_INTENT_STATUSES: Stripe.PaymentIntent.Status[] = [
-  'requires_payment_method', 'requires_confirmation', 'requires_action', 'processing',
+  'requires_payment_method', 'requires_confirmation', 'requires_action',
 ]
 
 // Reuse an already-open PaymentIntent instead of creating a new one on every
