@@ -218,10 +218,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // deliberately (see lib/job-financials.ts comment) rather than duplicated
   // ad hoc, since the DB trigger (migration 20260815100000) enforces the real
   // lock; this is only for the UI banner and disabling the unlock toggle.
-  // NB: the DB trigger only locks jobs with a quote (job_is_locked() returns
-  // false when quote_total is null), so a quote-less job's jobSourcedCeiling
-  // above can never cause a lock the database won't also apply for real.
-  const jobLocked = invoiceGuard({ jobTotal: financialJobTotal, alreadyInvoiced: financialInvoiced, subtotal: 0 }) === 'fully-invoiced'
+  // Uses jobQuote?.total directly, NOT financialJobTotal — job_is_locked()
+  // only ever locks a job that has a quote (returns false when quote_total is
+  // null), so this must mirror that exactly rather than the job-sourced
+  // fallback above, or a quote-less job could show a "locked" banner the
+  // database was never going to enforce.
+  const jobLocked = invoiceGuard({ jobTotal: jobQuote?.total ?? 0, alreadyInvoiced: financialInvoiced, subtotal: 0 }) === 'fully-invoiced'
     && !job.invoice_lock_override
   const jobFinancialStats: FinancialStat[] = [
     { label: 'Job total', value: financialJobTotal },
