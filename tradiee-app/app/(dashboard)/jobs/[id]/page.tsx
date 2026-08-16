@@ -12,6 +12,7 @@ import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard } from '@/lib/job-financials'
+import { round2 } from '@/lib/pricing'
 import { JobDetailClient } from './client'
 import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
@@ -122,7 +123,41 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
 
-  // Job costing: estimated from quote, actual from timesheets + invoices
+  // Actual line items for "invoice from actuals" (logged materials + billable
+  // labour) — computed early because it now also backs "Job total" for a job
+  // with no quote (see below): the total must come from the job itself, not
+  // require a quote that may never exist for a time-and-materials job.
+  const actualMaterialLines = (materialsRes.data ?? [])
+    .filter(m => Number(m.unit_price) > 0)
+    .map(m => ({
+      description: m.description as string,
+      quantity: Number(m.quantity),
+      unit: (m.unit as string) ?? 'each',
+      unit_price: Number(m.unit_price),
+      type: 'material' as const,
+    }))
+  // Group billable timesheet hours by bill rate (net of breaks)
+  const labourByRate = new Map<number, number>()
+  for (const t of timesheetsRes.data ?? []) {
+    if (!t.is_billable || !t.bill_rate || !t.ended_at) continue
+    const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000 - Number(t.break_minutes ?? 0) / 60
+    if (hrs <= 0) continue
+    labourByRate.set(Number(t.bill_rate), (labourByRate.get(Number(t.bill_rate)) ?? 0) + hrs)
+  }
+  const actualLabourLines = [...labourByRate.entries()].map(([rate, hrs]) => ({
+    description: 'Labour',
+    quantity: Math.round(hrs * 100) / 100,
+    unit: 'hr',
+    unit_price: rate,
+    type: 'labour' as const,
+  }))
+  const actualLines = [...actualMaterialLines, ...actualLabourLines]
+  const actualTotal = actualLines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0)
+
+  // Job costing: estimated from the quote when the job has one; otherwise
+  // from the job's own logged materials + billable labour (actualTotal) —
+  // a quote-less time-and-materials job still has a real total once work is
+  // logged against it, it just isn't a pre-agreed ceiling.
   let estimatedSubtotal = 0
   let quoteLineItems: Array<{ description: string; quantity: number; unit: string; unit_price: number; line_total: number }> = []
   let quoteFillLines: Array<{ description: string; quantity: number; unit: string; unit_cost: number; unit_price: number; type: string; price_list_item_id: string | null }> = []
@@ -150,6 +185,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     // line_total is already tax-extracted at quote-save time regardless of
     // entry mode, so summing it is the only way this stays GST-exclusive.
     estimatedSubtotal = (qLines ?? []).reduce((sum, l) => sum + Number(l.line_total), 0)
+  } else {
+    estimatedSubtotal = actualTotal
   }
   const actualLabour = (timesheetsRes.data ?? []).reduce((sum, t) => {
     if (!t.is_billable || !t.bill_rate || !t.ended_at) return sum
@@ -169,15 +206,21 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // At-a-glance financial box (top of page) — distinct from the Job Costing
   // card further down: this excludes void invoices (summarizeInvoices) and
   // compares against the quote's GST-inclusive total, not the excl.-GST
-  // estimate the costing card uses.
+  // estimate the costing card uses. For a quote-less job, fall back to the
+  // same job-sourced estimate (converted to GST-inclusive) rather than $0 —
+  // "Job total" must come from the job, not require a quote.
   const jobQuote = job.quotes as unknown as { quote_number: string; total: number; is_estimate: boolean } | null
+  const jobSourcedCeiling = job.quote_id ? undefined : (actualTotal > 0 ? round2(actualTotal * (1 + gstRate)) : undefined)
   const { invoiced: financialInvoiced, paid: financialPaid, outstanding: financialOutstanding } = summarizeInvoices(invoicesRes.data ?? [])
-  const financialJobTotal = jobTotal(jobQuote?.total, financialInvoiced)
+  const financialJobTotal = jobTotal(jobQuote?.total ?? jobSourcedCeiling, financialInvoiced)
   const financialToInvoice = toInvoice(financialJobTotal, financialInvoiced)
   // Same predicate as invoiceGuard()'s 'fully-invoiced' branch — kept in sync
   // deliberately (see lib/job-financials.ts comment) rather than duplicated
   // ad hoc, since the DB trigger (migration 20260815100000) enforces the real
   // lock; this is only for the UI banner and disabling the unlock toggle.
+  // NB: the DB trigger only locks jobs with a quote (job_is_locked() returns
+  // false when quote_total is null), so a quote-less job's jobSourcedCeiling
+  // above can never cause a lock the database won't also apply for real.
   const jobLocked = invoiceGuard({ jobTotal: financialJobTotal, alreadyInvoiced: financialInvoiced, subtotal: 0 }) === 'fully-invoiced'
     && !job.invoice_lock_override
   const jobFinancialStats: FinancialStat[] = [
@@ -197,34 +240,6 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     ? [...liveInvoices].sort((a, b) => String(b.invoice_number).localeCompare(String(a.invoice_number)))
         .map(i => ({ id: i.id as string, invoice_number: i.invoice_number as string }))[0]
     : null
-
-  // Actual line items for "invoice from actuals" (logged materials + billable labour)
-  const actualMaterialLines = (materialsRes.data ?? [])
-    .filter(m => Number(m.unit_price) > 0)
-    .map(m => ({
-      description: m.description as string,
-      quantity: Number(m.quantity),
-      unit: (m.unit as string) ?? 'each',
-      unit_price: Number(m.unit_price),
-      type: 'material' as const,
-    }))
-  // Group billable timesheet hours by bill rate (net of breaks)
-  const labourByRate = new Map<number, number>()
-  for (const t of timesheetsRes.data ?? []) {
-    if (!t.is_billable || !t.bill_rate || !t.ended_at) continue
-    const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000 - Number(t.break_minutes ?? 0) / 60
-    if (hrs <= 0) continue
-    labourByRate.set(Number(t.bill_rate), (labourByRate.get(Number(t.bill_rate)) ?? 0) + hrs)
-  }
-  const actualLabourLines = [...labourByRate.entries()].map(([rate, hrs]) => ({
-    description: 'Labour',
-    quantity: Math.round(hrs * 100) / 100,
-    unit: 'hr',
-    unit_price: rate,
-    type: 'labour' as const,
-  }))
-  const actualLines = [...actualMaterialLines, ...actualLabourLines]
-  const actualTotal = actualLines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0)
 
   const co = profile?.companies as { name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
