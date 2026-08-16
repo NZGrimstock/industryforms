@@ -4,7 +4,8 @@ import { CreditCard, Loader2, CheckCircle } from 'lucide-react'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
 export function PayNowButton({ token, amountDue }: { token: string; amountDue: number }) {
-  const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'processing' | 'done' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'done' | 'error'>('idle')
+  const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const stripeRef = useRef<Stripe | null>(null)
   const elementsRef = useRef<StripeElements | null>(null)
@@ -55,7 +56,13 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
   }, [step])
 
   async function submitPayment() {
-    setStep('processing')
+    // Deliberately does NOT setStep() away from 'form' before confirming —
+    // that would unmount #stripe-payment-element (only the 'form' branch
+    // renders it), firing the mount effect's cleanup and tearing down the
+    // Payment Element while confirmPayment() is still awaiting it. submitting
+    // only disables the button; the form (and its mounted element) stays put
+    // until the confirm call actually resolves.
+    setSubmitting(true)
     try {
       const stripe = stripeRef.current
       const elements = elementsRef.current
@@ -72,6 +79,8 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Payment failed')
       setStep('error')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -100,12 +109,13 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
         <div className="flex gap-3">
           <button
             onClick={submitPayment}
-            className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+            disabled={submitting}
+            className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
           >
-            <CreditCard className="h-4 w-4" />
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
             Pay now
           </button>
-          <button onClick={() => setStep('idle')} className="px-4 py-3 text-gray-500 hover:text-gray-700 text-sm">Cancel</button>
+          <button onClick={() => setStep('idle')} disabled={submitting} className="px-4 py-3 text-gray-500 hover:text-gray-700 text-sm disabled:opacity-60">Cancel</button>
         </div>
       </div>
     )
@@ -114,10 +124,10 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
   return (
     <button
       onClick={startPayment}
-      disabled={step === 'loading' || step === 'processing'}
+      disabled={step === 'loading'}
       className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
     >
-      {(step === 'loading' || step === 'processing') ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+      {step === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
       Pay now
     </button>
   )
