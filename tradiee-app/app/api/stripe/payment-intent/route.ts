@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   // Connect onboarding; falls back to the platform account (today's behaviour)
   // otherwise, so this public pay page never breaks for a not-yet-onboarded
   // company. See lib/stripe.ts connectOptions.
+  const options = connectOptions(company)
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
     currency: stripeCurrency(company?.country),
@@ -39,7 +40,11 @@ export async function POST(req: NextRequest) {
     payment_method_types: ['card'],
     metadata: { invoice_id: invoice.id, invoice_number: invoice.invoice_number },
     description: `Invoice ${invoice.invoice_number} — ${company?.name ?? ''}`,
-  }, connectOptions(company))
+  }, options)
 
-  return NextResponse.json({ clientSecret: paymentIntent.client_secret })
+  // A direct-charge client_secret only resolves through Stripe.js when it's
+  // loaded scoped to the same connected account (loadStripe(pk, { stripeAccount })) —
+  // otherwise the Payment Element mounts with nothing in it, since it can't
+  // see a PaymentIntent that lives on an account it wasn't told about.
+  return NextResponse.json({ clientSecret: paymentIntent.client_secret, stripeAccountId: options?.stripeAccount ?? null })
 }

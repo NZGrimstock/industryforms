@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   const stripe = getStripe()
   // Direct charge on the connected account once onboarded, else the platform
   // account (today's behaviour) — see lib/stripe.ts connectOptions.
+  const options = connectOptions(company)
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountDue,
     currency: stripeCurrency(company?.country),
@@ -38,9 +39,12 @@ export async function POST(req: NextRequest) {
     payment_method_types: ['card'],
     metadata: { booking_id: booking.id },
     description: `Booking deposit — ${company?.name ?? ''}`,
-  }, connectOptions(company))
+  }, options)
 
   await service.from('bookings').update({ stripe_payment_intent_id: paymentIntent.id }).eq('id', bookingId)
 
-  return NextResponse.json({ clientSecret: paymentIntent.client_secret })
+  // A direct-charge client_secret only resolves through Stripe.js when it's
+  // loaded scoped to the same connected account (loadStripe(pk, { stripeAccount })) —
+  // otherwise the Payment Element mounts with nothing in it.
+  return NextResponse.json({ clientSecret: paymentIntent.client_secret, stripeAccountId: options?.stripeAccount ?? null })
 }

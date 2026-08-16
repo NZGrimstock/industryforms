@@ -21,7 +21,13 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
       if (!res.ok) throw new Error(data.error ?? 'Failed to initialize payment')
 
       const { loadStripe } = await import('@stripe/stripe-js')
-      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+      // Must be loaded scoped to the connected account when the invoice was
+      // charged as a direct charge (data.stripeAccountId), or Stripe.js can't
+      // resolve the clientSecret and the Payment Element mounts empty.
+      const stripe = await loadStripe(
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+        data.stripeAccountId ? { stripeAccount: data.stripeAccountId } : undefined
+      )
       if (!stripe) throw new Error('Stripe failed to load')
 
       stripeRef.current = stripe
