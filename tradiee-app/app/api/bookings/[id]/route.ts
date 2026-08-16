@@ -2,9 +2,15 @@
 // Admin-only manual triage for 'requested' bookings and status changes.
 // A refund (if a deposit was paid) is a separate step via /api/bookings/refund
 // once the booking is 'cancelled' or 'no_show'.
+//
+// Uses resolveCompanyUser (cookie or mobile Bearer token) — a bare cookie-only
+// getUser() always came back unauthenticated for the mobile app, which has no
+// cookie (this is the Inbox booking action, reached from the same screen that
+// hit "Unauthorised" on mobile).
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { resolveCompanyUser } from '@/lib/api-auth'
 import { createJobFromBooking } from '@/lib/bookings/fulfill'
 import { sendBookingConfirmationEmail } from '@/lib/bookings/notify'
 
@@ -16,11 +22,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!parsed.success) return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   const { action } = parsed.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data: profile } = await supabase.from('profiles').select('company_id, role').eq('id', user.id).single()
-  if (!profile || (profile.role !== 'owner' && profile.role !== 'admin')) {
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.role !== 'owner' && auth.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -28,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { data: booking } = await service.from('bookings')
     .select('id, company_id, status, customer_id, package_id, assigned_to, customer_email, customer_phone, customer_name, site_address, starts_at, ends_at, job_id')
     .eq('id', id).single()
-  if (!booking || booking.company_id !== profile.company_id) {
+  if (!booking || booking.company_id !== auth.companyId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

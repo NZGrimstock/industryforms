@@ -20,6 +20,7 @@ import { scrollFieldAboveKeyboard } from '@/lib/keyboard'
 import { Icon } from '@/lib/icons'
 import { TimeEntryEditModal, type EditableTimeEntry } from '@/components/timesheets/TimeEntryEditModal'
 import { ScheduleVisitModal } from '@/components/schedule/ScheduleVisitModal'
+import { ChangeSiteModal } from '@/components/jobs/ChangeSiteModal'
 
 // Self-contained HTML signature pad — draws to a canvas and posts a PNG data URL
 // (or 'EMPTY' if untouched) back to React Native.
@@ -76,6 +77,7 @@ type Job = {
   customer_name: string | null
   customer_phone: string | null
   customer_billing_address: string | null
+  site_id: string | null
   site_address: string | null
   site_lat: number | null
   site_lng: number | null
@@ -146,6 +148,7 @@ export default function JobDetailScreen() {
   const [savingForm, setSavingForm] = useState(false)
   const [showInvoice, setShowInvoice] = useState(false)
   const [showScheduleVisit, setShowScheduleVisit] = useState(false)
+  const [showChangeSite, setShowChangeSite] = useState(false)
   const [invMode, setInvMode] = useState<'full' | 'actuals' | 'deposit' | 'progress'>('full')
   const [invPct, setInvPct] = useState('50')
   const [invAmount, setInvAmount] = useState('')
@@ -279,7 +282,7 @@ export default function JobDetailScreen() {
   }
 
   const { data: jobs, isLoading, refresh: refreshJob } = useQuery<Job>(
-    `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at, j.customer_id,
+    `SELECT j.id, j.job_number, j.title, j.description, j.status, j.assigned_to, j.created_at, j.customer_id, j.site_id,
             c.name AS customer_name, c.phone AS customer_phone,
             c.billing_address AS customer_billing_address,
             s.address AS site_address, s.lat AS site_lat, s.lng AS site_lng
@@ -989,12 +992,21 @@ export default function JobDetailScreen() {
               <Text style={[styles.metaValue, styles.metaLink]}>{job.customer_phone}</Text>
             </TouchableOpacity>
           )}
-          {jobAddress && (
-            <TouchableOpacity style={styles.metaRow} onPress={openInMaps} activeOpacity={0.6}>
+          <View style={styles.metaRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.metaLabel}>Address</Text>
-              <Text style={[styles.metaValue, styles.metaLink]}>{jobAddress}</Text>
-            </TouchableOpacity>
-          )}
+              <TouchableOpacity onPress={() => setShowChangeSite(true)}>
+                <Text style={[styles.metaLabel, { color: '#f97316', fontWeight: '600' }]}>Change</Text>
+              </TouchableOpacity>
+            </View>
+            {jobAddress ? (
+              <TouchableOpacity onPress={openInMaps} activeOpacity={0.6}>
+                <Text style={[styles.metaValue, styles.metaLink]}>{jobAddress}</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.metaValue, { color: '#9ca3af', fontStyle: 'italic' }]}>Not set</Text>
+            )}
+          </View>
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Created</Text>
             <Text style={styles.metaValue}>{formatDate(job.created_at)}</Text>
@@ -1293,35 +1305,50 @@ export default function JobDetailScreen() {
           </View>
         )}
 
-        {/* Time Logged — tap an entry to fix the job, times, or a missed stop */}
-        {(jobTimesheets ?? []).length > 0 && (
-          <View style={styles.section}>
+        {/* Time Logged — tap an entry to fix the job, times, or a missed stop.
+            "+ Add" opens the same modal in create mode (entry.id === null) for
+            a manual backdated entry — e.g. forgot to clock in, or worked
+            off-app. */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Time Logged</Text>
-            {jobTimesheets!.map(t => (
-              <TouchableOpacity
-                key={t.id}
-                style={styles.materialRow}
-                onPress={() => setEditingTimeEntry({
-                  id: t.id, job_id: t.job_id, job_number: job?.job_number ?? '', job_title: job?.title ?? '',
-                  started_at: t.started_at, ended_at: t.ended_at, break_minutes: t.break_minutes, notes: t.notes,
-                })}
-                activeOpacity={0.6}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.materialDesc} numberOfLines={1}>{formatDateTime(t.started_at)}</Text>
-                  {t.notes ? <Text style={[styles.emptyText, { marginTop: 2 }]} numberOfLines={1}>{t.notes}</Text> : null}
-                </View>
-                <Text style={[styles.materialPrice, !t.ended_at && { color: '#22c55e' }]}>
-                  {formatTimeLogDuration(t.started_at, t.ended_at, t.break_minutes)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            <View style={styles.materialTotal}>
-              <Text style={styles.materialTotalLabel}>Total</Text>
-              <Text style={styles.materialTotalValue}>{totalLoggedHours.toFixed(1)}h</Text>
-            </View>
+            <TouchableOpacity onPress={() => setEditingTimeEntry({
+              id: null, job_id: id ?? null, job_number: job?.job_number ?? '', job_title: job?.title ?? '',
+              started_at: new Date().toISOString(), ended_at: null, break_minutes: 0, notes: null,
+            })}>
+              <Text style={styles.addLink}>+ Add</Text>
+            </TouchableOpacity>
           </View>
-        )}
+          {(jobTimesheets ?? []).length === 0 ? (
+            <Text style={styles.emptyText}>No time logged yet</Text>
+          ) : (
+            <>
+              {jobTimesheets!.map(t => (
+                <TouchableOpacity
+                  key={t.id}
+                  style={styles.materialRow}
+                  onPress={() => setEditingTimeEntry({
+                    id: t.id, job_id: t.job_id, job_number: job?.job_number ?? '', job_title: job?.title ?? '',
+                    started_at: t.started_at, ended_at: t.ended_at, break_minutes: t.break_minutes, notes: t.notes,
+                  })}
+                  activeOpacity={0.6}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.materialDesc} numberOfLines={1}>{formatDateTime(t.started_at)}</Text>
+                    {t.notes ? <Text style={[styles.emptyText, { marginTop: 2 }]} numberOfLines={1}>{t.notes}</Text> : null}
+                  </View>
+                  <Text style={[styles.materialPrice, !t.ended_at && { color: '#22c55e' }]}>
+                    {formatTimeLogDuration(t.started_at, t.ended_at, t.break_minutes)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.materialTotal}>
+                <Text style={styles.materialTotalLabel}>Total</Text>
+                <Text style={styles.materialTotalValue}>{totalLoggedHours.toFixed(1)}h</Text>
+              </View>
+            </>
+          )}
+        </View>
 
         {/* Forms — the app's namesake, finally on the job screen */}
         <View style={styles.section} onLayout={e => setFormsY(e.nativeEvent.layout.y)}>
@@ -1685,6 +1712,17 @@ export default function JobDetailScreen() {
           presetJob={{ id: job.id, job_number: job.job_number, title: job.title }}
           onClose={() => setShowScheduleVisit(false)}
           onSaved={() => { setShowScheduleVisit(false); refreshVisits?.(); refreshJob?.() }}
+        />
+      )}
+
+      {job && (
+        <ChangeSiteModal
+          visible={showChangeSite}
+          jobId={job.id}
+          customerId={job.customer_id}
+          currentSiteId={job.site_id}
+          onClose={() => setShowChangeSite(false)}
+          onSaved={() => { setShowChangeSite(false); refreshJob?.() }}
         />
       )}
 

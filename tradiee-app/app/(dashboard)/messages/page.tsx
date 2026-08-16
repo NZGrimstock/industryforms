@@ -13,7 +13,7 @@ export default async function MessagesPage() {
   // Owner/admin only — same gate used for other sales/comms surfaces.
   if (profile?.role === 'staff') redirect('/dashboard')
 
-  const conversations = await getConversations(supabase)
+  const conversations = await getConversations(supabase, profile!.company_id)
 
   return (
     <>

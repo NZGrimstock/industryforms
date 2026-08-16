@@ -8,6 +8,7 @@
 // Terminal Location that lives on the connected account (ensureTerminalLocation).
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
+import { toE164 } from '@/lib/sms'
 
 type CompanyRow = {
   id: string
@@ -159,7 +160,8 @@ export async function ensureTerminalLocation(company: TerminalLocationCompany): 
   const location = await stripe.terminal.locations.create(
     {
       display_name: company.name ?? 'IndustryForms',
-      phone: company.phone ?? undefined,
+      // Stripe requires E.164 (+64/+61) — reject a bare leading-0 NZ/AU number.
+      phone: toE164(company.phone, company.country === 'AU' ? 'AU' : 'NZ') ?? undefined,
       address: {
         country: verified.country ?? (company.country === 'AU' ? 'AU' : 'NZ'),
         line1: verified.line1,

@@ -16,16 +16,23 @@ export type ConversationSummary = {
   status: 'open' | 'pending' | 'closed' | 'spam'
 }
 
-export async function getConversations(supabase: SupabaseClient): Promise<ConversationSummary[]> {
+// `companyId` is filtered explicitly rather than left to RLS — the API route
+// caller uses the service client (mobile Bearer auth has no RLS session), so
+// this is the only thing standing between a company and every other
+// company's messages/enquiries/bookings. The web SSR callers (RLS-scoped
+// client) get it applied redundantly, which is harmless.
+export async function getConversations(supabase: SupabaseClient, companyId: string): Promise<ConversationSummary[]> {
   const [messagesRes, enquiriesRes, bookingsRes] = await Promise.all([
     supabase
       .from('customer_messages')
       .select('id, customer_id, direction, body, created_at, read_at, status, from_number, customers(name)')
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(500),
     supabase
       .from('enquiries')
       .select('id, customer_name, customer_email, customer_phone, description, source, status, created_at')
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(200),
     // Bookable-packages bookings (Sprint C/D) — distinct from the legacy
@@ -33,6 +40,7 @@ export async function getConversations(supabase: SupabaseClient): Promise<Conver
     supabase
       .from('bookings')
       .select('id, customer_name, customer_email, customer_phone, notes, status, starts_at, created_at, bookable_packages(name)')
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false })
       .limit(200),
   ])

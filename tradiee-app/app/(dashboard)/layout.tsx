@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // billing-exempt review accounts bypass this).
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, is_super_admin, welcome_tutorial_seen_at, timezone, terms_version, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode, country)')
+    .select('company_id, role, is_super_admin, welcome_tutorial_seen_at, timezone, terms_version, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, theme_accent, test_mode, country)')
     .eq('id', user.id)
     .single()
   const company = (profile?.companies ?? null) as (BillingCompany & { theme_accent?: string | null; test_mode?: boolean | null; country?: string | null }) | null
@@ -41,7 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isStaff = profile?.role === 'staff'
 
   // Messages nav badge (owner/admin only — staff don't get the Messages tab).
-  const unreadMessages = isStaff ? 0 : (await getConversations(supabase)).filter(c => c.unread).length
+  const unreadMessages = isStaff || !profile?.company_id ? 0 : (await getConversations(supabase, profile.company_id)).filter(c => c.unread).length
 
   const subscriptionInfo = {
     plan: company?.subscription_plan ?? null,
