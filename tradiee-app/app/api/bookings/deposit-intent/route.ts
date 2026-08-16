@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getStripe, stripeCurrency, connectOptions } from '@/lib/stripe'
+import { getStripe, stripeCurrency, connectOptions, getOrCreatePaymentIntent } from '@/lib/stripe'
 
 const bodySchema = z.object({ bookingId: z.string().uuid() })
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient()
   const { data: booking } = await service.from('bookings')
-    .select('id, status, deposit_required, deposit_paid, company_id, companies(name, country, stripe_account_id, stripe_charges_enabled)')
+    .select('id, status, deposit_required, deposit_paid, company_id, stripe_payment_intent_id, companies(name, country, stripe_account_id, stripe_charges_enabled)')
     .eq('id', bookingId).single()
 
   if (!booking || booking.status !== 'deposit_pending') {
@@ -32,16 +32,18 @@ export async function POST(req: NextRequest) {
   // Direct charge on the connected account once onboarded, else the platform
   // account (today's behaviour) — see lib/stripe.ts connectOptions.
   const options = connectOptions(company)
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await getOrCreatePaymentIntent(stripe, options, booking.stripe_payment_intent_id, {
     amount: amountDue,
     currency: stripeCurrency(company?.country),
     // Card only — otherwise automatic payment methods surface Klarna/Link.
     payment_method_types: ['card'],
     metadata: { booking_id: booking.id },
     description: `Booking deposit — ${company?.name ?? ''}`,
-  }, options)
+  })
 
-  await service.from('bookings').update({ stripe_payment_intent_id: paymentIntent.id }).eq('id', bookingId)
+  if (paymentIntent.id !== booking.stripe_payment_intent_id) {
+    await service.from('bookings').update({ stripe_payment_intent_id: paymentIntent.id }).eq('id', bookingId)
+  }
 
   // A direct-charge client_secret only resolves through Stripe.js when it's
   // loaded scoped to the same connected account (loadStripe(pk, { stripeAccount })) —

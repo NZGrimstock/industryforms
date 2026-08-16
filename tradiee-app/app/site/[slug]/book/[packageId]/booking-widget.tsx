@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, CheckCircle, Clock } from 'lucide-react'
+import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
 type Pkg = {
   id: string; name: string; description: string | null; duration_minutes: number
@@ -11,7 +12,7 @@ type Slot = { startsAt: string; endsAt: string; profileId: string | null }
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-offset-0'
 
 export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: string; pkg: Pkg; companyPhone: string | null }) {
-  const [step, setStep] = useState<'slot' | 'details' | 'deposit' | 'done' | 'error'>('slot')
+  const [step, setStep] = useState<'slot' | 'details' | 'deposit' | 'pending' | 'done' | 'error'>('slot')
   const [slots, setSlots] = useState<Slot[]>([])
   const [loadingSlots, setLoadingSlots] = useState(true)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
@@ -21,6 +22,47 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
   const [form, setForm] = useState({ name: '', email: '', phone: '', siteAddress: '', notes: '' })
   const [depositAmount, setDepositAmount] = useState(0)
   const [finalStatus, setFinalStatus] = useState<'confirmed' | 'requested' | null>(null)
+  const stripeRef = useRef<Stripe | null>(null)
+  const elementsRef = useRef<StripeElements | null>(null)
+  const stripeAccountIdRef = useRef<string | null>(null)
+
+  // Some payment methods force a real top-level redirect (e.g. a 3D Secure
+  // challenge) despite confirmPayment's redirect: 'if_required' — a full page
+  // reload wipes all component state (bookingId, depositAmount, the mounted
+  // Payment Element), so recover what's needed from the URL instead of
+  // silently restarting the whole booking wizard from the slot picker with
+  // no acknowledgment of whether the deposit actually went through.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const clientSecret = params.get('payment_intent_client_secret')
+    if (!clientSecret) return
+    const stripeAccountId = params.get('sa')
+    const returnedBookingId = params.get('bk')
+    const returnedDepositAmount = params.get('da')
+
+    ;(async () => {
+      if (returnedBookingId) setBookingId(returnedBookingId)
+      if (returnedDepositAmount) setDepositAmount(Number(returnedDepositAmount))
+
+      const { loadStripe } = await import('@stripe/stripe-js')
+      const stripe = await loadStripe(
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+        stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+      )
+      window.history.replaceState(null, '', window.location.pathname)
+      if (!stripe) { setError('Stripe failed to load'); setStep('error'); return }
+
+      const { paymentIntent, error: piError } = await stripe.retrievePaymentIntent(clientSecret)
+      if (piError || !paymentIntent) { setError(piError?.message ?? 'Could not confirm payment status'); setStep('error'); return }
+
+      if (paymentIntent.status === 'succeeded') { setFinalStatus('confirmed'); setStep('done') }
+      else if (paymentIntent.status === 'processing') setStep('pending')
+      // Anything else (requires_payment_method, canceled, …) — re-enter the
+      // deposit step so the payDeposit() effect below fires again; it reuses
+      // the same open PaymentIntent rather than creating a fresh one.
+      else setStep('deposit')
+    })()
+  }, [])
 
   useEffect(() => {
     fetch(`/api/bookings/availability?companyId=${companyId}&packageId=${pkg.id}`)
@@ -97,11 +139,10 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
       )
       if (!stripe) throw new Error('Stripe failed to load')
 
-      const elements = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'stripe' } })
-      const paymentEl = elements.create('payment')
-      paymentEl.mount('#booking-payment-element')
-      ;(window as Window & { __bookingStripe?: typeof stripe; __bookingElements?: typeof elements })['__bookingStripe'] = stripe
-      ;(window as Window & { __bookingStripe?: typeof stripe; __bookingElements?: typeof elements })['__bookingElements'] = elements
+      stripeRef.current = stripe
+      stripeAccountIdRef.current = data.stripeAccountId ?? null
+      elementsRef.current = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'stripe' } })
+      elementsRef.current.create('payment').mount('#booking-payment-element')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start payment')
     } finally {
@@ -118,10 +159,20 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
     setSubmitting(true)
     setError('')
     try {
-      const w = window as Window & { __bookingStripe?: import('@stripe/stripe-js').Stripe; __bookingElements?: import('@stripe/stripe-js').StripeElements }
-      if (!w.__bookingStripe || !w.__bookingElements) throw new Error('Payment form not ready')
-      const { error } = await w.__bookingStripe.confirmPayment({
-        elements: w.__bookingElements, redirect: 'if_required', confirmParams: { return_url: window.location.href },
+      const stripe = stripeRef.current
+      const elements = elementsRef.current
+      if (!stripe || !elements) throw new Error('Payment form not ready')
+
+      // Carries what's needed to resume on the redirect-return effect above
+      // (a full page reload wipes bookingId/depositAmount/stripeAccountId,
+      // none of which are otherwise recoverable from a fresh page load).
+      const returnUrl = new URL(window.location.href)
+      if (bookingId) returnUrl.searchParams.set('bk', bookingId)
+      if (stripeAccountIdRef.current) returnUrl.searchParams.set('sa', stripeAccountIdRef.current)
+      returnUrl.searchParams.set('da', String(depositAmount))
+
+      const { error } = await stripe.confirmPayment({
+        elements, redirect: 'if_required', confirmParams: { return_url: returnUrl.toString() },
       })
       if (error) throw new Error(error.message ?? 'Payment failed')
       setFinalStatus('confirmed')
@@ -146,6 +197,16 @@ export function BookingWidget({ companyId, pkg, companyPhone }: { companyId: str
             : "We'll confirm your booking shortly."}
         </p>
         {companyPhone && <p className="text-xs text-green-600 mt-2">Questions? Call {companyPhone}</p>}
+      </div>
+    )
+  }
+
+  if (step === 'pending') {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+        <Loader2 className="h-8 w-8 text-amber-600 mx-auto mb-2 animate-spin" />
+        <p className="font-semibold text-amber-800">Payment is processing</p>
+        <p className="text-sm text-amber-700 mt-1">We&apos;ll confirm your booking as soon as it&apos;s through — no need to try again.</p>
       </div>
     )
   }

@@ -4,11 +4,46 @@ import { CreditCard, Loader2, CheckCircle } from 'lucide-react'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
 export function PayNowButton({ token, amountDue }: { token: string; amountDue: number }) {
-  const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'done' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'done' | 'pending' | 'error'>('idle')
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const stripeRef = useRef<Stripe | null>(null)
   const elementsRef = useRef<StripeElements | null>(null)
+  const stripeAccountIdRef = useRef<string | null>(null)
+
+  // Some payment methods force a real top-level redirect (e.g. a 3D Secure
+  // challenge) despite confirmPayment's redirect: 'if_required' — Stripe
+  // sends the customer back here with payment_intent_client_secret and
+  // redirect_status appended to return_url. Without this, the page just
+  // re-rendered the same "Ready to pay?" card with no acknowledgment either
+  // way, and nothing stopped the customer retrying and paying twice while
+  // our own webhook was still catching up.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const clientSecret = params.get('payment_intent_client_secret')
+    if (!clientSecret) return
+    const stripeAccountId = params.get('sa')
+
+    ;(async () => {
+      setStep('loading')
+      const { loadStripe } = await import('@stripe/stripe-js')
+      const stripe = await loadStripe(
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+        stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+      )
+      // Clean the redirect params off the URL either way, so a refresh
+      // doesn't re-run this or leave the secret sitting in the address bar.
+      window.history.replaceState(null, '', window.location.pathname)
+      if (!stripe) { setErrorMsg('Stripe failed to load'); setStep('error'); return }
+
+      const { paymentIntent, error } = await stripe.retrievePaymentIntent(clientSecret)
+      if (error || !paymentIntent) { setErrorMsg(error?.message ?? 'Could not confirm payment status'); setStep('error'); return }
+
+      if (paymentIntent.status === 'succeeded') setStep('done')
+      else if (paymentIntent.status === 'processing') setStep('pending')
+      else { setErrorMsg('The payment did not go through — please try again.'); setStep('error') }
+    })()
+  }, [])
 
   async function startPayment() {
     setStep('loading')
@@ -32,6 +67,7 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
       if (!stripe) throw new Error('Stripe failed to load')
 
       stripeRef.current = stripe
+      stripeAccountIdRef.current = data.stripeAccountId ?? null
       elementsRef.current = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'stripe' } })
       setStep('form')
     } catch (e: unknown) {
@@ -68,10 +104,16 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
       const elements = elementsRef.current
       if (!stripe || !elements) throw new Error('Payment form not ready')
 
+      // Carries the connected account id through the redirect — Stripe.js has
+      // to be reloaded scoped to it on return (see the effect above), and
+      // there's nowhere else to recover that id from a fresh page load.
+      const returnUrl = new URL(window.location.href)
+      if (stripeAccountIdRef.current) returnUrl.searchParams.set('sa', stripeAccountIdRef.current)
+
       const { error } = await stripe.confirmPayment({
         elements,
         redirect: 'if_required',
-        confirmParams: { return_url: window.location.href },
+        confirmParams: { return_url: returnUrl.toString() },
       })
 
       if (error) throw new Error(error.message ?? 'Payment failed')
@@ -89,6 +131,15 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
       <div className="flex items-center gap-2 px-5 py-3 bg-green-50 border border-green-200 rounded-xl text-green-700">
         <CheckCircle className="h-5 w-5" />
         <span className="font-medium">Payment successful! Thank you.</span>
+      </div>
+    )
+  }
+
+  if (step === 'pending') {
+    return (
+      <div className="flex items-center gap-2 px-5 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="font-medium">Payment is processing — this page will update once it&apos;s confirmed.</span>
       </div>
     )
   }
