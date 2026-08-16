@@ -5,6 +5,7 @@ export const metadata = {
   title: 'Account and Data Deletion Request - IndustryForms',
   description: 'Request deletion of your IndustryForms account and associated data.',
 }
+export const dynamic = 'force-dynamic'
 
 export default function AccountDeletionPage() {
   return (

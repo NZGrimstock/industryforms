@@ -3,6 +3,8 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Wrench } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function CustomerPortalPage({
   params,
 }: {

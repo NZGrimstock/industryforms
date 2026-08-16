@@ -1,4 +1,5 @@
 export const metadata = { title: 'Privacy Policy — IndustryForms' }
+export const dynamic = 'force-dynamic'
 
 export default function PrivacyPage() {
   return (

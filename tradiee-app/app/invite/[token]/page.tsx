@@ -2,6 +2,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { Wrench } from 'lucide-react'
 import { PublicInviteActions } from './client'
 
+export const dynamic = 'force-dynamic'
+
 export default async function PublicInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const supabase = createServiceClient()
