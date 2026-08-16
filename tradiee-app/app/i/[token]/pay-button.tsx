@@ -1,12 +1,15 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CreditCard, Loader2, CheckCircle } from 'lucide-react'
+import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
 export function PayNowButton({ token, amountDue }: { token: string; amountDue: number }) {
   const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'processing' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const stripeRef = useRef<Stripe | null>(null)
+  const elementsRef = useRef<StripeElements | null>(null)
 
-  async function openPayment() {
+  async function startPayment() {
     setStep('loading')
     try {
       const res = await fetch('/api/stripe/payment-intent', {
@@ -15,78 +18,45 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
         body: JSON.stringify({ token }),
       })
       const data = await res.json()
-      if (!res.ok || !data.clientSecret) throw new Error(data.error ?? 'Failed to initialize payment')
+      if (!res.ok) throw new Error(data.error ?? 'Failed to initialize payment')
 
       const { loadStripe } = await import('@stripe/stripe-js')
       const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
       if (!stripe) throw new Error('Stripe failed to load')
 
-      const { error } = await stripe.confirmCardPayment(data.clientSecret, {
-        payment_method: { card: await getCardElement(stripe) },
-      })
-
-      if (error) throw new Error(error.message ?? 'Payment failed')
-      setStep('done')
-    } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Payment failed')
-      setStep('error')
-    }
-  }
-
-  // Simple card collection using Stripe Elements redirect approach
-  async function getCardElement(stripe: import('@stripe/stripe-js').Stripe) {
-    throw new Error('Use checkout redirect instead')
-    // Prevent lint error — handled below via checkout
-    return {} as never
-  }
-
-  async function redirectToCheckout() {
-    setStep('processing')
-    try {
-      const res = await fetch('/api/stripe/payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Failed')
-
-      const { loadStripe } = await import('@stripe/stripe-js')
-      const stripe = await loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
-      if (!stripe) throw new Error('Stripe failed to load')
-
-      const elements = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'stripe' } })
-      const paymentEl = elements.create('payment')
-
-      // Mount into a div we'll show inline
+      stripeRef.current = stripe
+      elementsRef.current = stripe.elements({ clientSecret: data.clientSecret, appearance: { theme: 'stripe' } })
       setStep('form')
-      // Store for later submission — confirmPayment() must be called on this
-      // same Stripe instance, not a freshly loaded one, or Stripe.js rejects
-      // the elements as belonging to a different instance.
-      const w = window as Window & { __stripe?: typeof stripe; __stripeElements?: typeof elements; __stripeEl?: typeof paymentEl }
-      w.__stripe = stripe
-      w.__stripeElements = elements
-      w.__stripeEl = paymentEl
-
-      setTimeout(() => {
-        const mount = document.getElementById('stripe-payment-element')
-        if (mount) paymentEl.mount('#stripe-payment-element')
-      }, 50)
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Failed to load payment form')
       setStep('error')
     }
   }
 
+  // Mounts the Payment Element once #stripe-payment-element has actually
+  // committed to the DOM (step === 'form'). Previously this ran on a bare
+  // setTimeout(…, 50) right after setStep('form') in the click handler — a
+  // race against React's render commit that lost often enough on phones to
+  // leave the element unmounted, so confirmPayment() below rejected with
+  // "elements should have a mounted Payment Element or Express Checkout
+  // Element." A layout effect only ever runs after the DOM for that render
+  // is committed, so the div is guaranteed to exist here.
+  useEffect(() => {
+    if (step !== 'form' || !elementsRef.current) return
+    const paymentEl = elementsRef.current.create('payment')
+    paymentEl.mount('#stripe-payment-element')
+    return () => paymentEl.unmount()
+  }, [step])
+
   async function submitPayment() {
     setStep('processing')
     try {
-      const w = window as Window & { __stripe?: import('@stripe/stripe-js').Stripe; __stripeElements?: import('@stripe/stripe-js').StripeElements }
-      const stripe = w.__stripe
-      if (!stripe || !w.__stripeElements) throw new Error('Payment form not ready')
+      const stripe = stripeRef.current
+      const elements = elementsRef.current
+      if (!stripe || !elements) throw new Error('Payment form not ready')
 
       const { error } = await stripe.confirmPayment({
-        elements: w.__stripeElements,
+        elements,
         redirect: 'if_required',
         confirmParams: { return_url: window.location.href },
       })
@@ -137,7 +107,7 @@ export function PayNowButton({ token, amountDue }: { token: string; amountDue: n
 
   return (
     <button
-      onClick={redirectToCheckout}
+      onClick={startPayment}
       disabled={step === 'loading' || step === 'processing'}
       className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
     >
