@@ -6,19 +6,33 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **Apply `20260816100000_credit_notes.sql` to production** with
-  `supabase db push --linked`, then do one real click-through: credit a real
-  invoice both ways (Stripe refund, account credit), apply account credit to
-  a draft invoice for the same customer, and sync a credit note + its
-  allocation to Xero if connected. See `CREDIT_NOTES.md` for what's already
-  verified vs not.
-- **Apply `20260815100000_lock_job_once_fully_invoiced.sql` to production**
-  with `supabase db push --linked`. Verified against real local Postgres
-  (12-case pass, see 2026-08-15 session entry) but not yet applied remotely.
-  After applying, do one real click-through: fully invoice a real (or
-  throwaway) job, confirm materials/timesheets/notes are rejected with the
-  new message, confirm a technician can still message on it, and confirm the
-  Unlock button (owner/admin, both apps) actually restores editing.
+- **Set up Resend Inbound for the enquiry email inbox** (2026-08-16): the
+  webhook handler (`app/api/inbound/email/route.ts`) was rewritten to verify
+  Resend's Svix-signed `email.received` webhook and fetch the full body via
+  `resend.emails.receiving.get()`, but nothing routes real mail to it yet —
+  `inbound.industryforms.app` has no MX record, which is why a real email
+  bounced "address not found" (reported 2026-08-16). Needs, in the Resend
+  dashboard: (1) add the MX record for `inbound.industryforms.app` under
+  Domains → Receiving, (2) create a webhook subscribed to `email.received`
+  pointed at `https://app.industryforms.app/api/inbound/email`, (3) put its
+  signing secret in `RESEND_WEBHOOK_SECRET` (Vercel + `.env.local`). Then
+  send one real test email to a generated `co-xxxxx@inbound...` address and
+  confirm it lands as an enquiry.
+- **`20260816100000_credit_notes.sql`** — applied to production 2026-08-16
+  (`supabase db push --linked`). Still owed: one real click-through — credit
+  a real invoice both ways (Stripe refund, account credit), apply account
+  credit to a draft invoice for the same customer, and sync a credit note +
+  its allocation to Xero if connected. See `CREDIT_NOTES.md` for what's
+  already verified vs not.
+- **`20260815100000_lock_job_once_fully_invoiced.sql`** — applied to
+  production 2026-08-16 (`supabase db push --linked`). Verified against real
+  local Postgres (12-case pass, see 2026-08-15 session entry) and the app-level
+  guards were extended 2026-08-16 to cover a quote-less job's own logged
+  materials/labour too (previously only a quoted job's ceiling was enforced).
+  Still owed: one real click-through — fully invoice a real (or throwaway)
+  job, confirm materials/timesheets/notes are rejected with the new message,
+  confirm a technician can still message on it, and confirm the Unlock button
+  (owner/admin, both apps) actually restores editing.
 - **SMS provider swapped Twilio → WebSMS 2026-08-11.** Vercel production env
   vars are now set (confirmed 2026-08-12) — sending live from WebSMS's shared
   **group-pool short code 34567** (their standard offer below 3000 msgs/month;
