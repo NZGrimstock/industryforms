@@ -97,6 +97,7 @@ export interface JobSheetData {
     quantity: number
     unit: string
     unit_price: number
+    line_total: number
   }>
   timesheets: Array<{
     started_at: string
@@ -127,7 +128,9 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
   const timezone = data.timezone ?? DEFAULT_TIMEZONE
   const gstRate = company.default_gst_rate ?? 0.15
 
-  const lineSubtotal = lineItems.reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_price), 0)
+  // line_total is already net of GST (extracted at quote-save time when prices
+  // are entered tax-inclusive) — qty*unit_price would double-count GST below.
+  const lineSubtotal = lineItems.reduce((sum, l) => sum + Number(l.line_total), 0)
   const labourSubtotal = timesheets
     .filter(t => t.is_billable && t.bill_rate && t.ended_at)
     .reduce((sum, t) => {

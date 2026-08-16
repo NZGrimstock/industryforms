@@ -81,7 +81,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     getJobStatuses(supabase, profile!.company_id),
     nextDocNumber(supabase, profile!.company_id, 'invoice'),
     job.quote_id
-      ? supabase.from('quote_line_items').select('quantity, unit_price, unit_cost, description, unit, type, price_list_item_id, sort_order').eq('quote_id', job.quote_id).order('sort_order')
+      ? supabase.from('quote_line_items').select('quantity, unit_price, unit_cost, line_total, description, unit, type, price_list_item_id, sort_order').eq('quote_id', job.quote_id).order('sort_order')
       : Promise.resolve({ data: null }),
     supabase.from('jobs').select('id, job_number, title').eq('company_id', profile!.company_id).order('job_number'),
     // Ascending — a conversation reads oldest-first, unlike the notes list.
@@ -124,15 +124,16 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   // Job costing: estimated from quote, actual from timesheets + invoices
   let estimatedSubtotal = 0
-  let quoteLineItems: Array<{ description: string; quantity: number; unit: string; unit_price: number }> = []
+  let quoteLineItems: Array<{ description: string; quantity: number; unit: string; unit_price: number; line_total: number }> = []
   let quoteFillLines: Array<{ description: string; quantity: number; unit: string; unit_cost: number; unit_price: number; type: string; price_list_item_id: string | null }> = []
   if (job.quote_id) {
-    const qLines = (qLinesRes as { data: Array<{ quantity: number; unit_price: number; unit_cost: number | null; description: string | null; unit: string | null; type: string | null; price_list_item_id: string | null }> | null }).data
+    const qLines = (qLinesRes as { data: Array<{ quantity: number; unit_price: number; unit_cost: number | null; line_total: number; description: string | null; unit: string | null; type: string | null; price_list_item_id: string | null }> | null }).data
     quoteLineItems = (qLines ?? []).map(l => ({
       description: l.description ?? '',
       quantity: Number(l.quantity),
       unit: l.unit ?? 'each',
       unit_price: Number(l.unit_price),
+      line_total: Number(l.line_total),
     }))
     quoteFillLines = (qLines ?? []).map(l => ({
       description: l.description ?? '',
@@ -143,7 +144,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       type: l.type ?? 'material',
       price_list_item_id: l.price_list_item_id ?? null,
     }))
-    estimatedSubtotal = quoteLineItems.reduce((sum, l) => sum + l.quantity * l.unit_price, 0)
+    // Sum the stored net line_total, not quantity*unit_price — unit_price is
+    // the raw entered figure, which IS GST-inclusive when the company has
+    // "Prices include GST" on (see quote-builder.tsx's netOf()/lineNet()).
+    // line_total is already tax-extracted at quote-save time regardless of
+    // entry mode, so summing it is the only way this stays GST-exclusive.
+    estimatedSubtotal = (qLines ?? []).reduce((sum, l) => sum + Number(l.line_total), 0)
   }
   const actualLabour = (timesheetsRes.data ?? []).reduce((sum, t) => {
     if (!t.is_billable || !t.bill_rate || !t.ended_at) return sum
