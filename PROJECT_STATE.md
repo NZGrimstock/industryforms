@@ -1,11 +1,20 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-11. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-16. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **Re-run a holistic reality-check pass over the 2026-08-16 pt.3 session**
+  (commits `f65cf6a`..`0b0e2eb`) — one was started covering the four
+  earliest commits of that session (refund Connect scoping, the Settings
+  tab move, the GST double-count fix, the mobile-auth bundle), which had
+  only ever been checked with `tsc`/`eslint` + reasoning, never an
+  adversarial pass. It was interrupted by a session/token limit before
+  reporting findings. Every other commit in that session already got its
+  own reality-check pass (see the pt.3 session entry below for what was
+  found and fixed).
 - **Set up Resend Inbound for the enquiry email inbox** (2026-08-16): the
   webhook handler (`app/api/inbound/email/route.ts`) was rewritten to verify
   Resend's Svix-signed `email.received` webhook and fetch the full body via
@@ -199,6 +208,148 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-16 (Claude, pt.3) — Payment reliability sweep, payment terms, Tap to Pay checklist
+
+Long session, mostly triggered by a batch of live bug reports. Grouped by
+theme; commits are on `main` between `a2a4b54` (pt.1/pt.2, above) and
+`0b0e2eb`.
+
+**Payment reliability sweep** — several independent bugs in the Stripe
+Connect direct-charge path, found while chasing user reports one at a time:
+- `app/api/bookings/refund/route.ts` was missing `connectOptions(company)`
+  (flagged, not fixed, in the pt.1 credit-notes entry above) — fixed.
+- `estimatedSubtotal`/job-sheet PDF totals were summing `quantity*unit_price`
+  instead of the already-tax-extracted `line_total` — double-counted GST on
+  top of tax-inclusive prices. Same bug hit progress-claim invoicing (caught
+  in a follow-up reality-check pass — it set an explicit `due_date` that
+  skipped the new payment-terms trigger too, see below).
+- **Public invoice/booking-deposit payment was fully broken** on two fronts:
+  (1) the Payment Element mounted on a bare `setTimeout(50ms)` racing
+  React's render commit — lost often enough on phones that it silently never
+  mounted; (2) even after fixing that, Stripe.js was never loaded scoped to
+  the connected account (`loadStripe(pk, {stripeAccount})`), so a
+  direct-charge clientSecret couldn't resolve and the Payment Element
+  rendered completely blank. Both fixed; a reality-check pass then caught a
+  *third*, self-inflicted regression — `submitPayment()` switched React
+  state away from the `'form'` step as its first line, which unmounted the
+  Payment Element while `confirmPayment()` was still awaiting it.
+- **Built proper 3DS redirect handling**, since a real card can still force
+  a top-level redirect despite `redirect: 'if_required'`: `getOrCreatePaymentIntent()`
+  (`lib/stripe.ts`) reuses an open PaymentIntent across retries instead of
+  orphaning a fresh one per attempt (needed `invoices.stripe_payment_intent_id`,
+  migration `20260816110000`); both `pay-button.tsx` and `booking-widget.tsx`
+  now detect a redirect return and show a real succeeded/processing/failed
+  state. Reality-check pass caught two more here: 'processing' PaymentIntents
+  were being treated as reusable (Stripe rejects re-confirming one), and
+  `booking-widget.tsx` trusted booking id/amount from URL query params
+  before verifying them — fixed by a new public
+  `GET /api/bookings/resolve-deposit-intent` that resolves those
+  server-side from Stripe's own record instead (Stripe.js doesn't expose
+  PaymentIntent.metadata to client-side retrieval even with the real
+  clientSecret, so this had to go through the server regardless).
+
+**Mobile auth migration** — `/api/messages/{conversations,thread,action}`,
+`/api/sms/send`, and `/api/bookings/[id]` PATCH all used a cookie-only
+`getUser()` check, so every mobile request (Bearer token, no cookie) 401'd
+regardless of role — the reported "Inbox unauthorised" bug. Switched to
+`resolveCompanyUser()` (already used elsewhere for this) and added explicit
+`company_id` filters everywhere the old code leaned on RLS, since the
+service client bypasses it. Also: Stripe Terminal Location now runs
+`company.phone` through the existing `toE164()` helper (leading-0 NZ/AU
+numbers were rejected by Stripe); mobile got a manual time-log "+ Add"
+button (the create-mode UI already existed, just nothing opened it) and a
+job-site picker (RLS already allowed it, purely a missing screen); "Get
+paid" moved from the Subscription tab to Integrations (it's an external
+connection like Xero, not a plan/billing setting).
+
+**Job totals now come from the job, not just the quote** — a job created
+without a quote (e.g. the quick "New job" dialog) always showed $0.00
+everywhere, with no ceiling to invoice against. `estimatedSubtotal`/
+`financialJobTotal` now fall back to the job's own logged materials +
+billable labour when there's no quote. Two reality-check follow-ups: the
+customer page's own "To invoice" stat had the same gap independently (now
+fetches the same fallback data); the "fully invoiced" lock banner was
+computed from the new fallback-inclusive total, so a quote-less job could
+show "locked" even though the DB trigger (`20260815100000`) only ever locks
+a *quoted* job — banner now checks the quote total directly, matching the
+trigger exactly. A third gap (mobile's `/api/invoices` had its own,
+separate jobTotal computation that never got this fallback, so a
+quote-less job could still be re-invoiced after "full" on mobile
+specifically) was caught later, unprompted, and fixed the same way.
+
+**New feature: per-customer payment terms.** `invoices.due_date` was never
+set by any code path before this — always null. Three term shapes (due on
+receipt / net N days / a fixed day of the *following* month, clamped to
+that month's last real day) live on `companies` (default) and `customers`
+(optional override), computed by a `BEFORE INSERT` trigger
+(`compute_invoice_due_date()`, migration `20260816120000`) rather than in
+app code, so every invoice-creation path gets it for free. Verified against
+real local Postgres (`scripts/check-payment-terms.mjs`) including the
+month-rollover + last-day clamp. Reality-check pass caught progress-claim
+invoicing setting an explicit `due_date` that bypassed the trigger — fixed
+(see payment reliability sweep above).
+
+**Inbound email rewritten for Resend Inbound** — the enquiry-inbox email
+bounced "address not found" because `inbound.industryforms.app` has no MX
+record at all (nothing was ever set up to receive mail there). Also, the
+existing webhook handler was built for a generic flat inbound-parse payload
+(Mailgun/SendGrid style), not what got chosen: Resend Inbound, whose
+`email.received` webhook is Svix-signed and metadata-only — the body needs
+a separate `resend.emails.receiving.get()` call. Rewritten accordingly. DNS
++ webhook subscription + `RESEND_WEBHOOK_SECRET` are still owed (see Action
+items above).
+
+**Website**: founder section now credits Josh & Edin ("we" instead of "I")
+in three places; widened the Xero/Stripe/Google Calendar logo row's gap.
+
+**Two migrations applied to production this session**
+(`supabase db push --linked`): `20260816110000_invoice_payment_intent_id.sql`,
+`20260816120000_payment_terms.sql`.
+
+**Security audit + a final reality-check pass** were run across the whole
+session's diff (`a2a4b54..4d80aae`). Security audit: two candidates
+surfaced (public `resolve-deposit-intent`'s lack of ownership check; the
+payment-terms trigger not scoping `customer_id` to `company_id`), both
+filtered out on a dedicated false-positive pass — the first requires
+already possessing an unguessable Stripe id, the second inherits a
+structural gap in `invoices.customer_id` that predates this session (no
+FK/RLS cross-company constraint has ever existed on it — noted here as a
+defense-in-depth item, not fixed, since it's pre-existing and out of scope).
+The mobile auth migration (the largest, riskiest-looking change) came back
+clean, every query correctly scoped. A final holistic reality-check pass
+covering the four earliest commits of the session (never adversarially
+reviewed before) was interrupted by a session/token limit before finishing
+— worth re-running if picking this up cold.
+
+**Apple Tap to Pay submission checklist** (`App Review Requirements
+Checklist 1_6 (completed).xlsx`, outside this repo — Google Drive, JE Group
+Ltd/IndustryForms/App Releases/Apple/Tap to Pay Submission Assets/) was
+reviewed against the actual code and updated in place:
+- Implemented and now **Yes**: 1.4 (iOS < 17.6 gets a proactive "update iOS"
+  message — the SDK has no matching error code to catch reliably), 3.4
+  (Tap to Pay now surfaced at the end of the welcome tutorial, the app's
+  real onboarding flow), 5.9 (declined/timed-out/cancelled/failed now
+  distinguished in plain language instead of a raw SDK string).
+- Corrected to **Yes**, no code needed — already true, checklist was stale:
+  4.7 (PIN accessibility — already in `tap-to-pay-help.tsx`), the referenced
+  Stripe refund row (already live via credit-notes, and it covers Tap to
+  Pay payments specifically since they settle through the same
+  `payment_intent.succeeded` → `record_stripe_invoice_payment()` path as
+  any other Stripe invoice payment), and the two flow recordings (both
+  `.mp4`s now sit in the assets folder).
+- **4.1 (ProximityReaderDiscovery) marked N/A**, deliberately not forced to
+  Yes: the app integrates through the Stripe Terminal SDK, the correct path
+  for a PSP integration — calling Apple's raw API directly would mean
+  bypassing Stripe's SDK entirely. The education sub-requirements this row
+  exists to gate (4.5–4.8) are independently satisfied already. Worth a
+  second opinion from Stripe/Apple before submitting if there's any doubt.
+- Untouched, still need a human: HIG/Marketing-guide design review,
+  onboarding-speed and reader-warm-up timing (need a real device), regional
+  requirements, localization string wording, and the two "mechanism built,
+  not yet sent" marketing items (launch email + push) — those are one-shot
+  sends to real users, intentionally not triggered as a side effect of a
+  checklist review.
 
 ## Session 2026-08-16 (Claude, pt.2) — Mobile visitors nudged toward the Android app on signup/login
 
