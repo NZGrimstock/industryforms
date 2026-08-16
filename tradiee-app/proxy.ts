@@ -155,8 +155,15 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Public routes that don't need auth
-  const publicPaths = ['/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback', '/q/', '/i/', '/site/', '/api/']
+  // Public routes that don't need auth. Anything NOT listed here redirects a
+  // signed-out visitor to /login, so every page a logged-out person is
+  // legitimately sent to must be here — including the legal pages linked from
+  // the signup form and both app stores, and the token links we email out.
+  const publicPaths = [
+    '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback',
+    '/q/', '/i/', '/site/', '/api/',
+    '/terms', '/privacy', '/account-deletion', '/invite/', '/portal/',
+  ]
   const isPublic = publicPaths.some(p => pathname.startsWith(p))
 
   if (!user && !isPublic) {
