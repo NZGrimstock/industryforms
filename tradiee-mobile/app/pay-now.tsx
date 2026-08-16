@@ -46,6 +46,52 @@ function messageFromError(error: unknown) {
   return 'Something went wrong while collecting the payment.'
 }
 
+// Apple Tap to Pay review requirement 1.4: on iOS < 17.6, Apple's native
+// PaymentCardReaderError.osVersionNotSupported must be met with a message
+// telling the merchant to update iOS. The JS layer of
+// @stripe/stripe-terminal-react-native has no matching ErrorCode to catch
+// (it's a native ProximityReader error Stripe doesn't translate 1:1), so
+// this checks Platform.Version proactively before ever touching the reader
+// — more robust than hoping a specific error string round-trips intact.
+function iosVersionSupportsTapToPay(): boolean {
+  if (Platform.OS !== 'ios') return true
+  const [major, minor] = String(Platform.Version).split('.').map(n => parseInt(n, 10) || 0)
+  return major > 17 || (major === 17 && minor >= 6)
+}
+
+// Apple Tap to Pay review requirement 5.9: the outcome must be clearly
+// stated as approved, declined, or timed out — not a raw SDK error string.
+// The technical message is still shown underneath in smaller text, useful
+// for support calls, but it's secondary to the plain-language headline.
+type ErrorInfo = { title: string; message: string; detail: string }
+const DECLINE_CODES = new Set(['DECLINED_BY_STRIPE_API', 'DECLINED_BY_READER'])
+const TIMEOUT_CODES = new Set([
+  'CARD_READ_TIMED_OUT', 'REQUEST_TIMED_OUT', 'USB_DISCOVERY_TIMED_OUT',
+  'BLUETOOTH_SCAN_TIMED_OUT', 'COLLECT_INPUTS_TIMED_OUT',
+])
+function classifyError(error: unknown): ErrorInfo {
+  const detail = messageFromError(error)
+  const code = error && typeof error === 'object' ? (error as { code?: string }).code : undefined
+
+  if (Platform.OS === 'ios' && !iosVersionSupportsTapToPay()) {
+    return {
+      title: 'iOS Update Needed',
+      message: 'Tap to Pay needs iOS 17.6 or later on this iPhone. Update iOS in Settings, then try again.',
+      detail: '',
+    }
+  }
+  if (code === 'CANCELED') {
+    return { title: 'Payment Cancelled', message: 'The payment was cancelled before it completed.', detail }
+  }
+  if (code && DECLINE_CODES.has(code)) {
+    return { title: 'Payment Declined', message: 'The card was declined. Ask the customer to try a different card or payment method.', detail }
+  }
+  if (code && TIMEOUT_CODES.has(code)) {
+    return { title: 'Payment Timed Out', message: 'The payment took too long and was cancelled. Please try again.', detail }
+  }
+  return { title: 'Payment Failed', message: "The payment couldn't be completed. Please try again.", detail }
+}
+
 const STATUS_COLOR: Record<string, string> = {
   draft:          '#6b7280',
   sent:           '#3b82f6',
@@ -62,7 +108,7 @@ export default function PayNowScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [selected, setSelected] = useState<InvoiceSummary | null>(null)
   const [stage, setStage] = useState<PayStage>(preselectedId ? 'confirm' : 'select')
-  const [errorMsg, setErrorMsg] = useState('')
+  const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null)
   const [role, setRole] = useState<string | null>(null)
   // Apple Tap to Pay review requirement 3.9.1: show configuration progress
   // (0-100) while the reader is preparing, instead of a bare spinner.
@@ -165,7 +211,13 @@ export default function PayNowScreen() {
 
   async function startPayment() {
     if (!selected) return
-    setErrorMsg('')
+    setErrorInfo(null)
+
+    if (!iosVersionSupportsTapToPay()) {
+      setErrorInfo(classifyError(null))
+      setStage('error')
+      return
+    }
 
     try {
       // Codex build audit marker (2026-07-07): real Stripe Terminal Tap to Pay collect-confirm flow.
@@ -269,14 +321,14 @@ export default function PayNowScreen() {
       setStage('success')
     } catch (error) {
       await cancelDiscovering().catch(() => undefined)
-      setErrorMsg(messageFromError(error))
+      setErrorInfo(classifyError(error))
       setStage('error')
     }
   }
 
   function reset() {
     setStage(preselectedId ? 'confirm' : 'select')
-    setErrorMsg('')
+    setErrorInfo(null)
     setConfigProgress(null)
   }
 
@@ -336,8 +388,11 @@ export default function PayNowScreen() {
           <View style={s.errorCircle}>
             <Icon name="x" size={40} color="#ef4444" />
           </View>
-          <Text style={s.errorTitle}>Payment Failed</Text>
-          <Text style={s.errorMsg}>{errorMsg}</Text>
+          <Text style={s.errorTitle}>{errorInfo?.title ?? 'Payment Failed'}</Text>
+          <Text style={s.errorMsg}>{errorInfo?.message}</Text>
+          {errorInfo && errorInfo.detail && errorInfo.detail !== errorInfo.message && (
+            <Text style={s.errorDetail}>{errorInfo.detail}</Text>
+          )}
           <TouchableOpacity style={s.retryBtn} onPress={reset}>
             <Text style={s.retryBtnText}>Try Again</Text>
           </TouchableOpacity>
@@ -560,7 +615,8 @@ const s = StyleSheet.create({
     backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
   errorTitle: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 8 },
-  errorMsg: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 32 },
+  errorMsg: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 6 },
+  errorDetail: { fontSize: 12, color: '#9ca3af', textAlign: 'center', marginBottom: 32 },
   retryBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 15, paddingHorizontal: 40 },
   retryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 })

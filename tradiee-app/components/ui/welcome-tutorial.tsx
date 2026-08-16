@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CalendarCheck, Car, CheckCircle2, FileText, ReceiptText, Sparkles, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowRight, CalendarCheck, Car, CheckCircle2, CreditCard, FileText, ReceiptText, Sparkles, X } from 'lucide-react'
 
 type TutorialStep = {
   eyebrow: string
@@ -83,6 +84,7 @@ const FEATURE_GROUPS = [
 ]
 
 export function WelcomeTutorial({ initiallyOpen }: { initiallyOpen: boolean }) {
+  const router = useRouter()
   const [open, setOpen] = useState(initiallyOpen)
   const [phase, setPhase] = useState<'welcome' | 'tour' | 'features'>('welcome')
   const [step, setStep] = useState(0)
@@ -109,6 +111,18 @@ export function WelcomeTutorial({ initiallyOpen }: { initiallyOpen: boolean }) {
   async function complete() {
     setOpen(false)
     await fetch('/api/tutorial/seen', { method: 'POST' }).catch(() => null)
+  }
+
+  // Apple Tap to Pay review requirement 3.4: the app must clearly show how
+  // to enable Tap to Pay at the end of every new merchant onboarding
+  // process. This welcome tutorial is that process — Stripe Connect payouts
+  // (Settings → Integrations) is the actual gate Tap to Pay sits behind, so
+  // that's where this sends them; the iPhone-side enable step happens once
+  // they open the mobile app with payouts already live.
+  async function goToTapToPaySetup() {
+    setOpen(false)
+    await fetch('/api/tutorial/seen', { method: 'POST' }).catch(() => null)
+    router.push('/settings?tab=integrations')
   }
 
   // Opt-in demo data: seeds sample records across every module and flips the
@@ -229,7 +243,19 @@ export function WelcomeTutorial({ initiallyOpen }: { initiallyOpen: boolean }) {
                     </section>
                   ))}
                 </div>
-                <div className="mt-6 space-y-2">
+                <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[var(--accent,#f97316)]/30 bg-[var(--accent,#f97316)]/5 p-4">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent,#f97316)]/10 text-[var(--accent,#f97316)]">
+                    <CreditCard className="h-4.5 w-4.5" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-950">Take card payments in person</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">Connect Stripe once, then tap a customer&apos;s card on your iPhone with Tap to Pay — no card reader needed.</p>
+                    <button type="button" onClick={goToTapToPaySetup} className="mt-2 text-xs font-bold text-[var(--accent,#f97316)] hover:opacity-80">
+                      Set up payouts →
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
                   <button type="button" onClick={loadDemoAndComplete} disabled={seeding} className="w-full rounded-xl border border-[var(--accent,#f97316)] bg-[var(--accent,#f97316)]/10 px-5 py-3 text-sm font-bold text-[var(--accent,#f97316)] shadow-sm hover:bg-[var(--accent,#f97316)]/15 disabled:opacity-60">
                     {seeding ? 'Loading demo data…' : 'Explore with sample data first'}
                   </button>
