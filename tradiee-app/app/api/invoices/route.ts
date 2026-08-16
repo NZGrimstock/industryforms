@@ -73,7 +73,26 @@ export async function POST(req: NextRequest) {
       .order('sort_order')
     quoteLines = (data ?? []) as Line[]
   }
-  const jobTotal = quoteLines.reduce((s, l) => s + Number(l.line_total), 0)
+  let jobTotal = quoteLines.reduce((s, l) => s + Number(l.line_total), 0)
+
+  // A quote-less job still has a real total once work is logged against it —
+  // mirrors jobs/[id]/page.tsx's fallback (same reasoning: "Job total" must
+  // come from the job, not require a quote). Without this, invoiceGuard()
+  // below never fires for a quote-less job (jobTotal stayed 0), so "already
+  // fully invoiced" was never enforced when invoicing from mobile.
+  if (!job.quote_id) {
+    const [{ data: materials }, { data: timesheets }] = await Promise.all([
+      service.from('job_materials').select('quantity, unit_price').eq('job_id', job_id),
+      service.from('timesheets').select('started_at, ended_at, break_minutes, bill_rate, is_billable').eq('job_id', job_id),
+    ])
+    const materialsTotal = (materials ?? []).reduce((s, m) => Number(m.unit_price) > 0 ? s + Number(m.quantity) * Number(m.unit_price) : s, 0)
+    const labourTotal = (timesheets ?? []).reduce((s, t) => {
+      if (!t.is_billable || !t.bill_rate || !t.ended_at) return s
+      const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000 - Number(t.break_minutes ?? 0) / 60
+      return hrs > 0 ? s + hrs * Number(t.bill_rate) : s
+    }, 0)
+    jobTotal = materialsTotal + labourTotal
+  }
 
   const { data: priorInvoices } = await service
     .from('invoices')
