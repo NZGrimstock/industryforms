@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager } from '@/components/forms/company-lists'
+import { PaymentTermsFields } from '@/components/forms/payment-terms-fields'
 import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } from 'lucide-react'
 import { getPlan, planForSeats } from '@/lib/plans'
 import { extractAccent } from '@/lib/extract-color'
@@ -86,6 +87,9 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     review_request_enabled: company.review_request_enabled ?? true,
     standard_markup_enabled: (company as Company & { standard_markup_enabled?: boolean }).standard_markup_enabled ?? false,
     standard_markup_pct: ((company as Company & { standard_markup_pct?: number }).standard_markup_pct ?? 80).toString(),
+    payment_terms_type: (company as Company & { payment_terms_type?: string }).payment_terms_type ?? 'net_days',
+    payment_terms_days: ((company as Company & { payment_terms_days?: number }).payment_terms_days ?? 14).toString(),
+    payment_terms_day_of_month: (company as Company & { payment_terms_day_of_month?: number | null }).payment_terms_day_of_month?.toString() ?? '',
   })
 
   const [profileForm, setProfileForm] = useState({
@@ -203,6 +207,8 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       standard_markup_enabled: companyForm.standard_markup_enabled,
       standard_markup_pct: parseFloat(companyForm.standard_markup_pct) || 0,
       default_job_assignee_id: companyForm.default_job_assignee_id || null,
+      payment_terms_days: parseInt(companyForm.payment_terms_days) || 14,
+      payment_terms_day_of_month: companyForm.payment_terms_type === 'day_of_month' ? (parseInt(companyForm.payment_terms_day_of_month) || null) : null,
     }).eq('id', company.id)
     if (error) toast(error.message, 'error')
     else { toast('Company settings saved'); router.refresh() }
@@ -510,6 +516,19 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               </div>
               <div><Label>Country</Label>
                 <Select value={companyForm.country} onChange={e => setC('country', e.target.value)} options={[{ value: 'NZ', label: 'New Zealand' }, { value: 'AU', label: 'Australia' }]} />
+              </div>
+              <div>
+                <Label>Payment terms</Label>
+                <PaymentTermsFields
+                  value={{ type: companyForm.payment_terms_type, days: companyForm.payment_terms_days, dayOfMonth: companyForm.payment_terms_day_of_month }}
+                  onChange={patch => setCompanyForm(f => ({
+                    ...f,
+                    ...(patch.type !== undefined && { payment_terms_type: patch.type }),
+                    ...(patch.days !== undefined && { payment_terms_days: patch.days }),
+                    ...(patch.dayOfMonth !== undefined && { payment_terms_day_of_month: patch.dayOfMonth }),
+                  }))}
+                />
+                <p className="text-xs text-gray-400 mt-1">Sets each new invoice&apos;s due date. Any customer can override this individually.</p>
               </div>
               <div>
                 <Label>Default terms & conditions</Label>

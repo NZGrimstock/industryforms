@@ -14,6 +14,7 @@ import { VoiceInput } from '@/components/ui/voice-input'
 import { SmartWriteButton } from '@/components/ui/smart-write'
 import { Dialog } from '@/components/ui/dialog'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
+import { PaymentTermsFields } from '@/components/forms/payment-terms-fields'
 
 interface Props {
   companyId: string
@@ -37,6 +38,9 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
     billing_address: customer?.billing_address ?? '',
     pricing_group_id: customer?.pricing_group_id ?? '',
     notes: customer?.notes ?? '',
+    payment_terms_type: (customer as (Customer & { payment_terms_type?: string }) | undefined)?.payment_terms_type ?? '',
+    payment_terms_days: ((customer as (Customer & { payment_terms_days?: number }) | undefined)?.payment_terms_days ?? '').toString(),
+    payment_terms_day_of_month: ((customer as (Customer & { payment_terms_day_of_month?: number }) | undefined)?.payment_terms_day_of_month ?? '').toString(),
   })
   const [firstName, setFirstName] = useState(() => customer?.name?.split(' ')[0] ?? '')
   const [lastName, setLastName] = useState(() => customer?.name?.split(' ').slice(1).join(' ') ?? '')
@@ -67,6 +71,9 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
       billing_address: form.billing_address || null,
       pricing_group_id: form.pricing_group_id || null,
       notes: form.notes || null,
+      payment_terms_type: form.payment_terms_type || null,
+      payment_terms_days: form.payment_terms_type === 'net_days' ? (parseInt(form.payment_terms_days) || null) : null,
+      payment_terms_day_of_month: form.payment_terms_type === 'day_of_month' ? (parseInt(form.payment_terms_day_of_month) || null) : null,
     }
 
     let customerId = customer?.id ?? ''
@@ -201,6 +208,19 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
               <span className="text-sm text-gray-600">Add as job site</span>
             </label>
           )}
+        </div>
+        <div>
+          <Label>Payment terms</Label>
+          <PaymentTermsFields
+            allowInherit
+            value={{ type: form.payment_terms_type, days: form.payment_terms_days, dayOfMonth: form.payment_terms_day_of_month }}
+            onChange={patch => setForm(f => ({
+              ...f,
+              ...(patch.type !== undefined && { payment_terms_type: patch.type }),
+              ...(patch.days !== undefined && { payment_terms_days: patch.days }),
+              ...(patch.dayOfMonth !== undefined && { payment_terms_day_of_month: patch.dayOfMonth }),
+            }))}
+          />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
