@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { SettingsClient } from './client'
 
@@ -7,7 +7,12 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(*)').eq('id', user!.id).single()
   const { data: team } = await supabase.from('profiles').select('*').eq('company_id', profile!.company_id).order('full_name')
-  const { data: credits } = await supabase
+  // Service client: companies RLS only permits reading your own row, which
+  // would silently null out the referred company's name in this join. Safe
+  // here — the .eq('company_id', ...) below already scopes results to only
+  // this company's own earned credits; the service client just lets the
+  // *display name* of a company they referred come through too.
+  const { data: credits } = await createServiceClient()
     .from('referral_credits')
     .select('referred_company_id, month_number, companies!referred_company_id(name)')
     .eq('company_id', profile!.company_id)

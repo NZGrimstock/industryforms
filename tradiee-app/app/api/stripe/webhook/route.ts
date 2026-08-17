@@ -17,7 +17,7 @@ import { getPlan } from '@/lib/plans'
 import { maybeSendReviewRequest } from '@/lib/review-request'
 import { notify } from '@/lib/notify'
 import { sendEmail } from '@/lib/email'
-import { BILLING_ADDONS, type BillingAddonSlug, setAddonActive } from '@/lib/billing'
+import { BILLING_ADDONS, type BillingAddonSlug, setAddonActive, effectivePlanKey } from '@/lib/billing'
 import { createJobFromBooking } from '@/lib/bookings/fulfill'
 import { sendBookingConfirmationEmail } from '@/lib/bookings/notify'
 
@@ -268,7 +268,7 @@ async function handleReferralCredit(service: any, stripe: Stripe, invoice: Strip
   const monthNumber = (count ?? 0) + 1
 
   const { data: referrer } = await service.from('companies')
-    .select('id, name, subscription_plan, country, stripe_customer_id')
+    .select('id, name, subscription_plan, subscription_status, trial_ends_at, billing_exempt, country, stripe_customer_id')
     .eq('id', referrerCompanyId).single()
   if (!referrer) return
 
@@ -285,7 +285,11 @@ async function handleReferralCredit(service: any, stripe: Stripe, invoice: Strip
     }
   }
 
-  const plan = getPlan(referrer.subscription_plan)
+  // effectivePlanKey(), not the raw subscription_plan column — the column
+  // only resets on customer.subscription.deleted, so a referrer mid-dunning
+  // (status 'past_due', not yet canceled) would otherwise still price off
+  // their stale paid plan instead of correctly resolving to 'free'.
+  const plan = getPlan(effectivePlanKey(referrer))
   const currency = stripeCurrency(referrer.country)
   const amountCents = Math.round(plan.monthly * 100)
   if (amountCents <= 0) return // referrer isn't actually on a paid plan — nothing to credit

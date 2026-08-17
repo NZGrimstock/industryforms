@@ -1278,6 +1278,15 @@ function SignatureCaptureModal({
 
 const PLAN_DETAILS = [
   {
+    key: 'free',
+    label: 'Free',
+    price: 'Free forever',
+    users: '1 user',
+    desc: 'No credit card, no time limit',
+    features: ['Customers, quotes, jobs & invoices', '3 active jobs, 10 customers', 'Mobile app access'],
+    highlight: false,
+  },
+  {
     key: 'trial',
     label: 'Free trial',
     price: 'Free',
@@ -1290,8 +1299,6 @@ const PLAN_DETAILS = [
     key: 'solo',
     label: 'Solo',
     price: '$29/mo',
-    origPrice: '$49',
-    intro: 'Intro price, locked in for 2026',
     users: '1 user',
     desc: 'Perfect for sole traders',
     features: ['All core features', 'Unlimited jobs & quotes', 'Invoice payments', 'Customer portal', 'Price list & materials', 'Email included; SMS add-on'],
@@ -1301,8 +1308,6 @@ const PLAN_DETAILS = [
     key: 'team',
     label: 'Team',
     price: '$49/mo',
-    origPrice: '$79',
-    intro: 'Intro price, locked in for 2026',
     users: 'Up to 10 users',
     desc: 'Grow your crew',
     features: ['Everything in Solo', 'Team scheduling & GPS map', 'Role-based access', 'Timesheets & travel logs', 'Supplier/PO/Bills module', 'Projects add-on ($19/mo)', 'Instant website ($19/mo)'],
@@ -1312,8 +1317,6 @@ const PLAN_DETAILS = [
     key: 'pro',
     label: 'Pro',
     price: '$99/mo',
-    origPrice: '$149',
-    intro: 'Intro price, locked in for 2026',
     users: 'Unlimited users',
     desc: 'For larger operations',
     features: ['Everything in Team', 'Unlimited team members', 'Priority support', 'Advanced reporting', 'Bulk invoicing', 'Xero & accounting sync'],
@@ -1333,6 +1336,12 @@ function BillingTab({ company }: { company: Company }) {
     : null
 
   const currentPlan = company.subscription_plan ?? 'trial'
+  // subscription_plan never transitions off 'trial' on its own once the
+  // trial window lapses (see effectivePlanKey() in lib/billing.ts) — without
+  // this, a company on the permanent free floor still reads as "Free trial"
+  // with a red "trial expired" warning implying access is about to be cut,
+  // which is no longer true.
+  const onFreeFloor = effectivePlanKey(company) === 'free'
   const companyAddons = ((company as Company & { addons?: Record<string, { active?: boolean }> }).addons ?? {})
   const isExempt = (company as Company & { billing_exempt?: boolean }).billing_exempt === true
   const initialSmsEnabled = isExempt || companyAddons.sms_usage?.active === true
@@ -1405,8 +1414,12 @@ function BillingTab({ company }: { company: Company }) {
     router.refresh()
   }
 
-  const PLAN_ORDER = ['trial', 'solo', 'team', 'pro']
-  const currentIdx = PLAN_ORDER.indexOf(currentPlan)
+  const PLAN_ORDER = ['free', 'trial', 'solo', 'team', 'pro']
+  // subscription_plan never becomes 'free' on its own (see effectivePlanKey()
+  // in lib/billing.ts) — resolve which card is "current" from the same
+  // onFreeFloor check the status banner above already uses.
+  const displayPlanKey = onFreeFloor ? 'free' : currentPlan
+  const currentIdx = PLAN_ORDER.indexOf(displayPlanKey)
 
   return (
     <div className="space-y-6">
@@ -1416,13 +1429,15 @@ function BillingTab({ company }: { company: Company }) {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-base font-semibold text-gray-900">
-                Current plan: <span className="text-[var(--accent,#f97316)] capitalize">{currentPlan === 'trial' ? 'Free trial' : currentPlan}</span>
+                Current plan: <span className="text-[var(--accent,#f97316)] capitalize">{onFreeFloor ? 'Free' : currentPlan === 'trial' ? 'Free trial' : currentPlan}</span>
               </p>
               <p className="text-sm text-gray-500 capitalize mt-0.5">
-                Status: {company.subscription_status ?? 'trialing'}
-                {trialDaysLeft !== null && trialDaysLeft > 0 && ` · ${trialDaysLeft} days left`}
+                Status: {onFreeFloor ? 'free plan' : company.subscription_status ?? 'trialing'}
+                {!onFreeFloor && trialDaysLeft !== null && trialDaysLeft > 0 && ` · ${trialDaysLeft} days left`}
               </p>
-              {trialDaysLeft === 0 && currentPlan === 'trial' && (
+              {onFreeFloor ? (
+                <p className="text-sm text-gray-500 mt-1">Your trial has ended — you&apos;re on the Free plan, free forever, no credit card needed. Upgrade any time for more.</p>
+              ) : trialDaysLeft === 0 && currentPlan === 'trial' && (
                 <p className="text-sm text-red-600 font-medium mt-1">Trial expired — choose a plan below to continue</p>
               )}
             </div>
@@ -1494,9 +1509,9 @@ function BillingTab({ company }: { company: Company }) {
       {/* Plan grid */}
       <div id="plans" className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-5 scroll-mt-20">
         {PLAN_DETAILS.map((plan) => {
-          const isCurrent = plan.key === currentPlan
+          const isCurrent = plan.key === displayPlanKey
           const isUpgrade = PLAN_ORDER.indexOf(plan.key) > currentIdx
-          const isDowngrade = PLAN_ORDER.indexOf(plan.key) < currentIdx && plan.key !== 'trial'
+          const isDowngrade = PLAN_ORDER.indexOf(plan.key) < currentIdx && plan.key !== 'trial' && plan.key !== 'free'
           return (
             <div
               key={plan.key}
@@ -1521,10 +1536,8 @@ function BillingTab({ company }: { company: Company }) {
               <div className="mb-4">
                 <p className="text-base font-bold text-gray-900">{plan.label}</p>
                 <p className="mt-1 flex items-baseline gap-2">
-                  {plan.origPrice && <span className="text-base font-semibold text-gray-400 line-through">{plan.origPrice}</span>}
                   <span className="text-2xl font-bold text-[var(--accent,#f97316)]">{plan.price}</span>
                 </p>
-                {plan.intro && <p className="text-xs font-medium text-green-600 mt-0.5">{plan.intro}</p>}
                 <p className="text-xs text-gray-500 mt-0.5">{plan.users}</p>
                 <p className="text-xs text-gray-400 mt-1">{plan.desc}</p>
               </div>
@@ -1540,7 +1553,7 @@ function BillingTab({ company }: { company: Company }) {
                 <div className="rounded-lg bg-[var(--accent,#f97316)]/10 text-[var(--accent,#f97316)] text-xs font-semibold text-center py-2">
                   Active
                 </div>
-              ) : plan.key === 'trial' ? null : (
+              ) : plan.key === 'trial' || plan.key === 'free' ? null : (
                 <Button
                   size="sm"
                   variant={isDowngrade ? 'outline' : 'default'}

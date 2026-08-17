@@ -20,7 +20,7 @@ export function FreeTierBanner() {
     <div className="flex items-center gap-3 bg-orange-50 border-b border-orange-100 px-4 py-2 text-sm text-orange-900">
       <Sparkles className="h-4 w-4 text-orange-500 shrink-0" />
       <span className="flex-1 min-w-0 truncate">
-        <span className="font-semibold">Free Version</span> — {benefit}
+        <span className="font-semibold">Free Version</span> · free forever — {benefit}
       </span>
       <Link href="/upgrade" className="shrink-0 font-medium text-orange-600 hover:text-orange-700 hover:underline">
         Upgrade

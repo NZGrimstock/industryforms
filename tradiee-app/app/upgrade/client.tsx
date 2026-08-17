@@ -4,12 +4,12 @@ import { createClient } from '@/lib/supabase/client'
 import { Check } from 'lucide-react'
 
 const PLANS = [
-  { key: 'solo', label: 'Solo', price: '$29', origPrice: '$49', desc: '1 user · unlimited jobs, quotes & invoices' },
-  { key: 'team', label: 'Team', price: '$49', origPrice: '$79', desc: 'Up to 10 users · all features', popular: true },
-  { key: 'pro', label: 'Pro', price: '$99', origPrice: '$149', desc: 'Unlimited users · priority support' },
+  { key: 'solo', label: 'Solo', price: '$29', desc: '1 user · unlimited jobs, quotes & invoices' },
+  { key: 'team', label: 'Team', price: '$49', desc: 'Up to 10 users · all features', popular: true },
+  { key: 'pro', label: 'Pro', price: '$99', desc: 'Unlimited users · priority support' },
 ]
 
-export function UpgradeClient({ companyName }: { companyName: string }) {
+export function UpgradeClient({ companyName, stillHasFullAccess }: { companyName: string; stillHasFullAccess: boolean }) {
   const supabase = createClient()
   const [loading, setLoading] = useState('')
   const [error, setError] = useState('')
@@ -42,9 +42,11 @@ export function UpgradeClient({ companyName }: { companyName: string }) {
       <div className="w-full max-w-3xl">
         <div className="text-center mb-8">
           <p className="text-sm font-semibold text-orange-600 mb-1">IndustryForms</p>
-          <h1 className="text-2xl font-bold text-gray-900">Your free trial has ended</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{stillHasFullAccess ? 'Choose a plan' : 'You’re on the Free plan — free forever'}</h1>
           <p className="text-sm text-gray-500 mt-2">
-            Choose a plan to keep using {companyName ? <strong>{companyName}</strong> : 'your account'}. Cancel anytime.
+            {stillHasFullAccess
+              ? <>Upgrade {companyName ? <strong>{companyName}</strong> : 'your account'} any time — no rush, your trial is still active. Cancel anytime.</>
+              : <>No credit card needed to stay on Free. Upgrade {companyName ? <strong>{companyName}</strong> : 'your account'} any time for more seats, jobs, and features. Cancel anytime.</>}
           </p>
         </div>
 
@@ -58,10 +60,8 @@ export function UpgradeClient({ companyName }: { companyName: string }) {
               {p.popular && <span className="self-start mb-2 text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">Most popular</span>}
               <h2 className="text-lg font-semibold text-gray-900">{p.label}</h2>
               <p className="mt-1 flex items-baseline gap-2">
-                {p.origPrice && <span className="text-base font-semibold text-gray-400 line-through">{p.origPrice}</span>}
                 <span className="text-2xl font-bold text-gray-900">{p.price}</span><span className="text-sm text-gray-500">/mo</span>
               </p>
-              <p className="text-xs font-medium text-green-600 mt-0.5">Intro price, locked in for 2026</p>
               <p className="text-sm text-gray-500 mt-2 flex-1">{p.desc}</p>
               <button
                 onClick={() => subscribe(p.key)}

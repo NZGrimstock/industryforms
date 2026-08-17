@@ -1,7 +1,21 @@
 // Shared math for the job/customer financial summary boxes. Kept as pure
 // functions so both pages compute "to invoice" the same way.
 
+import { lineNet, round2 } from './pricing.ts'
+
 export type InvoiceForFinancials = { status: string; total: number | string; amount_paid: number | string }
+
+export type ActualLine = { quantity: number; unit_price: number }
+
+// GST-inclusive ceiling for a quote-less (time-and-materials) job, from its
+// own logged materials + billable labour hours. Respects prices_include_tax
+// the same way invoices do (lineNet(), lib/pricing.ts). Shared logic for the
+// "jobSourcedCeiling" computation duplicated across jobs/[id]/page.tsx,
+// customers/[id]/page.tsx, and the Jobs list's "To Invoice" tab.
+export function actualsJobCeiling(lines: ActualLine[], gstRate: number, pricesIncludeTax: boolean): number {
+  const net = lines.reduce((sum, l) => sum + lineNet(l.quantity, l.unit_price, null, 0, gstRate, pricesIncludeTax), 0)
+  return net > 0 ? round2(net * (1 + gstRate)) : 0
+}
 
 // Void invoices never happened financially — excluded from every total below.
 export function summarizeInvoices(invoices: InvoiceForFinancials[]) {
@@ -43,6 +57,22 @@ export function toInvoice(total: number, invoiced: number): number {
  * second empty draft invoice through with no prompt at all.
  */
 export const INVOICE_EPS = 0.01
+
+/**
+ * Jobs list's "To Invoice" / "Invoiced in Full" split, for a job whose
+ * status is terminal (completed-type, not cancelled). A job with zero
+ * invoices ever created reads as "to invoice" even when nothing is owed
+ * (ceiling 0, e.g. a job with no materials/labour logged) — nothing has
+ * actually been billed yet, which is the state that needs a tradie's
+ * attention, not "invoiced $0 automatically". Once at least one invoice
+ * exists and the live (non-void) total covers the ceiling, it's full.
+ */
+export function jobInvoicingBucket(
+  { ceiling, invoiced, invoiceCount }: { ceiling: number; invoiced: number; invoiceCount: number }
+): 'to-invoice' | 'invoiced-in-full' {
+  if (invoiceCount === 0) return 'to-invoice'
+  return toInvoice(ceiling, invoiced) > INVOICE_EPS ? 'to-invoice' : 'invoiced-in-full'
+}
 
 export function invoiceGuard(
   { jobTotal, alreadyInvoiced, subtotal, force = false }:

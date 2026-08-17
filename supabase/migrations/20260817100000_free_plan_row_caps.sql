@@ -40,9 +40,14 @@ $$ language plpgsql stable security definer set search_path = public;
 -- tradiee-app/lib/plans.ts — same drift risk noted above, kept as plain
 -- constants here rather than a shared config table (matches job_is_locked()
 -- being self-contained SQL, not reading from app config). "Active" jobs
--- excludes the two terminal statuses, same semantics as the jobs list's own
--- "Active" pill — a free-tier company shouldn't get permanently capped by
--- jobs it already finished.
+-- excludes terminal statuses, same semantics as the jobs list's own "Active"
+-- pill — a free-tier company shouldn't get permanently capped by jobs it
+-- already finished. job_statuses is per-company customizable (Settings →
+-- Workflow lets an owner rename or replace the seeded 'completed'/
+-- 'cancelled' rows), so this joins on job_statuses.is_terminal rather than
+-- hardcoding those two keys — a hardcoded check would silently stop
+-- excluding finished jobs the moment a company renamed their terminal
+-- status, permanently capping them.
 create or replace function enforce_plan_row_cap() returns trigger as $$
 declare
   v_kind text := TG_ARGV[0];
@@ -50,14 +55,34 @@ declare
   v_cap integer;
   v_count integer;
 begin
+  -- Locks the company row for the rest of this transaction, serializing
+  -- concurrent inserts for the same company (e.g. a web request and a
+  -- mobile PowerSync sync landing at once) so two racing inserts can't both
+  -- read the same under-cap count and both pass.
+  perform 1 from companies where id = new.company_id for update;
+
   if company_effective_plan(new.company_id) <> 'free' then
     return new;
   end if;
 
   if v_kind = 'jobs' then
     v_cap := 3;
-    select count(*) into v_count from jobs
-      where company_id = new.company_id and status not in ('completed', 'cancelled');
+    -- A job counts as terminal (excluded from the cap) when job_statuses has
+    -- a matching row saying so, OR — if job_statuses has no row at all for
+    -- that status, which should never happen for a real company (signup
+    -- always seeds it) but would otherwise make every job in that company
+    -- count as active forever, including finished ones — the status is one
+    -- of the two seeded default keys. Belt and braces, not an either/or.
+    select count(*) into v_count from jobs j
+      where j.company_id = new.company_id
+        and not exists (
+          select 1 from job_statuses js
+          where js.company_id = j.company_id and js.key = j.status and js.is_terminal
+        )
+        and (
+          exists (select 1 from job_statuses js where js.company_id = j.company_id and js.key = j.status)
+          or j.status not in ('completed', 'cancelled')
+        );
   elsif v_kind = 'customers' then
     v_cap := 10;
     select count(*) into v_count from customers where company_id = new.company_id;

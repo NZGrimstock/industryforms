@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import type { BillingCompany } from '@/lib/billing'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 import { UpgradeClient } from './client'
 
 export default async function UpgradePage() {
@@ -21,5 +21,9 @@ export default async function UpgradePage() {
   if (profile?.is_super_admin || company?.billing_exempt || company?.subscription_status === 'active') redirect('/dashboard')
 
   const companyName = (profile?.companies as { name?: string } | null)?.name ?? ''
-  return <UpgradeClient companyName={companyName} />
+  // Trial and free-tier companies land here voluntarily now (clicking an
+  // "Upgrade" link) — neither is losing access, unlike the old world where
+  // this page only existed for a lapsed, locked-out trial.
+  const stillHasFullAccess = effectivePlanKey(company) === 'trial'
+  return <UpgradeClient companyName={companyName} stillHasFullAccess={stillHasFullAccess} />
 }

@@ -20,6 +20,10 @@ export async function POST(req: Request) {
 
   const { plan } = await req.json() as { plan?: PlanKey }
   if (!plan) return NextResponse.json({ error: 'plan required' }, { status: 400 })
+  // 'free' is a derived floor (see effectivePlanKey() in lib/billing.ts), never
+  // a real subscription state — it must never be written to subscription_plan,
+  // and this route has no Stripe call to actually downgrade a paying company.
+  if (plan === 'free') return NextResponse.json({ error: 'Unknown plan' }, { status: 400 })
   const target = getPlan(plan)
   if (target.key !== plan) return NextResponse.json({ error: 'Unknown plan' }, { status: 400 })
 
