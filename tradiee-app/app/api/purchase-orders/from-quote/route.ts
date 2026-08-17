@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { nextDocNumber } from '@/lib/numbering'
+import { isFreePlanCompany } from '@/lib/billing'
 
 const bodySchema = z.object({ quote_id: z.string().uuid() })
 
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest) {
   const service = createServiceClient()
   const { data: profile } = await service.from('profiles').select('company_id').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'No profile' }, { status: 403 })
+  if (await isFreePlanCompany(service, profile.company_id)) {
+    return NextResponse.json({ error: 'Auto-generating purchase orders requires a paid plan. Create one manually instead.' }, { status: 403 })
+  }
 
   const { data: quote } = await service
     .from('quotes')

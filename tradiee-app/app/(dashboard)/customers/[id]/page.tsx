@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/ui/badge'
 import { formatDate, formatCurrency, formatDateTime } from '@/lib/utils'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
-import { round2 } from '@/lib/pricing'
+import { round2, lineNet } from '@/lib/pricing'
 import { currentFinancialYearStart } from '@/lib/financial-year'
 import Link from 'next/link'
 import { CustomerDetailClient } from './client'
@@ -19,7 +19,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id, full_name, role, timezone, companies!company_id(country, default_gst_rate)')
+    .select('company_id, full_name, role, timezone, companies!company_id(country, default_gst_rate, prices_include_tax)')
     .eq('id', user!.id)
     .single()
 
@@ -32,9 +32,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   if (!customer) notFound()
 
-  const company = profile!.companies as unknown as { country: string | null; default_gst_rate: number | null } | null
+  const company = profile!.companies as unknown as { country: string | null; default_gst_rate: number | null; prices_include_tax?: boolean | null } | null
   const currency = company?.country === 'AU' ? 'AUD' : 'NZD'
   const gstRate = company?.default_gst_rate ?? 0.15
+  const pricesIncludeTax = !!company?.prices_include_tax
 
   const [quotesRes, jobsRes, allInvoicesRes, commsRes, messagesRes, pricingGroupsRes] = await Promise.all([
     supabase.from('quotes').select('id, quote_number, status, total, created_at').eq('customer_id', id).order('created_at', { ascending: false }).limit(10),
@@ -70,16 +71,18 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         supabase.from('timesheets').select('job_id, started_at, ended_at, break_minutes, bill_rate, is_billable').in('job_id', quotelessJobIds),
       ])
     : [{ data: [] }, { data: [] }]
+  // Net of GST when prices_include_tax is on — same fix as jobs/[id]/page.tsx's
+  // actualTotal, see its comment for why lineNet() is needed here.
   const actualTotalByJob = new Map<string, number>()
   for (const m of materialsRes.data ?? []) {
     if (Number(m.unit_price) <= 0) continue
-    actualTotalByJob.set(m.job_id, (actualTotalByJob.get(m.job_id) ?? 0) + Number(m.quantity) * Number(m.unit_price))
+    actualTotalByJob.set(m.job_id, (actualTotalByJob.get(m.job_id) ?? 0) + lineNet(Number(m.quantity), Number(m.unit_price), null, 0, gstRate, pricesIncludeTax))
   }
   for (const t of timesheetsRes.data ?? []) {
     if (!t.is_billable || !t.bill_rate || !t.ended_at) continue
     const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000 - Number(t.break_minutes ?? 0) / 60
     if (hrs <= 0) continue
-    actualTotalByJob.set(t.job_id, (actualTotalByJob.get(t.job_id) ?? 0) + hrs * Number(t.bill_rate))
+    actualTotalByJob.set(t.job_id, (actualTotalByJob.get(t.job_id) ?? 0) + lineNet(hrs, Number(t.bill_rate), null, 0, gstRate, pricesIncludeTax))
   }
 
   // "To invoice" per job needs that job's own invoices, so group first.

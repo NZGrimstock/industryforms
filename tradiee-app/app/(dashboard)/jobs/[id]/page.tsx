@@ -12,7 +12,8 @@ import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard } from '@/lib/job-financials'
-import { round2 } from '@/lib/pricing'
+import { round2, lineNet } from '@/lib/pricing'
+import { effectivePlanKey } from '@/lib/billing'
 import { JobDetailClient } from './client'
 import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
@@ -36,7 +37,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, logo_url, country, standard_markup_enabled, standard_markup_pct)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -122,6 +123,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const profileHasSignature = !!((profile as Record<string, unknown>).signature_base64)
 
   const gstRate = (profile?.companies as {default_gst_rate: number} | null)?.default_gst_rate ?? 0.15
+  const pricesIncludeTax = !!(profile?.companies as {prices_include_tax?: boolean} | null)?.prices_include_tax
 
   // Actual line items for "invoice from actuals" (logged materials + billable
   // labour) — computed early because it now also backs "Job total" for a job
@@ -152,7 +154,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     type: 'labour' as const,
   }))
   const actualLines = [...actualMaterialLines, ...actualLabourLines]
-  const actualTotal = actualLines.reduce((sum, l) => sum + l.quantity * l.unit_price, 0)
+  // Net of GST when the company enters tax-inclusive prices — job_materials/
+  // timesheets have no separate net line_total column like quote_line_items
+  // does, so unit_price is the only source; lineNet() strips the tax portion
+  // the same way quote-builder.tsx does for quote lines (see lineNet() in
+  // lib/pricing.ts). Previously this always treated unit_price as already-net
+  // and then GST got added on top a second time downstream.
+  const actualTotal = actualLines.reduce((sum, l) => sum + lineNet(l.quantity, l.unit_price, null, 0, gstRate, pricesIncludeTax), 0)
 
   // Job costing: estimated from the quote when the job has one; otherwise
   // from the job's own logged materials + billable labour (actualTotal) —
@@ -243,9 +251,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         .map(i => ({ id: i.id as string, invoice_number: i.invoice_number as string }))[0]
     : null
 
-  const co = profile?.companies as { name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string } | null
+  const co = profile?.companies as {
+    name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string
+    subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+  } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
   const currency = co?.country === 'AU' ? 'AUD' : 'NZD'
+  const isFreePlan = effectivePlanKey(co) === 'free'
   const sheetData = {
     job: {
       id: job.id,
@@ -288,6 +300,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
       logo_url: co?.logo_url ?? null,
       gst_number: co?.gst_number ?? null,
       default_gst_rate: co?.default_gst_rate ?? 0.15,
+      isFreePlan: effectivePlanKey(co) === 'free',
     },
     timezone: (profile as { timezone?: string | null } | null)?.timezone ?? DEFAULT_TIMEZONE,
   }
@@ -339,6 +352,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               projectAddress={(job.customer_sites as { address: string } | null)?.address ?? null}
               sheetData={sheetData}
               gstRate={gstRate}
+              pricesIncludeTax={pricesIncludeTax}
               nextInvoiceNumber={nextInvoiceNumber}
               jobTotal={estimatedSubtotal}
               quoteId={job.quote_id ?? null}
@@ -372,7 +386,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
               <CardTitle>Materials &amp; parts</CardTitle>
-              <OrderMaterialsButton jobId={id} disabled={(materialsRes.data ?? []).length === 0} />
+              <OrderMaterialsButton
+                jobId={id}
+                disabled={isFreePlan || (materialsRes.data ?? []).length === 0}
+                disabledReason={isFreePlan ? 'Auto-generating purchase orders requires a paid plan' : undefined}
+              />
             </div>
             {jobPurchaseOrders.length > 0 && (
               <p className="mt-1 text-xs text-gray-500">

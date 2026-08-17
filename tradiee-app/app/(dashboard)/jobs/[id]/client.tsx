@@ -17,6 +17,7 @@ import { TimePicker } from '@/components/ui/time-picker'
 import { PrintJobSheet } from '@/components/pdf/print-job-sheet'
 import { InviteSubcontractorModal } from '@/components/jobs/InviteSubcontractorModal'
 import type { JobSheetData } from '@/components/pdf/job-sheet-pdf'
+import { lineNet } from '@/lib/pricing'
 
 interface Props {
   job: { id: string; job_number: string; status: string; customer_id: string; title: string; description: string | null; tags: string[] | null; assigned_to: string | null }
@@ -27,6 +28,7 @@ interface Props {
   projectAddress: string | null
   sheetData: JobSheetData
   gstRate: number
+  pricesIncludeTax: boolean
   nextInvoiceNumber: string
   jobTotal: number
   quoteId: string | null
@@ -40,7 +42,7 @@ interface Props {
 
 type JobDialog = 'schedule' | 'assign' | 'both' | 'note' | 'timesheet' | null
 
-export function JobDetailClient({ job, companyId, profileId, team, assignees, projectAddress, sheetData, gstRate, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, existingInvoice, actualLines, actualTotal, jobStatuses }: Props) {
+export function JobDetailClient({ job, companyId, profileId, team, assignees, projectAddress, sheetData, gstRate, pricesIncludeTax, nextInvoiceNumber, jobTotal, quoteId, alreadyInvoiced, existingInvoice, actualLines, actualTotal, jobStatuses }: Props) {
   const supabase = createClient()
   const db = useContext(PowerSyncContext)
   const router = useRouter()
@@ -215,7 +217,7 @@ export function JobDetailClient({ job, companyId, profileId, team, assignees, pr
       lineItemsToInsert = [{ description: `Progress claim — ${progressPct}% of quoted works`, quantity: 1, unit: 'each', unit_price: subtotal, line_total: subtotal, type: 'misc' }]
     } else if (basis === 'actuals') {
       if (actualLines.length === 0) { toast('No logged time or materials to invoice yet.', 'error'); return }
-      lineItemsToInsert = actualLines.map(l => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, line_total: l.quantity * l.unit_price, type: l.type }))
+      lineItemsToInsert = actualLines.map(l => ({ description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, line_total: lineNet(l.quantity, l.unit_price, null, 0, gstRate, pricesIncludeTax), type: l.type }))
       if (alreadyInvoiced > EPS) {
         lineItemsToInsert.push({ description: 'Less previously invoiced', quantity: 1, unit: 'each', unit_price: -alreadyInvoiced, line_total: -alreadyInvoiced, type: 'misc' })
       }

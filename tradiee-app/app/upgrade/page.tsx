@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { hasAccess, type BillingCompany } from '@/lib/billing'
+import type { BillingCompany } from '@/lib/billing'
 import { UpgradeClient } from './client'
 
 export default async function UpgradePage() {
@@ -15,8 +15,10 @@ export default async function UpgradePage() {
     .single()
   const company = (profile?.companies ?? null) as BillingCompany | null
 
-  // Still entitled? Don't show the paywall — send them into the app.
-  if (hasAccess(!!profile?.is_super_admin, company)) redirect('/dashboard')
+  // Already on a real paid plan (or exempt)? No need to see the upgrade page —
+  // send them into the app. Trial and free-tier companies still see it, since
+  // access is no longer all-or-nothing (see effectivePlanKey() in lib/billing.ts).
+  if (profile?.is_super_admin || company?.billing_exempt || company?.subscription_status === 'active') redirect('/dashboard')
 
   const companyName = (profile?.companies as { name?: string } | null)?.name ?? ''
   return <UpgradeClient companyName={companyName} />

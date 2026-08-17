@@ -27,12 +27,13 @@ type Job = {
 }
 
 export function JobsListTable({
-  jobs, jobStatuses, companyId, gstRate, sortParams, sort, dir,
+  jobs, jobStatuses, companyId, gstRate, pricesIncludeTax, sortParams, sort, dir,
 }: {
   jobs: Job[]
   jobStatuses: { key: string; label: string; color: string; is_terminal?: boolean }[]
   companyId: string
   gstRate: number
+  pricesIncludeTax: boolean
   sortParams: Record<string, string>
   sort?: string
   dir?: string
@@ -72,7 +73,7 @@ export function JobsListTable({
 
     setBusy(true)
     try {
-      const result = await createBatchInvoices(supabase, targets, { companyId, gstRate, doneStatusKey: doneStatus?.key ?? null })
+      const result = await createBatchInvoices(supabase, targets, { companyId, gstRate, pricesIncludeTax, doneStatusKey: doneStatus?.key ?? null })
       toast(summarize(result), result.created.length > 0 ? 'success' : 'error')
 
       if (result.created.length > 0) {

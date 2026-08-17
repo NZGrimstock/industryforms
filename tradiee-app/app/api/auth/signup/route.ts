@@ -29,9 +29,19 @@ async function notifyAdminConsole(input: { fullName: string; email: string; phon
   if (!response.ok) throw new Error(`admin console responded ${response.status}`)
 }
 
+// 8-char base36 code — collision-checked at insert time (retried on conflict),
+// not because collisions are likely, but because it's cheap insurance.
+function generateReferralCode(): string {
+  return Math.random().toString(36).slice(2, 10).toUpperCase()
+}
+
+function emailDomain(addr: string | null | undefined): string | null {
+  return addr?.split('@')[1]?.toLowerCase() ?? null
+}
+
 export async function POST(request: Request) {
   try {
-    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms } = await request.json()
+    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms, referralCode } = await request.json()
 
     if (!fullName || !email || !password || !companyName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -67,25 +77,50 @@ export async function POST(request: Request) {
     const gstRate = country === 'AU' ? 0.10 : 0.15
     const trialEndsAt = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString()
 
-    // Create company
-    const { data: company, error: companyError } = await supabase
-      .from('companies')
-      .insert({
-        name: companyName,
-        trade_type: tradeType || null,
-        country,
-        phone: phone.trim(),
-        address: companyAddress || null,
-        default_gst_rate: gstRate,
-        subscription_plan: 'trial',
-        subscription_status: 'trialing',
-        trial_ends_at: trialEndsAt,
-      })
-      .select()
-      .single()
-    if (companyError) {
+    // Referral attribution — optional, never blocks signup. An invalid code
+    // or a self-referral attempt (same email domain as the referrer) just
+    // silently skips attribution rather than erroring the whole signup.
+    let referredByCompanyId: string | null = null
+    if (referralCode) {
+      const { data: referrer } = await supabase
+        .from('companies')
+        .select('id, email')
+        .eq('referral_code', String(referralCode).trim().toUpperCase())
+        .maybeSingle()
+      if (referrer && emailDomain(referrer.email) !== emailDomain(email)) {
+        referredByCompanyId = referrer.id
+      }
+    }
+
+    // Create company. Every company gets its own referral_code to share —
+    // collision odds are astronomical (36^8) but the retry is cheap insurance.
+    let company: { id: string } | null = null
+    let companyError: { message: string } | null = null
+    for (let attempt = 0; attempt < 3 && !company; attempt++) {
+      const result = await supabase
+        .from('companies')
+        .insert({
+          name: companyName,
+          trade_type: tradeType || null,
+          country,
+          phone: phone.trim(),
+          address: companyAddress || null,
+          default_gst_rate: gstRate,
+          subscription_plan: 'trial',
+          subscription_status: 'trialing',
+          trial_ends_at: trialEndsAt,
+          referral_code: generateReferralCode(),
+          referred_by_company_id: referredByCompanyId,
+        })
+        .select()
+        .single()
+      if (result.data) { company = result.data; break }
+      companyError = result.error
+      if (!result.error?.message.includes('referral_code')) break // not a code collision — don't retry
+    }
+    if (!company) {
       await supabase.auth.admin.deleteUser(userId)
-      return NextResponse.json({ error: companyError.message }, { status: 400 })
+      return NextResponse.json({ error: companyError?.message ?? 'Could not create company' }, { status: 400 })
     }
 
     // Create profile (owner)

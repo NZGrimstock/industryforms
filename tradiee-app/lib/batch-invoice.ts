@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { lineNet } from './pricing'
 
 export type BatchInvoiceJob = {
   id: string
@@ -23,7 +24,7 @@ export type BatchInvoiceResult = {
 export async function createBatchInvoices(
   supabase: SupabaseClient,
   jobs: BatchInvoiceJob[],
-  opts: { companyId: string; gstRate: number; doneStatusKey: string | null }
+  opts: { companyId: string; gstRate: number; pricesIncludeTax: boolean; doneStatusKey: string | null }
 ): Promise<BatchInvoiceResult> {
   const result: BatchInvoiceResult = { created: [], skipped: [] }
   if (jobs.length === 0) return result
@@ -58,9 +59,11 @@ export async function createBatchInvoices(
         supabase.from('job_materials').select('description, quantity, unit, unit_price').eq('job_id', job.id),
         supabase.from('timesheets').select('started_at, ended_at, break_minutes, bill_rate, is_billable').eq('job_id', job.id),
       ])
+      // Net of GST when prices_include_tax is on — see the identical fix and
+      // comment in app/api/invoices/route.ts's 'materials' branch.
       const materialLines = (materialsRes.data ?? [])
         .filter(m => Number(m.unit_price) > 0)
-        .map(m => ({ description: m.description as string, quantity: Number(m.quantity), unit: (m.unit as string) ?? 'each', unit_price: Number(m.unit_price), line_total: Number(m.quantity) * Number(m.unit_price), type: 'material' }))
+        .map(m => ({ description: m.description as string, quantity: Number(m.quantity), unit: (m.unit as string) ?? 'each', unit_price: Number(m.unit_price), line_total: lineNet(Number(m.quantity), Number(m.unit_price), null, 0, opts.gstRate, opts.pricesIncludeTax), type: 'material' }))
       const labourByRate = new Map<number, number>()
       for (const t of timesheetsRes.data ?? []) {
         if (!t.is_billable || !t.bill_rate || !t.ended_at) continue
@@ -70,7 +73,7 @@ export async function createBatchInvoices(
       }
       const labourLines = [...labourByRate.entries()].map(([rate, hrs]) => {
         const qty = Math.round(hrs * 100) / 100
-        return { description: 'Labour', quantity: qty, unit: 'hr', unit_price: rate, line_total: qty * rate, type: 'labour' }
+        return { description: 'Labour', quantity: qty, unit: 'hr', unit_price: rate, line_total: lineNet(qty, rate, null, 0, opts.gstRate, opts.pricesIncludeTax), type: 'labour' }
       })
       lines = [...materialLines, ...labourLines]
     }

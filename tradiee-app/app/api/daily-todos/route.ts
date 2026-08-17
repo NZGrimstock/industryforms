@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createOpenAIText, openAiConfigured, OPENAI_MODEL_NANO, parseJsonObject } from '@/lib/openai'
 import { createServiceClient } from '@/lib/supabase/server'
 import { DEFAULT_TIMEZONE, formatTime } from '@/lib/datetime'
+import { effectivePlanKey } from '@/lib/billing'
 
 type SourceType = 'visit_today' | 'quote_followup' | 'invoice_overdue' | 'enquiry_followup' | 'job_stalled'
 
@@ -196,10 +197,28 @@ async function run() {
     })
   }
 
+  // ── 2b. Drop candidates for free-plan companies ───────────────────────────
+  // Automatic to-dos are a paid feature (the DB trigger on `todos` would
+  // reject these inserts anyway — block_auto_todo_if_free_plan in
+  // 20260817120000_free_plan_feature_gates.sql — but filtering here first
+  // skips the AI-polish call below for candidates that would just be
+  // rejected, not just avoids a scary error in the logs).
+  const candidateCompanyIds = [...new Set(candidates.map(c => c.companyId))]
+  const freeCompanyIds = new Set<string>()
+  if (candidateCompanyIds.length) {
+    const { data: candidateCompanies } = await svc.from('companies')
+      .select('id, subscription_plan, subscription_status, trial_ends_at, billing_exempt')
+      .in('id', candidateCompanyIds)
+    for (const co of candidateCompanies ?? []) {
+      if (effectivePlanKey(co) === 'free') freeCompanyIds.add(co.id as string)
+    }
+  }
+  const payingCandidates = candidates.filter(c => !freeCompanyIds.has(c.companyId))
+
   // ── 3. Let the cheap utility model polish the morning list wording ────────
   // Source selection stays deterministic above; AI may only tighten title,
   // description, and priority for the already-selected task.
-  const finalCandidates = await refineDailyTodoText(candidates)
+  const finalCandidates = await refineDailyTodoText(payingCandidates)
 
   // ── 4. Upsert candidates ──────────────────────────────────────────────────
   // Partial unique index on (assigned_to, source_type, source_id) handles dupes;

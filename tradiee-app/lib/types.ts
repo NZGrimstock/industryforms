@@ -37,6 +37,8 @@ export interface Company {
   xero_token_expires_at: string | null
   default_project_stages: string[] | null
   default_job_assignee_id: string | null
+  referral_code?: string | null
+  referred_by_company_id?: string | null
   created_at: string
   updated_at: string
 }

@@ -14,6 +14,7 @@ import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { RevertToJobButton } from '@/components/invoices/revert-to-job-button'
 import { InvoiceLinesProvider, InvoiceLinesCard, type InvoiceLine } from '@/components/invoices/invoice-lines'
 import { CreditNotesCard } from './credit-notes-card'
+import { effectivePlanKey } from '@/lib/billing'
 import { maxCreditableAmount, maxRefundableAmount, availableCreditBalance } from '@/lib/credit-notes'
 import { Mail } from 'lucide-react'
 import Link from 'next/link'
@@ -22,7 +23,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
 
   const { data: invoice } = await supabase
     .from('invoices')
@@ -59,7 +60,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const alreadyRefunded = liveCreditsOnThisInvoice.filter(c => c.outcome === 'refund').reduce((s, c) => s + Number(c.amount), 0)
   const refundable = maxRefundableAmount(stripePaidTotal, alreadyRefunded)
   const availableCustomerCredit = availableCreditBalance((customerCreditNotes ?? []) as Parameters<typeof availableCreditBalance>[0])
-  const co = profile?.companies as unknown as {name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number; xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null; logo_url: string | null} | null
+  const co = profile?.companies as unknown as {
+    name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number
+    xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null; logo_url: string | null
+    subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+  } | null
   const gstRate = co?.default_gst_rate ?? 0.15
   const xeroConnected = !!co?.xero_tenant_id
   const printData: InvoicePdfData = {
@@ -74,6 +79,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       phone: co?.phone ?? null,
       gst_number: co?.gst_number ?? null,
       logo_url: await logoDataUri(co?.logo_url),
+      isFreePlan: effectivePlanKey(co) === 'free',
     },
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }

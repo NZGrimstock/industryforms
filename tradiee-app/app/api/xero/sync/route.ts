@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { refreshXeroToken, syncInvoiceToXero } from '@/lib/xero'
+import { isFreePlanCompany } from '@/lib/billing'
 
 const bodySchema = z.object({ invoiceId: z.string().uuid() })
 
@@ -17,6 +18,12 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await service.from('profiles').select('company_id, companies!company_id(xero_tenant_id, xero_access_token, xero_refresh_token, xero_token_expires_at, default_gst_rate)').eq('id', user.id).single()
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+  // Defense in depth — the connect button/entry point is also gated
+  // (app/api/xero/auth), this covers a company that connected on a higher
+  // plan and later downgraded.
+  if (await isFreePlanCompany(service, profile.company_id)) {
+    return NextResponse.json({ error: 'Xero sync requires a paid plan.' }, { status: 403 })
+  }
 
   const co = profile.companies as unknown as { xero_tenant_id: string | null; xero_access_token: string | null; xero_refresh_token: string | null; xero_token_expires_at: string | null; default_gst_rate: number | null } | null
   if (!co?.xero_tenant_id || !co.xero_refresh_token) {

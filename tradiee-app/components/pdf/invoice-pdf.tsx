@@ -44,6 +44,7 @@ const s = StyleSheet.create({
   bottomCol: { flex: 1 },
   bottomHeading: { fontSize: 7, color: GREY, textTransform: 'uppercase', fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   bottomText: { fontSize: 7.5, color: GREY, lineHeight: 1.5 },
+  watermark: { textAlign: 'center', fontSize: 7, color: GREY, marginTop: 18 },
 })
 
 function fmt(n: number | null | undefined) {
@@ -71,7 +72,7 @@ export interface InvoicePdfData {
     jobs?: { job_number: string; title: string } | null
     invoice_line_items?: Array<{ id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number }>
   }
-  company: { name: string; email?: string | null; phone?: string | null; gst_number?: string | null; logo_url?: string | null }
+  company: { name: string; email?: string | null; phone?: string | null; gst_number?: string | null; logo_url?: string | null; isFreePlan?: boolean }
   timezone?: string
 }
 
@@ -181,6 +182,8 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
             <Text style={s.bottomText}>{data.invoice.invoice_footer ?? 'Payment is due by the date marked above. Thank you for your business.'}</Text>
           </View>
         </View>
+
+        {data.company.isFreePlan ? <Text style={s.watermark}>Powered by www.industryforms.app</Text> : null}
       </Page>
     </Document>
   )

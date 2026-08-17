@@ -13,6 +13,7 @@ import { InvoicePdf, type InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { putObject, presignedDownload, PRIVATE_BUCKET } from '@/lib/r2'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { logoDataUri } from '@/lib/pdf-logo'
+import { effectivePlanKey } from '@/lib/billing'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -24,14 +25,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('*, customers(name, email, billing_address), jobs(job_number, title), invoice_line_items(*), companies(name, email, phone, gst_number, logo_url, payment_instructions, invoice_footer)')
+    .select('*, customers(name, email, billing_address), jobs(job_number, title), invoice_line_items(*), companies(name, email, phone, gst_number, logo_url, payment_instructions, invoice_footer, subscription_plan, subscription_status, trial_ends_at, billing_exempt)')
     .eq('id', id)
     .eq('company_id', auth.companyId)
     .single()
 
   if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const co = invoice.companies as { name: string; email: string | null; phone: string | null; gst_number: string | null; logo_url: string | null; payment_instructions: string | null; invoice_footer: string | null } | null
+  const co = invoice.companies as {
+    name: string; email: string | null; phone: string | null; gst_number: string | null; logo_url: string | null
+    payment_instructions: string | null; invoice_footer: string | null
+    subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+  } | null
 
   const data: InvoicePdfData = {
     invoice: {
@@ -45,6 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       phone: co?.phone ?? null,
       gst_number: co?.gst_number ?? null,
       logo_url: await logoDataUri(co?.logo_url),
+      isFreePlan: effectivePlanKey(co) === 'free',
     },
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }

@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { resolveCompanyUser } from '@/lib/api-auth'
+import { createServiceClient } from '@/lib/supabase/server'
+import { isFreePlanCompany } from '@/lib/billing'
 
 const bodySchema = z.object({
   message: z.string().trim().min(1).max(4000),
@@ -38,6 +40,9 @@ Keep answers concise, practical, and step-by-step where helpful. If unsure, say 
 export async function POST(req: Request) {
   const auth = await resolveCompanyUser(req)
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (await isFreePlanCompany(createServiceClient(), auth.companyId)) {
+    return NextResponse.json({ error: 'The AI assistant requires a paid plan.' }, { status: 403 })
+  }
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })

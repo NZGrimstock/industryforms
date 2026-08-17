@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { hasAccess, type BillingCompany } from '@/lib/billing'
+import { hasAccess, effectivePlanKey, type BillingCompany } from '@/lib/billing'
+import { FreeTierBanner } from '@/components/billing/free-tier-banner'
 import { getConversations } from '@/lib/messages'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/mobile-nav'
@@ -43,6 +44,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Messages nav badge (owner/admin only — staff don't get the Messages tab).
   const unreadMessages = isStaff || !profile?.company_id ? 0 : (await getConversations(supabase, profile.company_id)).filter(c => c.unread).length
 
+  const isFreePlan = effectivePlanKey(company) === 'free'
+
   const subscriptionInfo = {
     plan: company?.subscription_plan ?? null,
     status: company?.subscription_status ?? null,
@@ -59,6 +62,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <div className="flex h-full">
             <Sidebar isStaff={isStaff} unreadMessages={unreadMessages} />
             <DashboardShell brandAccent={brandAccent} testMode={testMode}>
+              {isFreePlan && <FreeTierBanner />}
               <SyncStatusBar />
               {children}
               <WelcomeTutorial initiallyOpen={!profile?.welcome_tutorial_seen_at} />

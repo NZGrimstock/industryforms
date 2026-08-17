@@ -24,9 +24,10 @@ interface Props {
   }
   companyId: string
   nextJobNumber: string
+  isFreePlan: boolean
 }
 
-export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
+export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan }: Props) {
   const label = quoteLabel(quote.is_estimate)
   const supabase = createClient()
   const router = useRouter()
@@ -160,9 +161,15 @@ export function QuoteActions({ quote, companyId, nextJobNumber }: Props) {
         </Link>
       )}
       {quote.status === 'accepted' && (
-        <Button variant="secondary" size="sm" loading={loading === 'order'} onClick={orderParts}>
-          <ShoppingCart className="h-4 w-4" /> Order parts
-        </Button>
+        isFreePlan ? (
+          <Link href="/upgrade" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-200 rounded-lg text-gray-400 bg-gray-50 hover:border-orange-200 hover:text-orange-500 hover:bg-orange-50" title="Auto-generating purchase orders requires a paid plan">
+            <ShoppingCart className="h-4 w-4" /> Order parts
+          </Link>
+        ) : (
+          <Button variant="secondary" size="sm" loading={loading === 'order'} onClick={orderParts}>
+            <ShoppingCart className="h-4 w-4" /> Order parts
+          </Button>
+        )
       )}
       {canDelete && (
         <Button variant="ghost" size="sm" loading={loading === 'delete'} onClick={deleteQuote}>

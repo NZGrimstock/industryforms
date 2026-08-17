@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getPlan, planForSeats } from '@/lib/plans'
+import { effectivePlanKey } from '@/lib/billing'
 
 const bodySchema = z.object({
   full_name: z.string().trim().min(1).max(200),
@@ -38,11 +39,11 @@ export async function POST(request: Request) {
     // ── Server-side seat check: don't let the client bypass the plan cap ──
     const [{ count }, { data: company }] = await Promise.all([
       service.from('profiles').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
-      service.from('companies').select('subscription_plan, billing_exempt').eq('id', companyId).single(),
+      service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', companyId).single(),
     ])
     const exempt = company?.billing_exempt === true
     if (!exempt) {
-      const plan = getPlan(company?.subscription_plan)
+      const plan = getPlan(effectivePlanKey(company))
       const desired = (count ?? 0) + 1
       const needed = planForSeats(plan, desired)
       if (needed) {

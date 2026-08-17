@@ -1,8 +1,39 @@
+import type { PlanKey } from './plans'
+
 export type BillingCompany = {
   subscription_status: string | null
   subscription_plan: string | null
   trial_ends_at: string | null
-  billing_exempt: boolean | null
+  billing_exempt?: boolean | null
+}
+
+/**
+ * The plan that actually governs a company's limits right now — NOT the raw
+ * `subscription_plan` column, which stays 'trial' forever once the trial
+ * lapses (nothing transitions it). Once trial_ends_at passes with no active
+ * subscription, a company falls through to the permanent 'free' floor rather
+ * than losing access (see hasAccess() below). Mirrored in SQL by
+ * company_effective_plan() for the job/customer row-cap triggers — flagged
+ * there as a drift risk, same as job_is_locked()/invoiceGuard().
+ */
+export function effectivePlanKey(company: BillingCompany | null): PlanKey {
+  if (!company) return 'free'
+  if (company.billing_exempt) return 'pro'
+  if (company.subscription_status === 'active') return (company.subscription_plan as PlanKey) ?? 'free'
+  if (company.trial_ends_at && new Date(company.trial_ends_at).getTime() > Date.now()) return 'trial'
+  return 'free'
+}
+
+/**
+ * Server-route convenience for the many free-tier feature gates below — one
+ * query instead of repeating the select + effectivePlanKey() call at every
+ * route. Fails closed (treats a missing company as free) since every caller
+ * uses this to decide whether to allow a premium action.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function isFreePlanCompany(service: any, companyId: string): Promise<boolean> {
+  const { data } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', companyId).single()
+  return effectivePlanKey(data) === 'free'
 }
 
 // Codex build audit marker (2026-07-08): paid add-ons are Stripe-owned in prod.
@@ -31,20 +62,13 @@ export const BILLING_ADDONS = {
 export type BillingAddonSlug = keyof typeof BILLING_ADDONS
 
 /**
- * Whether an account may use the app. Access is granted when ANY of:
- *  - the user is a super admin (unrestricted), or
- *  - the company is billing-exempt (comped / app-store review account), or
- *  - the company has an active paid subscription, or
- *  - the company is still inside its trial window.
- * Otherwise the trial has lapsed with no subscription → paywalled.
+ * Whether an account may use the app at all. Always true now — a lapsed
+ * trial with no subscription falls through to the free plan (see
+ * effectivePlanKey()) instead of losing access. Kept as a named function,
+ * not deleted, as the one choke point for any future suspension/fraud gate.
  */
-export function hasAccess(isSuperAdmin: boolean, company: BillingCompany | null): boolean {
-  if (isSuperAdmin) return true
-  if (!company) return false
-  if (company.billing_exempt) return true
-  if (company.subscription_status === 'active') return true
-  if (company.trial_ends_at && new Date(company.trial_ends_at).getTime() > Date.now()) return true
-  return false
+export function hasAccess(_isSuperAdmin: boolean, _company: BillingCompany | null): boolean {
+  return true
 }
 
 /**

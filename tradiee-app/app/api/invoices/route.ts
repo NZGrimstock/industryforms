@@ -18,6 +18,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { resolveCompanyUser } from '@/lib/api-auth'
 import { nextDocNumber } from '@/lib/numbering'
 import { invoiceGuard } from '@/lib/job-financials'
+import { lineNet } from '@/lib/pricing'
 
 const bodySchema = z.object({
   job_id: z.string().uuid(),
@@ -58,10 +59,11 @@ export async function POST(req: NextRequest) {
 
   const { data: co } = await service
     .from('companies')
-    .select('default_gst_rate')
+    .select('default_gst_rate, prices_include_tax')
     .eq('id', companyId)
     .single()
   const gstRate = Number(co?.default_gst_rate ?? 0.15)
+  const pricesIncludeTax = !!co?.prices_include_tax
 
   // Quoted total (excl. GST) and what's already been invoiced against this job
   let quoteLines: Line[] = []
@@ -85,11 +87,14 @@ export async function POST(req: NextRequest) {
       service.from('job_materials').select('quantity, unit_price').eq('job_id', job_id),
       service.from('timesheets').select('started_at, ended_at, break_minutes, bill_rate, is_billable').eq('job_id', job_id),
     ])
-    const materialsTotal = (materials ?? []).reduce((s, m) => Number(m.unit_price) > 0 ? s + Number(m.quantity) * Number(m.unit_price) : s, 0)
+    // Net of GST when prices_include_tax is on — job_materials/timesheets have
+    // no separate net line_total column like quote_line_items does, so
+    // lineNet() strips the tax portion the same way quotes already do.
+    const materialsTotal = (materials ?? []).reduce((s, m) => Number(m.unit_price) > 0 ? s + lineNet(Number(m.quantity), Number(m.unit_price), null, 0, gstRate, pricesIncludeTax) : s, 0)
     const labourTotal = (timesheets ?? []).reduce((s, t) => {
       if (!t.is_billable || !t.bill_rate || !t.ended_at) return s
       const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000 - Number(t.break_minutes ?? 0) / 60
-      return hrs > 0 ? s + hrs * Number(t.bill_rate) : s
+      return hrs > 0 ? s + lineNet(hrs, Number(t.bill_rate), null, 0, gstRate, pricesIncludeTax) : s
     }, 0)
     jobTotal = materialsTotal + labourTotal
   }
@@ -155,7 +160,7 @@ export async function POST(req: NextRequest) {
       quantity: Number(m.quantity),
       unit: m.unit ?? 'ea',
       unit_price: Number(m.unit_price),
-      line_total: Number(m.quantity) * Number(m.unit_price),
+      line_total: lineNet(Number(m.quantity), Number(m.unit_price), null, 0, gstRate, pricesIncludeTax),
       type: 'labour',
     }))
     subtotal = lines.reduce((s, l) => s + l.line_total, 0)

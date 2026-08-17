@@ -1,11 +1,27 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-16. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-17. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **Three new migrations from 2026-08-17 pt.2/pt.3 need `supabase db push --linked`**:
+  `20260817100000_free_plan_row_caps.sql`, `20260817110000_referral_program.sql`,
+  `20260817120000_free_plan_feature_gates.sql`. All verified against real local
+  Postgres (see those sessions' entries) but not yet applied to production.
+- **Free tier + referral program need live click-throughs** before trusting them
+  with real customers: sign up a throwaway company, let its trial lapse (or set
+  `trial_ends_at` in the past), confirm it lands on the free plan instead of a
+  paywall; hit the 3-job/10-customer caps for real; confirm the logo upload is
+  actually greyed out and the "Powered by" line actually appears on a real
+  invoice PDF. For referrals: sign up a second throwaway company via a real
+  `?ref=` link, pay a real (test-mode) invoice on it, and confirm the
+  referrer's Stripe customer balance actually gets credited — the
+  `invoice.paid` webhook case, the `parent.subscription_details` field path
+  it depends on (confirmed against the installed `stripe` SDK's own type
+  definitions, not guessed), and the `createBalanceTransaction` call are all
+  unverified against a live Stripe event.
 - **Re-run a holistic reality-check pass over the 2026-08-16 pt.3 session**
   (commits `f65cf6a`..`0b0e2eb`) — one was started covering the four
   earliest commits of that session (refund Connect scoping, the Settings
@@ -208,6 +224,213 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-17 (Claude) — /terms → /login redirect loop: root cause was proxy.ts, not caching
+
+A real user report (screenshot of a signup-flow chat) surfaced a live bug:
+tapping "Terms of Service" or "Privacy Policy" from the mobile app's signup
+checkbox sent the user to `app.industryforms.app/login` in a loop instead of
+the actual page.
+
+**Two wrong theories before the real one — recorded so the next session
+doesn't repeat them.** First guess was Vercel edge-cache corruption scoped
+to the custom domain: plausible from `curl` alone (307, survived
+cache-busting query strings), but falsified by forcing a redeploy that
+reproduced the bug on a completely fresh build (`routes-manifest.json` /
+`prerender-manifest.json` pulled and inspected locally — clean, no
+collision). Second guess was a Next.js 16/Turbopack static-rendering quirk:
+client-component pages (`/login`, `/signup`) worked, every server-component
+page outside `(dashboard)` didn't, so `export const dynamic =
+'force-dynamic'` was added to the five affected pages — fixed nothing,
+because comparing `x-vercel-id` hop counts between `app.industryforms.app`
+(edge-only, no `::iad1::` hop) and its `industryforms.vercel.app` alias
+(reaches the origin function) proved the request was being answered
+*before* Next.js ever ran. Both wasted a redeploy each.
+
+**Real root cause**: `tradiee-app/proxy.ts` — Next.js 16 renamed
+`middleware.ts` to `proxy.ts` (`AGENTS.md` already warned file structure
+would differ from training data; missed on the first two passes because the
+search was for the old filename). Its `publicPaths` allowlist never
+included `/terms`, `/privacy`, `/account-deletion`, `/invite/`, or
+`/portal/` — every signed-out visitor hitting any of them got redirected to
+`/login` before the request reached the page. Not just the legal pages:
+this also hit the customer-portal and job-invite links the app emails out,
+and (caught as a side effect, never independently reported) `/portal/login`
+itself. `industryforms.vercel.app` never showed the bug because that
+hostname falls into `proxy.ts`'s "unknown custom domain" branch and skips
+the auth gate entirely — the alias had been accidentally masking the bug
+the whole time, which is exactly what sent the first two theories down the
+wrong path.
+
+Fixed by adding the five paths to `publicPaths`
+(`tradiee-app/proxy.ts:159`); the `force-dynamic` exports from the wrong
+second theory were reverted in the same commit (harmless but pointless —
+confirmed the five touched page files are byte-identical to before this
+session). Security-audited the fix afterward: `/invite/` and `/portal/`
+are still individually token-gated by their own per-page DB lookup — the
+proxy check was blocking legitimate access, not protecting data — and no
+authenticated dashboard route shares any of the five newly-public prefixes.
+Verified live in production, not just typechecked: all 5 routes now 200,
+`/dashboard` and `/upgrade` still correctly redirect when signed out.
+
+**Lesson recorded for next time**: `git log --all` for `middleware.ts` will
+find nothing in this repo on any commit — the file is `proxy.ts`. Start
+there for anything routing/auth-adjacent on this codebase.
+
+## Session 2026-08-17 (Claude, pt.3) — Free tier locked down to basic CRUD only
+
+Follow-up to pt.2's free tier: banner made permanent (no dismiss) and reworded
+to "**Free Version** — {benefit}", and the free plan restricted to genuinely
+basic customer/quote/job/invoice CRUD — no AI, no GPS tracking, no CSV
+export, no auto purchase orders, no Xero, no auto-generated to-dos.
+
+**Two AI routes had no auth check at all** (`/api/voice/parse`,
+`/api/supplier-invoice/parse`) — found while auditing every AI surface to
+gate by plan, fixed in the same commit (`resolveCompanyUser()` added,
+closing both the auth hole and the plan hole together). All AI routes
+(`ai/draft-quote`, `ai/rewrite`, `ai-assist`, the two above) now 403 for
+free-plan companies.
+
+Vehicle logbook (GPS-tracked trips + its CSV export, the only export feature
+in the app — everything else matching "export" is actually import, correctly
+left alone) is one page, gated at the page level (redirect to `/upgrade`) —
+plus a new DB trigger (`20260817120000_free_plan_feature_gates.sql`) blocking
+`travel_logs` inserts for free-plan companies directly, since mobile's
+background GPS tracker writes straight to Supabase with no page to gate.
+Same migration adds a second trigger blocking `is_auto=true` todos for free
+plan (manual todos, the app's default, stay allowed) — paired with an
+app-level skip in the `daily-todos` cron loop that filters free-plan
+companies out *before* the AI-polish call, so the DB trigger is a backstop,
+not the only thing standing between free-plan and a wasted AI spend. Both
+triggers verified against real local Postgres: free-plan rejected, paid
+plan/manual todos allowed.
+
+Auto-purchase-orders (`purchase-orders/from-quote`, `from-job`) and Xero
+(`xero/auth`, plus `xero/sync`/`sync-credit-note` as defense in depth for a
+company that connected while paid and later downgraded) gated server-side
+and their UI buttons swapped to a greyed-out "Upgrade" link, matching the
+pattern from pt.2's logo-upload gate. Checked whether `quotes.is_estimate`
+(the "estimate vs firm quote" checkbox) was a distinct feature to gate —
+it's cosmetic only (swaps a label, no other logic branches on it anywhere),
+so left alone.
+
+`tsc` clean, `eslint` 0 new errors (confirmed every pre-existing error
+belongs to a file this session never touched, via `git diff` against each).
+
+## Session 2026-08-17 (Claude, pt.2) — GST-on-actuals bug, free plan, referral program
+
+Three pieces of work, the first a live bug report that interrupted the other
+two mid-build.
+
+**Bug: `job_materials`/`timesheets` ignored `prices_include_tax`, double-
+charging GST.** User reported a job showing $11.50 for two $5 line items with
+"Prices include GST" ticked. Quotes have always correctly handled this via
+`lineNet()` (`lib/pricing.ts`) — the same tax-inclusive-entry logic had simply
+never been applied to job_materials/timesheets (used for quote-less
+time-and-materials jobs), so `unit_price` was always treated as GST-exclusive
+and GST got added a second time. Root-cause fix, not a patch: this exact
+calculation had been independently copy-pasted across **five** call sites
+over several past sessions, all fixed the same way (`lineNet(qty, unit_price,
+null, 0, gstRate, pricesIncludeTax)` in place of raw `qty * unit_price`) —
+`jobs/[id]/page.tsx` (Job total + Job Costing card), `jobs/[id]/client.tsx`
+(actual invoice-creation from the web UI), `customers/[id]/page.tsx`
+(customer "To invoice" stat), `api/invoices/route.ts` (the real
+invoice-creation route, also used by mobile), `lib/batch-invoice.ts` (bulk
+"Invoice and Print"). Checked `api/invoices/bulk/route.ts` and the mobile app
+separately for the same duplicated logic — neither has it, nothing to fix
+there. New `scripts/check-actuals-gst.mjs` reproduces the exact reported
+$5+$5 scenario (now correctly reconstructs to $10.00) plus confirms
+GST-exclusive shops are unaffected — passing. **Not yet click-tested live**
+against the user's actual job.
+
+**Free tier.** Previously, a lapsed trial with no active subscription hit a
+hard paywall (`hasAccess()` → `redirect('/upgrade')`, `(dashboard)/layout.tsx`)
+— no floor below "pay or lose access". New `effectivePlanKey()`
+(`lib/billing.ts`) resolves the plan that actually governs limits right now
+(active subscription → real plan; inside trial window → `'trial'`; otherwise
+→ new permanent `'free'` floor) since the raw `subscription_plan` column
+never transitions on its own once a trial lapses. `hasAccess()` now always
+returns `true` — kept as a named function (not deleted) as a single future
+choke point, but every company has *some* access now. `/upgrade`'s own
+redirect-away-if-entitled logic changed from `hasAccess()` (now always true,
+which would make the page unreachable) to `subscription_status === 'active'`,
+so free/trial companies can still see it.
+
+Free plan: 1 seat (`lib/plans.ts`, reuses the *existing* seat-cap check in
+`api/auth/invite/route.ts` — just needed to read the effective plan instead
+of the raw column), 3 active jobs, 10 customers. Volume caps enforced with a
+**DB trigger**, not just an app-level check
+(`20260817100000_free_plan_row_caps.sql`, mirrors the
+`job_is_locked()`/`block_write_if_job_locked()` pattern from
+`20260815100000`) — because customers have no server route at all (client
+inserts straight via Supabase JS) and jobs are also created offline on mobile
+via PowerSync, both bypassing any app-layer-only check. `company_effective_
+plan()` in SQL intentionally duplicates `effectivePlanKey()`'s logic, flagged
+as the same kind of drift risk as `job_is_locked()` vs `invoiceGuard()`.
+Verified against real local Postgres, not just reasoning: 10th customer
+allowed/11th rejected, 3rd job allowed/4th rejected, completing a job frees
+an active-job slot, paid and billing-exempt companies are never capped.
+
+"Powered by www.industryforms.app" now appears on invoice and job-sheet PDFs
+when `effectivePlanKey(company) === 'free'` (threaded through as a boolean,
+not the raw plan key, so the PDF components don't need to know plan-
+resolution rules) — `/q/[token]`'s public quote page already had an
+unconditional "Powered by" line from an earlier session, left as-is
+(unconditional, free marketing, touching it risks a regression for no
+benefit). Logo upload greyed out on free plan in Settings, with a server-side
+backstop in `api/storage/upload-url` (the actual `logo_url` write goes
+straight from the browser to Supabase, so the presigned-URL step is the one
+real choke point). New slim, dismissible `FreeTierBanner` in the dashboard
+layout — deliberately **not** a rotating carousel (flagged as a UX risk when
+asked to build one: this app has already avoided pushy patterns elsewhere,
+e.g. the 2026-08-16 pt.2 mobile-app nudge). Message varies by day-of-month
+rather than a timer, so it's not stale without being an in-page motion nag.
+
+**Referral program.** Existing customer refers a friend; each of the
+friend's first 3 paid months credits the referrer's own Stripe customer
+balance by the referrer's own plan price, stacking independently across
+multiple referred friends. New `referral_credits` ledger table
+(`20260817110000_referral_program.sql`, service-role-write-only, same shape
+as `sms_usage_events`) with a `unique(referred_company_id, month_number)`
+constraint that's the actual concurrency guard: the row is inserted *before*
+any Stripe call, atomically claiming the slot, so a webhook retry can't
+double-credit; a `stripe_credit_applied` flag means a retry that finds its
+row already claimed safely retries only the Stripe call, never the counting.
+Verified against real local Postgres: 3 credits succeed, a 4th (`month_number
+4`) rejected by a check constraint, a duplicate `month_number` for the same
+friend rejected by the unique constraint, a replayed `stripe_invoice_id`
+rejected, and `authenticated`/`anon` roles confirmed unable to write directly
+(RLS deny, service-role only).
+
+New `invoice.paid` case in the Stripe webhook (net-new — no prior handler for
+that event) does the actual crediting, gated on: not an add-on subscription
+invoice (checked via `invoice.parent.subscription_details.metadata.addon` —
+**this exact field path was confirmed against the installed `stripe` SDK's
+own `.d.ts` files**, not assumed from training data, since this codebase is
+on a materially newer Stripe API version — `invoice.subscription` no longer
+exists at the top level, it's nested under `parent.subscription_details`
+now); the paying company having `referred_by_company_id` set; under the
+per-friend cap of 3. Self-referral guard compares Stripe default-card
+fingerprints between referrer and referred customer (skipped if the referrer
+has no Stripe customer yet — nothing to compare, and one gets lazily created
+at credit time anyway, mirroring the exact pattern already used in
+`api/billing/addon/route.ts`).
+
+Referral code (`companies.referral_code`, 8-char, generated per-company at
+signup with a collision-retry loop; `companies.referred_by_company_id`, set
+once, never changed) captured via `?ref=` on `/signup` — same prefill
+pattern the page already used for `?email=` — into an editable field, not
+just a hidden pass-through, since someone might get a code verbally. Signup-
+time self-referral guard (matching billing-email domain) is a second,
+independent check from the payment-method one in the webhook. New
+"Referrals" tab in Settings (9th tab, matches the file's existing inline-tab
+convention) shows the referral link + a copy button and each referred
+friend's "`X` of 3 months earned" progress, fetched server-side.
+
+**Not verified**: no runnable check for the webhook logic itself beyond the
+schema-level Postgres checks above — the actual Stripe API shape and the
+`createBalanceTransaction` call need a real Stripe test-mode event, which
+this session didn't have. See Action items above.
 
 ## Session 2026-08-16 (Claude, pt.3) — Payment reliability sweep, payment terms, Tap to Pay checklist
 

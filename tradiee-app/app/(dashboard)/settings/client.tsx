@@ -17,6 +17,7 @@ import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInb
 import { PaymentTermsFields } from '@/components/forms/payment-terms-fields'
 import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } from 'lucide-react'
 import { getPlan, planForSeats } from '@/lib/plans'
+import { effectivePlanKey } from '@/lib/billing'
 import { extractAccent } from '@/lib/extract-color'
 import { MfaSection } from '@/components/settings/mfa-section'
 import { GetPaidCard } from '@/components/settings/get-paid-card'
@@ -27,19 +28,20 @@ interface Props {
   company: Company
   team: Profile[]
   googleConnected: boolean
+  referredFriends: { companyName: string; monthsEarned: number }[]
 }
 
-export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected }: Props) {
+export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected, referredFriends }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
   const mfaRequired = searchParams.get('mfa_required') === '1'
   const requestedTab = searchParams.get('tab')
-  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'developer', 'help'].includes(requestedTab)
-    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer' | 'help'
+  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'referrals', 'developer', 'help'].includes(requestedTab)
+    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help'
     : 'business'
   const { toast } = useToast()
-  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'developer' | 'help'>(mfaRequired ? 'profile' : initialTab)
+  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help'>(mfaRequired ? 'profile' : initialTab)
   const [testMode, setTestMode] = useState<boolean>(!!(company as Company & { test_mode?: boolean }).test_mode)
   const [testToggling, setTestToggling] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -56,6 +58,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
   const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected)
   const [googleSyncing, setGoogleSyncing] = useState(false)
   const [googleDisconnecting, setGoogleDisconnecting] = useState(false)
+  const isFreePlan = effectivePlanKey(company) === 'free'
 
   const SYSTEM_DEFAULT_STAGES = ['Planning & design', 'Materials & ordering', 'Site prep', 'Construction', 'Finishing & sign-off']
   const [projectStages, setProjectStages] = useState<string[]>(company.default_project_stages ?? SYSTEM_DEFAULT_STAGES)
@@ -281,7 +284,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     // Plan-cap check. Trial/Solo/Team have hard seat caps — bumping into one
     // requires confirming a plan upgrade BEFORE we create the auth user.
     const exempt = (company as Company & { billing_exempt?: boolean }).billing_exempt === true
-    const currentPlan = getPlan((company as Company & { subscription_plan?: string }).subscription_plan)
+    const currentPlan = getPlan(effectivePlanKey(company))
     const activeCount = team.filter(t => t.is_active !== false).length
     const upgrade = exempt ? null : planForSeats(currentPlan, activeCount + 1)
     if (upgrade) {
@@ -387,6 +390,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
           { key: 'profile',      label: 'My profile' },
           { key: 'integrations', label: 'Integrations' },
           { key: 'subscription', label: 'Subscription' },
+          { key: 'referrals',    label: 'Referrals' },
           { key: 'developer',    label: 'Test Mode' },
           { key: 'help',         label: 'Help' },
         ] as const).map(t => (
@@ -403,6 +407,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         {tab === 'integrations' && 'Connect external services — accounting, calendar and data import.'}
         {tab === 'developer'    && 'Load demo data to explore the system without touching real records.'}
         {tab === 'subscription' && 'Your plan, billing history and seat usage.'}
+        {tab === 'referrals'    && 'Refer a friend and earn free months when they pay.'}
         {tab === 'help'         && 'Step-by-step guides for getting set up.'}
       </p>
 
@@ -461,14 +466,25 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                   className="hidden"
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f) }}
                 />
-                <button
-                  onClick={() => logoInputRef.current?.click()}
-                  disabled={logoUploading}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  <Upload className="h-4 w-4" />
-                  {logoUploading ? 'Uploading...' : logoPreview ? 'Change logo' : 'Upload logo'}
-                </button>
+                {isFreePlan ? (
+                  <Link
+                    href="/upgrade"
+                    className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-400 bg-gray-50 cursor-not-allowed hover:border-orange-200 hover:text-orange-500 hover:bg-orange-50 transition-colors"
+                    title="Upgrade to add a logo"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upgrade to add a logo
+                  </Link>
+                ) : (
+                  <button
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {logoUploading ? 'Uploading...' : logoPreview ? 'Change logo' : 'Upload logo'}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -857,6 +873,14 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                   </div>
                   <a href="/api/xero/auth" className="text-xs text-orange-500 hover:underline">Reconnect</a>
                 </div>
+              ) : isFreePlan ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">Connect your Xero account to sync invoices automatically</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Requires a paid plan</p>
+                  </div>
+                  <Link href="/upgrade" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg text-gray-400 bg-gray-100 hover:bg-orange-50 hover:text-orange-500 transition-colors">Upgrade to connect</Link>
+                </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <div>
@@ -885,6 +909,58 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       {tab === 'subscription' && (
         <div className="space-y-6 max-w-7xl">
           <BillingTab company={company} />
+        </div>
+      )}
+
+      {tab === 'referrals' && (
+        <div className="space-y-6 max-w-2xl">
+          <Card>
+            <CardHeader><CardTitle>Your referral link</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500 mb-3">
+                Share this with a friend. When they pay for the first, second, and third month of
+                their subscription, you get a free month each time — up to 3 months per friend
+                referred, and it stacks across every friend you refer.
+              </p>
+              {company.referral_code ? (
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={`${process.env.NEXT_PUBLIC_APP_URL}/signup?ref=${company.referral_code}`} className="font-mono text-xs" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(`${process.env.NEXT_PUBLIC_APP_URL}/signup?ref=${company.referral_code}`)
+                      toast('Referral link copied')
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No referral code on this account yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Friends you&apos;ve referred</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {referredFriends.length === 0 ? (
+                <p className="text-sm text-gray-400 px-6 py-4">
+                  Nobody&apos;s signed up with your link yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-50">
+                  {referredFriends.map(f => (
+                    <li key={f.companyName} className="flex items-center justify-between px-6 py-3">
+                      <span className="text-sm text-gray-700">{f.companyName}</span>
+                      <span className="text-sm font-medium text-gray-900">{f.monthsEarned} of 3 months earned</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 

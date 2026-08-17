@@ -119,6 +119,7 @@ export interface JobSheetData {
     logo_url: string | null
     gst_number: string | null
     default_gst_rate: number
+    isFreePlan?: boolean
   }
   timezone?: string
 }
@@ -342,7 +343,10 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
 
         {/* ── Footer ── */}
         <View style={s.footer}>
-          <Text style={s.footerText}>{job.job_number} · {job.customers?.name ?? ''}</Text>
+          <Text style={s.footerText}>
+            {job.job_number} · {job.customers?.name ?? ''}
+            {company.isFreePlan ? ' · Powered by www.industryforms.app' : ''}
+          </Text>
           <Text style={s.footerText}>Generated {fmtDate(new Date().toISOString(), timezone)}</Text>
         </View>
       </Page>

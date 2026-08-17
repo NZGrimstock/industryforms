@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { refreshXeroToken, syncCreditNoteToXero } from '@/lib/xero'
+import { isFreePlanCompany } from '@/lib/billing'
 
 const bodySchema = z.object({ creditNoteId: z.string().uuid() })
 
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
   if (profile.role !== 'owner' && profile.role !== 'admin') {
     return NextResponse.json({ error: 'Only an owner or admin can sync to Xero.' }, { status: 403 })
+  }
+  if (await isFreePlanCompany(service, profile.company_id)) {
+    return NextResponse.json({ error: 'Xero sync requires a paid plan.' }, { status: 403 })
   }
 
   const co = profile.companies as unknown as { xero_tenant_id: string | null; xero_access_token: string | null; xero_refresh_token: string | null; xero_token_expires_at: string | null; default_gst_rate: number | null } | null

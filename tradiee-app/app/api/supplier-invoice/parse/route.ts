@@ -2,6 +2,9 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createOpenAIText, OPENAI_MODEL_MINI, OPENAI_MODEL_NANO, parseJsonObject } from '@/lib/openai'
+import { resolveCompanyUser } from '@/lib/api-auth'
+import { createServiceClient } from '@/lib/supabase/server'
+import { isFreePlanCompany } from '@/lib/billing'
 
 type ParsedSupplierInvoice = {
   supplier?: string | null
@@ -19,6 +22,14 @@ type ParsedSupplierInvoice = {
 }
 
 export async function POST(req: NextRequest) {
+  // Was previously reachable with no auth at all — closing that hole and the
+  // free-plan gate in the same guard.
+  const auth = await resolveCompanyUser(req)
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (await isFreePlanCompany(createServiceClient(), auth.companyId)) {
+    return NextResponse.json({ error: 'AI supplier-invoice parsing requires a paid plan.' }, { status: 403 })
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: 'AI parsing not configured — set OPENAI_API_KEY in Vercel environment variables' }, { status: 503 })
   }

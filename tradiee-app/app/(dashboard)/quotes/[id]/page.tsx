@@ -9,12 +9,14 @@ import { QuoteActions } from './client'
 import { SaveTemplateButton } from './save-template'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import Link from 'next/link'
+import { effectivePlanKey } from '@/lib/billing'
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
+  const billingCompany = profile?.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null } | null
 
   const [{ data: quote }, nextJobNumber, { data: quoteList }] = await Promise.all([
     supabase
@@ -82,7 +84,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
           <div className="flex flex-wrap items-center gap-2">
             <PrevNextNav prevHref={prevQuoteHref} nextHref={nextQuoteHref} />
             <SaveTemplateButton quoteId={quote.id} defaultName={quote.title} />
-            <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} />
+            <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} isFreePlan={effectivePlanKey(billingCompany) === 'free'} />
           </div>
         </div>
 

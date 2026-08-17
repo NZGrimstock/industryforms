@@ -12,7 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type Stripe from 'stripe'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
+import { getStripe, stripeCurrency } from '@/lib/stripe'
+import { getPlan } from '@/lib/plans'
 import { maybeSendReviewRequest } from '@/lib/review-request'
 import { notify } from '@/lib/notify'
 import { sendEmail } from '@/lib/email'
@@ -140,6 +141,15 @@ export async function POST(req: NextRequest) {
       break
     }
 
+    case 'invoice.paid': {
+      // Referral program: if the paying company was referred, credit the
+      // referrer's Stripe balance. Net-new — no existing invoice.paid/
+      // invoice.payment_succeeded handler to conflict with.
+      const invoice = event.data.object as Stripe.Invoice
+      await handleReferralCredit(service, stripe, invoice)
+      break
+    }
+
     case 'customer.subscription.deleted': {
       const sub = event.data.object as Stripe.Subscription
       if (isBillingAddon(sub.metadata?.addon)) {
@@ -221,6 +231,96 @@ function isBillingAddon(slug: string | undefined): slug is BillingAddonSlug {
 async function findCompanyIdForCustomer(service: any, stripeCustomerId: string): Promise<string | null> {
   const { data } = await service.from('companies').select('id').eq('stripe_customer_id', stripeCustomerId).maybeSingle()
   return data?.id ?? null
+}
+
+// Referral program: each of a referred company's first 3 qualifying
+// (main-plan, non-addon) payments credits the referrer's Stripe balance by
+// the referrer's own plan price. The referral_credits row is inserted FIRST
+// — its (referred_company_id, month_number) unique constraint atomically
+// claims the slot, so a concurrent Stripe retry of the same event can't
+// double-credit — and only once that succeeds do we touch Stripe. If the
+// Stripe call then fails, stripe_credit_applied stays false and a retry of
+// the same event finds the row already claimed and can safely retry just
+// the Stripe call, never re-counting or re-claiming.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleReferralCredit(service: any, stripe: Stripe, invoice: Stripe.Invoice) {
+  const stripeCustomerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+  if (!stripeCustomerId) return
+
+  // Only the main plan subscription counts — add-on subscriptions (Projects,
+  // Bookings Website, SMS) are a separate purchase, not "the friend paying".
+  // The subscription's metadata snapshot rides along on the invoice itself
+  // (Stripe API 2026-05-27.dahlia: invoice.parent.subscription_details), so
+  // this needs no extra API call to check.
+  const subDetails = invoice.parent?.subscription_details
+  if (!subDetails?.subscription) return
+  if (isBillingAddon(subDetails.metadata?.addon)) return
+
+  const referredCompanyId = await findCompanyIdForCustomer(service, stripeCustomerId)
+  if (!referredCompanyId) return
+
+  const { data: referred } = await service.from('companies').select('id, referred_by_company_id').eq('id', referredCompanyId).single()
+  const referrerCompanyId = referred?.referred_by_company_id
+  if (!referrerCompanyId) return
+
+  const { count } = await service.from('referral_credits').select('id', { count: 'exact', head: true }).eq('referred_company_id', referredCompanyId)
+  if ((count ?? 0) >= 3) return
+  const monthNumber = (count ?? 0) + 1
+
+  const { data: referrer } = await service.from('companies')
+    .select('id, name, subscription_plan, country, stripe_customer_id')
+    .eq('id', referrerCompanyId).single()
+  if (!referrer) return
+
+  // Self-referral guard: same card on both sides means the same person,
+  // regardless of the two accounts' billing email domains.
+  if (referrer.stripe_customer_id) {
+    const [referredFingerprint, referrerFingerprint] = await Promise.all([
+      defaultCardFingerprint(stripe, stripeCustomerId),
+      defaultCardFingerprint(stripe, referrer.stripe_customer_id),
+    ])
+    if (referredFingerprint && referrerFingerprint && referredFingerprint === referrerFingerprint) {
+      console.warn('[stripe-webhook] referral credit skipped — referrer and referred share a card', { referrerCompanyId, referredCompanyId })
+      return
+    }
+  }
+
+  const plan = getPlan(referrer.subscription_plan)
+  const currency = stripeCurrency(referrer.country)
+  const amountCents = Math.round(plan.monthly * 100)
+  if (amountCents <= 0) return // referrer isn't actually on a paid plan — nothing to credit
+
+  const { error: insertError } = await service.from('referral_credits').insert({
+    company_id: referrerCompanyId,
+    referred_company_id: referredCompanyId,
+    stripe_invoice_id: invoice.id,
+    month_number: monthNumber,
+    amount_cents: amountCents,
+    currency,
+  })
+  if (insertError) return // unique-constraint conflict — already claimed by an earlier delivery of this event
+
+  let referrerStripeCustomerId = referrer.stripe_customer_id as string | null
+  if (!referrerStripeCustomerId) {
+    const customer = await stripe.customers.create({ name: referrer.name ?? undefined, metadata: { company_id: referrerCompanyId } })
+    referrerStripeCustomerId = customer.id
+    await service.from('companies').update({ stripe_customer_id: referrerStripeCustomerId }).eq('id', referrerCompanyId)
+  }
+
+  await stripe.customers.createBalanceTransaction(referrerStripeCustomerId, {
+    amount: -amountCents,
+    currency,
+    description: `Referral reward — month ${monthNumber} of a friend's subscription`,
+  })
+  await service.from('referral_credits').update({ stripe_credit_applied: true }).eq('stripe_invoice_id', invoice.id)
+}
+
+async function defaultCardFingerprint(stripe: Stripe, stripeCustomerId: string): Promise<string | null> {
+  const customer = await stripe.customers.retrieve(stripeCustomerId, { expand: ['invoice_settings.default_payment_method'] })
+  if (customer.deleted) return null
+  const pm = customer.invoice_settings?.default_payment_method
+  if (pm && typeof pm !== 'string' && pm.type === 'card') return pm.card?.fingerprint ?? null
+  return null
 }
 
 // Idempotent under Stripe retries: every write is guarded by the booking's

@@ -20,11 +20,17 @@ export default function SignupPage() {
   const [tradeType, setTradeType] = useState('')
   const [country, setCountry] = useState('NZ')
   const [agreed, setAgreed] = useState(false)
+  const [referralCode, setReferralCode] = useState('')
 
-  // Prefill from the marketing site's hero email capture form (?email=).
+  // Prefill from the marketing site's hero email capture form (?email=), or
+  // a friend's referral link (?ref=). referralCode stays editable — someone
+  // might get the code verbally rather than via a link.
   useEffect(() => {
-    const prefill = new URLSearchParams(window.location.search).get('email')
+    const params = new URLSearchParams(window.location.search)
+    const prefill = params.get('email')
     if (prefill) setEmail(prefill)
+    const ref = params.get('ref')
+    if (ref) setReferralCode(ref)
   }, [])
 
   const TRADE_TYPES = [
@@ -72,7 +78,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms: agreed }),
+        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms: agreed, referralCode: referralCode.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Signup failed')
@@ -152,6 +158,12 @@ export default function SignupPage() {
                 <option value="NZ">New Zealand</option>
                 <option value="AU">Australia</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Referral code <span className="font-normal text-gray-400">(optional)</span></label>
+              <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                value={referralCode} onChange={e => setReferralCode(e.target.value)} placeholder="Got a code from a friend?" />
             </div>
 
             <label className="flex items-start gap-2 text-sm text-gray-600">

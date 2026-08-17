@@ -11,6 +11,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { resolveCompanyUser } from '@/lib/api-auth'
 import { presignedUpload, publicUrl } from '@/lib/r2'
+import { createServiceClient } from '@/lib/supabase/server'
+import { effectivePlanKey } from '@/lib/billing'
 
 const bodySchema = z.object({
   kind: z.enum(['job-photo', 'company-logo']),
@@ -32,6 +34,14 @@ export async function POST(req: Request) {
 
   let key: string
   if (body.kind === 'company-logo') {
+    // Backstop for the greyed-out upload button in Settings — that's a UI
+    // convenience, not the real gate, since the client writes logo_url to
+    // Supabase directly (no server route for that step).
+    const service = createServiceClient()
+    const { data: co } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', company).single()
+    if (effectivePlanKey(co) === 'free') {
+      return NextResponse.json({ error: 'Upgrade to add a company logo.' }, { status: 403 })
+    }
     key = `company-logos/${company}/logo.${ext}`
   } else if (body.kind === 'job-photo') {
     if (!body.jobId) return NextResponse.json({ error: 'jobId required' }, { status: 400 })
