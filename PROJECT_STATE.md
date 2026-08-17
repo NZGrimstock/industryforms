@@ -6,12 +6,6 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **Three migrations from 2026-08-17 pt.2/pt.3/pt.4 need `supabase db push --linked`**:
-  `20260817100000_free_plan_row_caps.sql` (edited again in pt.4 — job-status
-  fix + row lock, re-verified), `20260817110000_referral_program.sql`,
-  `20260817120000_free_plan_feature_gates.sql`. All verified against real
-  local Postgres (see those sessions' entries) but not yet applied to
-  production.
 - **Mobile still double-counts GST on the job detail screen**
   (`tradiee-mobile/app/jobs/[id].tsx`, `displayedMaterialsTotal` ~line 916 and
   `materialPrice` ~line 1251) — found by the pt.4 reality-check pass, not
