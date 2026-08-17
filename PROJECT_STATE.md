@@ -6,18 +6,36 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **Three new migrations from 2026-08-17 pt.2/pt.3 need `supabase db push --linked`**:
-  `20260817100000_free_plan_row_caps.sql`, `20260817110000_referral_program.sql`,
-  `20260817120000_free_plan_feature_gates.sql`. All verified against real local
-  Postgres (see those sessions' entries) but not yet applied to production.
+- **Three migrations from 2026-08-17 pt.2/pt.3/pt.4 need `supabase db push --linked`**:
+  `20260817100000_free_plan_row_caps.sql` (edited again in pt.4 — job-status
+  fix + row lock, re-verified), `20260817110000_referral_program.sql`,
+  `20260817120000_free_plan_feature_gates.sql`. All verified against real
+  local Postgres (see those sessions' entries) but not yet applied to
+  production.
+- **Mobile still double-counts GST on the job detail screen**
+  (`tradiee-mobile/app/jobs/[id].tsx`, `displayedMaterialsTotal` ~line 916 and
+  `materialPrice` ~line 1251) — found by the pt.4 reality-check pass, not
+  fixed. The web-side fix (pt.2) used `lineNet()`; this mobile screen still
+  does raw `quantity * unit_price`. Same bug class as the original report,
+  just a different screen — will read as a new bug to a mobile user.
+- **Mobile's background GPS vehicle tracker has no free-plan awareness**
+  (`tradiee-mobile/lib/location/tracking.ts`, `app/timesheets.tsx`) — the new
+  `block_travel_log_if_free_plan` trigger (pt.3) rejects every `travel_logs`
+  insert for a free-plan company, but per the pt.4 reality-check pass,
+  `stopTracking()` returns `false` (and skips calling
+  `Location.stopLocationUpdatesAsync`) whenever the save fails, so once a
+  free-plan phone hits this, the user reportedly cannot turn off background
+  tracking through the app at all — needs a mobile-side plan check before
+  this ships to real free-plan users on phones with tracking already on.
 - **Free tier + referral program need live click-throughs** before trusting them
   with real customers: sign up a throwaway company, let its trial lapse (or set
   `trial_ends_at` in the past), confirm it lands on the free plan instead of a
   paywall; hit the 3-job/10-customer caps for real; confirm the logo upload is
   actually greyed out and the "Powered by" line actually appears on a real
-  invoice PDF. For referrals: sign up a second throwaway company via a real
-  `?ref=` link, pay a real (test-mode) invoice on it, and confirm the
-  referrer's Stripe customer balance actually gets credited — the
+  invoice PDF; check the new Jobs "To Invoice" tab count against real
+  completed-but-unbilled jobs. For referrals: sign up a second throwaway
+  company via a real `?ref=` link, pay a real (test-mode) invoice on it, and
+  confirm the referrer's Stripe customer balance actually gets credited — the
   `invoice.paid` webhook case, the `parent.subscription_details` field path
   it depends on (confirmed against the installed `stripe` SDK's own type
   definitions, not guessed), and the `createBalanceTransaction` call are all
@@ -276,6 +294,108 @@ Verified live in production, not just typechecked: all 5 routes now 200,
 **Lesson recorded for next time**: `git log --all` for `middleware.ts` will
 find nothing in this repo on any commit — the file is `proxy.ts`. Start
 there for anything routing/auth-adjacent on this codebase.
+
+## Session 2026-08-17 (Claude, pt.4) — Reality-check fixes, Jobs "To Invoice" tab, marketing site
+
+Follow-up to pt.2/pt.3, three pieces: fixing findings from an adversarial
+review of the free-tier/referral commit, a genuinely new Jobs-list feature,
+and marketing-site copy.
+
+**Reality-check pass** (`/code-review HEAD high`, 8 finder angles, 11
+findings) surfaced real bugs in work this session had just shipped and
+called "verified" — worth internalizing, not just fixing: schema-level
+Postgres checks proved the *mechanism* worked, but didn't catch a UI-layer
+RLS gap or a hardcoded assumption about data that isn't actually fixed
+(custom job statuses). Fixed 5 of the 11 (rest deferred to Action items,
+mobile-side):
+- **Referral friend names always showed the fallback placeholder** — the
+  Settings → Referrals query joined `companies!referred_company_id(name)`
+  through the RLS-bound client, but `companies` RLS only permits reading
+  your *own* row, so the joined name was silently null on every request.
+  Fixed by using the service client for that one query (safe — the
+  `.eq('company_id', ...)` filter already scopes results to the caller's own
+  earned credits; the service client only lets the *display name* of a
+  referred company through too).
+- **Free-plan job cap could permanently lock out a company that customized
+  its job statuses** — `enforce_plan_row_cap()` hardcoded
+  `status not in ('completed','cancelled')`, but `job_statuses` is
+  per-company editable (Settings → Workflow lets an owner rename or delete
+  the seeded rows). Fixed to join `job_statuses.is_terminal` instead — and
+  that fix's own verification caught a *second* bug: a company with zero
+  `job_statuses` rows (shouldn't happen for a real company, signup always
+  seeds it, but the raw SQL test harness didn't) had every job count as
+  active forever, including finished ones, which is worse than the original
+  bug. Final version falls back to the literal keys only when no
+  `job_statuses` row exists at all for that status — belt and braces, not
+  either/or. Also added a `select ... for update` row lock, closing a TOCTOU
+  race where two near-simultaneous inserts (web + mobile sync) could both
+  read an under-cap count and both pass.
+- **Referral credit sized off the raw `subscription_plan` column** instead
+  of `effectivePlanKey()` — a referrer mid-Stripe-dunning (`past_due`, not
+  yet `canceled`, so the column hasn't reset) would still get a real balance
+  credit priced off their stale plan. One-line fix, same pattern as every
+  other place this session already got this right.
+- **The pre-existing `/api/billing/change-plan` stub silently started
+  accepting `plan:'free'`** the moment `PlanKey` was widened to include it —
+  that route has no Stripe call at all (a known placeholder, but genuinely
+  called in production by the Team tab's seat-cap upgrade flow), so this
+  would have let anyone downgrade a company to free with zero Stripe
+  interaction, directly contradicting the free plan's own "never written to
+  subscription_plan" design. Added an explicit guard rejecting it.
+- **Settings → Subscription and `/upgrade` still showed lapsed-trial
+  paywall copy** to companies now on the permanent free floor — both read
+  the raw `subscription_plan` column (`'trial'` forever once lapsed)
+  instead of `effectivePlanKey()`, so a free-plan company saw "Trial
+  expired — choose a plan to continue" even though access was never actually
+  ending. Both now show honest "you're on the Free plan, free forever"
+  copy, and `/upgrade`'s header no longer alarms a still-fully-entitled
+  trial user who clicked an upgrade link out of curiosity.
+
+**Deferred, not fixed this session** (see Action items): mobile still
+double-counts GST on the job detail screen (a *different* screen than the
+one already fixed in pt.2 — the "checked mobile, nothing to fix" claim in
+that session's own notes was wrong, caught by the reality-check pass
+searching for the general pattern instead of web-specific variable names);
+mobile's background GPS tracker has no free-plan awareness, so a phone that
+already has tracking on when a company drops to free can reportedly never
+turn tracking off again through the app once the new DB trigger starts
+rejecting its writes.
+
+**Jobs list: "To Invoice" tab + "Completed" → "Invoiced in Full".** Asked
+3 clarifying questions before building (zero-value completed jobs, whether
+Cancelled stays separate, whether this applies to any custom terminal
+status or just the literal "completed" key) since each had a genuinely
+different-code answer. Built per the answers: a completed job with zero
+invoices ever sent lands in "To Invoice" regardless of dollar amount owed
+(new `jobInvoicingBucket()`, `lib/job-financials.ts`); "Cancelled" keeps its
+own unchanged pill; the split applies to *any* terminal status a company has
+(not just the literal `completed` key), reusing the same `is_terminal`
+semantics as the row-cap fix above. New `actualsJobCeiling()` shares the
+GST-aware time-and-materials ceiling logic with the pt.2 actuals fix instead
+of a third copy-paste of it — the existing two call sites (job detail,
+customer detail) weren't refactored to use it, left as their original
+duplicated implementations to control blast radius. New
+`scripts/check-job-invoicing-bucket.mjs`. Needed `allowImportingTsExtensions`
+added to `tsconfig.json` since `lib/job-financials.ts` now has its first
+cross-file import — importing it extensionless had silently broken the
+*pre-existing* `check-job-financials.mjs`, caught only because the full
+check suite was re-run before committing rather than just the new script.
+
+**Marketing site** (`index.html`): "Free plan available" added to the hero
+tagline and pricing section trust line, plus a `$0` offer in the pricing
+JSON-LD. "Intro price, locked in for 2026" and the crossed-out founding
+prices removed from the web app's own pricing displays (Settings →
+Subscription, `/upgrade`) now that Free is a real permanent tier alongside
+them — the marketing site's own "Founding 25" crossed-out pricing was left
+as-is (not asked for, and reworking that page's whole positioning wasn't in
+scope).
+
+Full local Postgres reset + re-verification after every fix (not just the
+first pass) — job cap under both default and company-customized terminal
+statuses, `travel_logs`/auto-todo gates, referral idempotency and RLS
+lockout all reconfirmed. `tsc` and `eslint` clean; the 37 pre-existing
+`eslint` errors elsewhere in the repo reconfirmed via `git diff` to belong
+to files this session never touched.
 
 ## Session 2026-08-17 (Claude, pt.3) — Free tier locked down to basic CRUD only
 
