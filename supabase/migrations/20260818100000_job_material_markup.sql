@@ -20,7 +20,19 @@ comment on column job_materials.markup_pct is
 -- job_materials is SELECT job_materials.* (wildcard) in both sync-rules.yaml
 -- streams, so the new column reaches devices automatically going forward —
 -- but ALTER TABLE ADD COLUMN does not backfill existing rows through logical
--- replication (the 2026-08-02 outage trap). Force existing rows through the
--- WAL. Safe as a plain UPDATE — job_materials has no updated_at column and
--- no triggers to worry about firing falsely.
+-- replication (the 2026-08-02 outage trap). Force existing rows through the WAL.
+--
+-- NOT a plain UPDATE: job_materials has carried lock_job_materials
+-- (block_write_if_job_locked(), from 20260815100000, live in production since
+-- 2026-08-16) since before this migration was written — this file's original
+-- comment claimed "no triggers to worry about", which was only ever checked
+-- against the updated_at-bumping class of trigger and missed this one
+-- entirely. A bare backfill UPDATE against a real production job that's
+-- already fully invoiced and locked hard-fails the whole migration (caught by
+-- `supabase db push --linked` refusing to apply, not by local dev, which had
+-- no locked jobs yet to trip it on). This backfill touches no user-visible
+-- data, so suppressing triggers for it is correct, matching the jobs backfill
+-- in 20260815100000 itself.
+set local session_replication_role = 'replica';
 update job_materials set id = id;
+set local session_replication_role = 'origin';
