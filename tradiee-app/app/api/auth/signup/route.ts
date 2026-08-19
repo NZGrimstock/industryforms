@@ -24,7 +24,11 @@ async function notifyAdminConsole(input: { fullName: string; email: string; phon
       company: input.companyName,
       source: 'Trial signup',
     }),
-    signal: AbortSignal.timeout(8000),
+    // Fire-and-forget already (caller never awaits this) — a cold start chained across two
+    // serverless functions occasionally exceeded 8s and got aborted before it ever reached
+    // the console (confirmed via runtime logs: TimeoutError, not a real failure). Warm calls
+    // measure ~0.7-1.6s; 15s gives a cold path plenty of headroom at zero UX cost.
+    signal: AbortSignal.timeout(15000),
   })
   if (!response.ok) throw new Error(`admin console responded ${response.status}`)
 }
