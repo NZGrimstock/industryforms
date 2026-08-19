@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatDate, formatCurrency, formatDateTime } from '@/lib/utils'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
-import { summarizeInvoices, jobTotal, toInvoice } from '@/lib/job-financials'
+import { summarizeInvoices, jobTotal, toInvoice, approvedVariationTotal } from '@/lib/job-financials'
 import { round2, lineNet } from '@/lib/pricing'
 import { currentFinancialYearStart } from '@/lib/financial-year'
 import Link from 'next/link'
@@ -91,6 +91,21 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     if (inv.status === 'void' || !inv.job_id) continue
     invoicedByJob.set(inv.job_id, (invoicedByJob.get(inv.job_id) ?? 0) + Number(inv.total))
   }
+
+  // Extra work the customer has approved is still owed, so it belongs in this
+  // stat. Tax-inclusive totals, matching invoice.total above.
+  const variationsByJob = new Map<string, { status: string; amount: number }[]>()
+  if (allJobs.length > 0) {
+    const { data: variationRows } = await supabase
+      .from('variations')
+      .select('job_id, status, total')
+      .in('job_id', allJobs.map(j => j.id))
+    for (const v of variationRows ?? []) {
+      const list = variationsByJob.get(v.job_id) ?? []
+      list.push({ status: v.status, amount: Number(v.total) })
+      variationsByJob.set(v.job_id, list)
+    }
+  }
   const toInvoiceTotal = allJobs.reduce((sum, j) => {
     const quote = j.quotes as unknown as { total: number } | null
     const jobInvoiced = invoicedByJob.get(j.id) ?? 0
@@ -98,7 +113,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       const actualTotal = actualTotalByJob.get(j.id) ?? 0
       return actualTotal > 0 ? round2(actualTotal * (1 + gstRate)) : undefined
     })()
-    return sum + toInvoice(jobTotal(quote?.total ?? jobSourcedCeiling, jobInvoiced), jobInvoiced)
+    const jobVariations = approvedVariationTotal(variationsByJob.get(j.id) ?? [])
+    return sum + toInvoice(jobTotal(quote?.total ?? jobSourcedCeiling, jobInvoiced, jobVariations), jobInvoiced)
   }, 0)
 
   const fyStart = currentFinancialYearStart(new Date(), company?.country, profile!.timezone)

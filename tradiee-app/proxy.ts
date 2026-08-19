@@ -161,7 +161,7 @@ export async function proxy(request: NextRequest) {
   // the signup form and both app stores, and the token links we email out.
   const publicPaths = [
     '/login', '/signup', '/forgot-password', '/reset-password', '/auth/callback',
-    '/q/', '/i/', '/site/', '/api/',
+    '/q/', '/i/', '/v/', '/site/', '/api/',
     '/terms', '/privacy', '/account-deletion', '/invite/', '/portal/',
   ]
   const isPublic = publicPaths.some(p => pathname.startsWith(p))

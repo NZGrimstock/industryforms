@@ -17,7 +17,7 @@ import { z } from 'zod'
 import { createServiceClient } from '@/lib/supabase/server'
 import { resolveCompanyUser } from '@/lib/api-auth'
 import { nextDocNumber } from '@/lib/numbering'
-import { invoiceGuard } from '@/lib/job-financials'
+import { invoiceGuard, approvedVariationTotal } from '@/lib/job-financials'
 import { lineNet } from '@/lib/pricing'
 
 const bodySchema = z.object({
@@ -98,6 +98,16 @@ export async function POST(req: NextRequest) {
     }, 0)
     jobTotal = materialsTotal + labourTotal
   }
+
+  // Extra work the customer has since signed off raises the ceiling, so the
+  // guards below don't block billing for it. NET subtotals here, because this
+  // whole route compares quote line totals against invoice subtotals — see
+  // approvedVariationTotal()'s note on units.
+  const { data: jobVariations } = await service
+    .from('variations')
+    .select('status, subtotal')
+    .eq('job_id', job_id)
+  jobTotal += approvedVariationTotal((jobVariations ?? []).map(v => ({ status: v.status, amount: v.subtotal })))
 
   const { data: priorInvoices } = await service
     .from('invoices')

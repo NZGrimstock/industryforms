@@ -11,7 +11,7 @@ import { JobTemplatesPanel, ServiceRemindersPanel } from './panels'
 import { ListSearch } from '@/components/ui/list-search'
 import { JobsListTable } from '@/components/jobs/jobs-list-table'
 import { nextDocNumber } from '@/lib/numbering'
-import { actualsJobCeiling, jobInvoicingBucket } from '@/lib/job-financials'
+import { actualsJobCeiling, jobInvoicingBucket, approvedVariationTotal } from '@/lib/job-financials'
 
 const SORTABLE = ['job_number', 'title', 'status', 'created_at']
 
@@ -56,11 +56,20 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       .in('status', completedKeys)
     const jobIds = (completedJobs ?? []).map(j => j.id)
     if (jobIds.length) {
-      const [{ data: invoiceRows }, { data: materialRows }, { data: timesheetRows }] = await Promise.all([
+      const [{ data: invoiceRows }, { data: materialRows }, { data: timesheetRows }, { data: variationRows }] = await Promise.all([
         supabase.from('invoices').select('job_id, status, total').in('job_id', jobIds),
         supabase.from('job_materials').select('job_id, quantity, unit_price').in('job_id', jobIds),
         supabase.from('timesheets').select('job_id, started_at, ended_at, break_minutes, bill_rate, is_billable').in('job_id', jobIds),
+        supabase.from('variations').select('job_id, status, total').in('job_id', jobIds),
       ])
+      // Approved variations raise the ceiling, so a completed job with signed-off
+      // extra work still to bill stays in "To Invoice" instead of reading as full.
+      const variationsByJob = new Map<string, { status: string; amount: number }[]>()
+      for (const v of variationRows ?? []) {
+        const list = variationsByJob.get(v.job_id) ?? []
+        list.push({ status: v.status, amount: Number(v.total) })
+        variationsByJob.set(v.job_id, list)
+      }
       const invoicesByJob = new Map<string, { status: string; total: number }[]>()
       for (const inv of invoiceRows ?? []) {
         const list = invoicesByJob.get(inv.job_id) ?? []
@@ -87,7 +96,8 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         const quote = j.quotes as unknown as { total: number } | null
         const jobInvoices = invoicesByJob.get(j.id) ?? []
         const invoiced = jobInvoices.filter(i => i.status !== 'void').reduce((s, i) => s + i.total, 0)
-        const ceiling = quote ? Number(quote.total) : actualsJobCeiling(materialLinesByJob.get(j.id) ?? [], gstRate, pricesIncludeTax)
+        const baseCeiling = quote ? Number(quote.total) : actualsJobCeiling(materialLinesByJob.get(j.id) ?? [], gstRate, pricesIncludeTax)
+        const ceiling = baseCeiling + approvedVariationTotal(variationsByJob.get(j.id) ?? [])
         const bucket = jobInvoicingBucket({ ceiling, invoiced, invoiceCount: jobInvoices.length })
         ;(bucket === 'to-invoice' ? toInvoiceJobIds : invoicedFullJobIds).push(j.id)
       }

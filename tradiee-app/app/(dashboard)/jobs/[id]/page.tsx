@@ -11,13 +11,14 @@ import { StatusBadge } from '@/components/ui/badge'
 import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
-import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard } from '@/lib/job-financials'
+import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard, approvedVariationTotal } from '@/lib/job-financials'
 import { round2, lineNet } from '@/lib/pricing'
 import { effectivePlanKey } from '@/lib/billing'
 import { JobDetailClient } from './client'
 import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
 import { JobMaterials } from './materials'
+import { JobVariations } from './variations'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
 import { ProfitabilityBadge } from '@/components/ui/profitability-badge'
@@ -56,7 +57,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -88,6 +89,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('jobs').select('id, job_number, title').eq('company_id', profile!.company_id).order('job_number'),
     // Ascending — a conversation reads oldest-first, unlike the notes list.
     supabase.from('job_notes').select('id, body, author_id, created_at, profiles(full_name)').eq('job_id', id).eq('kind', 'message').order('created_at', { ascending: true }),
+    supabase.from('variations').select('*, variation_items(*)').eq('job_id', id).order('created_at'),
   ])
 
   const customerSites = customerSitesRes.data
@@ -221,7 +223,11 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const jobQuote = job.quotes as unknown as { quote_number: string; total: number; is_estimate: boolean } | null
   const jobSourcedCeiling = job.quote_id ? undefined : (actualTotal > 0 ? round2(actualTotal * (1 + gstRate)) : undefined)
   const { invoiced: financialInvoiced, paid: financialPaid, outstanding: financialOutstanding } = summarizeInvoices(invoicesRes.data ?? [])
-  const financialJobTotal = jobTotal(jobQuote?.total ?? jobSourcedCeiling, financialInvoiced)
+  // Tax-inclusive totals on this path (summarizeInvoices sums invoice.total),
+  // so variations contribute their inclusive total too.
+  const variations = variationsRes.data ?? []
+  const approvedVariations = approvedVariationTotal(variations.map(v => ({ status: v.status, amount: v.total })))
+  const financialJobTotal = jobTotal(jobQuote?.total ?? jobSourcedCeiling, financialInvoiced, approvedVariations)
   const financialToInvoice = toInvoice(financialJobTotal, financialInvoiced)
   // Same predicate as invoiceGuard()'s 'fully-invoiced' branch — kept in sync
   // deliberately (see lib/job-financials.ts comment) rather than duplicated
@@ -232,8 +238,13 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // null), so this must mirror that exactly rather than the job-sourced
   // fallback above, or a quote-less job could show a "locked" banner the
   // database was never going to enforce.
-  const jobLocked = invoiceGuard({ jobTotal: jobQuote?.total ?? 0, alreadyInvoiced: financialInvoiced, subtotal: 0 }) === 'fully-invoiced'
-    && !job.invoice_lock_override
+  // Approved variations are added here too — job_is_locked() counts them, so a
+  // job with signed-off extra work must stop showing the locked banner.
+  const jobLocked = invoiceGuard({
+    jobTotal: jobQuote ? Number(jobQuote.total) + approvedVariations : 0,
+    alreadyInvoiced: financialInvoiced,
+    subtotal: 0,
+  }) === 'fully-invoiced' && !job.invoice_lock_override
   const jobFinancialStats: FinancialStat[] = [
     { label: 'Job total', value: financialJobTotal },
     { label: 'Invoiced', value: financialInvoiced },
@@ -427,6 +438,33 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             />
           </CardContent>
         </Card>
+
+        {/* Variations — extra work agreed after the quote. Owner/admin only, to
+            match the RLS policy on the table (changing what the customer owes
+            is as sensitive as invoicing). Approving one raises the job's
+            invoiceable ceiling and reopens the fully-invoiced lock. */}
+        {(profile!.role === 'owner' || profile!.role === 'admin') && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Variations</CardTitle>
+              <p className="mt-1 text-xs text-gray-500">
+                Extra work beyond the original quote. Once approved it&apos;s added to what you can invoice.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              <JobVariations
+                jobId={id}
+                companyId={profile!.company_id}
+                profileId={user!.id}
+                quoteId={job.quote_id ?? null}
+                variations={variations}
+                gstRate={gstRate}
+                pricesIncludeTax={pricesIncludeTax}
+                appUrl={process.env.NEXT_PUBLIC_APP_URL ?? ''}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Visits / Schedule */}
         <VisitsCard

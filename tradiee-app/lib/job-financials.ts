@@ -7,6 +7,35 @@ export type InvoiceForFinancials = { status: string; total: number | string; amo
 
 export type ActualLine = { quantity: number; unit_price: number }
 
+export type VariationForCeiling = { status: string; amount: number | string }
+
+/**
+ * What approved variations add to a job's agreed ceiling.
+ *
+ * Only 'approved' counts — a draft or sent variation is a proposal, and a
+ * declined or void one never happened. Mirrors the same filter in
+ * job_is_locked() (20260820100000_variations.sql); the SQL trigger and this
+ * function are deliberately duplicated rather than sharing code, so any change
+ * to what counts as approved has to land in BOTH. That duplication has already
+ * drifted once (the trigger summed invoice subtotals where this side summed
+ * totals), so treat it as a live hazard, not a formality.
+ *
+ * `amount` is deliberately un-named as to GST: this codebase compares ceilings
+ * in two different units depending on the path. The display path (job page,
+ * customer page, jobs list) works in tax-INCLUSIVE totals — pass `v.total`.
+ * POST /api/invoices works entirely in NET subtotals, comparing quote line
+ * totals against invoice subtotals — pass `v.subtotal` there. Mixing the two
+ * silently over- or under-states the ceiling by one GST rate, which is exactly
+ * the bug this migration fixed on the SQL side, so the caller is made to choose.
+ */
+export function approvedVariationTotal(variations: VariationForCeiling[]): number {
+  return round2(
+    variations
+      .filter(v => v.status === 'approved')
+      .reduce((sum, v) => sum + Number(v.amount), 0)
+  )
+}
+
 // GST-inclusive ceiling for a quote-less (time-and-materials) job, from its
 // own logged materials + billable labour hours. Respects prices_include_tax
 // the same way invoices do (lineNet(), lib/pricing.ts). Shared logic for the
@@ -33,8 +62,16 @@ export function summarizeInvoices(invoices: InvoiceForFinancials[]) {
 // a sell-side total from job_materials/timesheets would need to replicate the
 // GST/discount math invoices already do, and a wrong number is worse than an
 // honest $0 here.
-export function jobTotal(quoteTotal: number | string | null | undefined, invoiced: number): number {
-  return quoteTotal != null ? Number(quoteTotal) : invoiced
+// `approvedVariations` (from approvedVariationTotal()) raises the ceiling for
+// extra work the customer has since agreed to. It only applies where a ceiling
+// exists at all — a job with nothing to measure against still reads back
+// whatever's been invoiced, for the reason above.
+export function jobTotal(
+  quoteTotal: number | string | null | undefined,
+  invoiced: number,
+  approvedVariations = 0,
+): number {
+  return quoteTotal != null ? round2(Number(quoteTotal) + approvedVariations) : invoiced
 }
 
 export function toInvoice(total: number, invoiced: number): number {
