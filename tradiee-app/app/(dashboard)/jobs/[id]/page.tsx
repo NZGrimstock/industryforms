@@ -19,6 +19,7 @@ import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
 import { JobMaterials } from './materials'
 import { JobVariations } from './variations'
+import { getCostCategories } from '@/lib/cost-categories'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
 import { ProfitabilityBadge } from '@/components/ui/profitability-badge'
@@ -57,7 +58,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -90,6 +91,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     // Ascending — a conversation reads oldest-first, unlike the notes list.
     supabase.from('job_notes').select('id, body, author_id, created_at, profiles(full_name)').eq('job_id', id).eq('kind', 'message').order('created_at', { ascending: true }),
     supabase.from('variations').select('*, variation_items(*)').eq('job_id', id).order('created_at'),
+    getCostCategories(supabase, profile!.company_id),
   ])
 
   const customerSites = customerSitesRes.data
@@ -206,6 +208,20 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   }, 0)
 
   const materialsCost = (materialsRes.data ?? []).reduce((sum, m) => sum + Number(m.quantity) * Number(m.unit_cost ?? 0), 0)
+  // By-category breakdown of the same materialsCost figure, only shown when
+  // at least one line actually has a category set — most jobs won't bother,
+  // and an all-"Uncategorised" list would just be noise.
+  const materialsCostByCategory = (() => {
+    const byId = new Map<string, number>()
+    for (const m of materialsRes.data ?? []) {
+      if (!m.cost_category_id) continue
+      byId.set(m.cost_category_id, (byId.get(m.cost_category_id) ?? 0) + Number(m.quantity) * Number(m.unit_cost ?? 0))
+    }
+    return costCategories
+      .map(c => ({ name: c.name, amount: byId.get(c.id) ?? 0 }))
+      .filter(c => c.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+  })()
   const labourCost = (timesheetsRes.data ?? []).reduce((sum, t) => {
     if (!t.ended_at) return sum
     const hrs = (new Date(t.ended_at).getTime() - new Date(t.started_at).getTime()) / 3600000
@@ -424,6 +440,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               profileId={user!.id}
               materials={materialsRes.data ?? []}
               priceItems={(priceItemsRes.data ?? []) as Array<{ id: string; code: string | null; name: string; unit: string; sell_price: number; cost_price: number; type: string; quantity_on_hand: number | null }>}
+              costCategories={costCategories}
               kits={kitsRes.data ?? []}
               standardMarkupEnabled={!!companySettings?.standard_markup_enabled}
               standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)}
@@ -637,6 +654,19 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
                 <span className={`font-medium ${estimatedSubtotal - actualLabour >= 0 ? 'text-green-600' : 'text-red-500'}`}>
                   {formatCurrency(estimatedSubtotal - actualLabour)} ({estimatedSubtotal > 0 ? Math.round(((estimatedSubtotal - actualLabour) / estimatedSubtotal) * 100) : 0}%)
                 </span>
+              </div>
+            )}
+            {materialsCostByCategory.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs text-gray-500 mb-2">Material cost by category</p>
+                <div className="space-y-1">
+                  {materialsCostByCategory.map(c => (
+                    <div key={c.name} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{c.name}</span>
+                      <span className="font-medium text-gray-800">{formatCurrency(c.amount)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

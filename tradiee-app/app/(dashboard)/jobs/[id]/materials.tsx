@@ -24,7 +24,9 @@ type Material = {
   unit_cost?: number | null
   price_list_item_id: string | null
   markup_pct?: number | null
+  cost_category_id?: string | null
 }
+type CostCategory = { id: string; name: string }
 type QuoteLine = {
   description: string
   quantity: number
@@ -49,6 +51,7 @@ interface Props {
   profileId: string
   materials: Material[]
   priceItems: PriceItem[]
+  costCategories?: CostCategory[]
   kits?: Kit[]
   quoteLines?: QuoteLine[]
   quoteNumber?: string | null
@@ -131,7 +134,7 @@ function DescriptionLookup({
   )
 }
 
-export function JobMaterials({ jobId, companyId, profileId, materials: initialMaterials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80, canMarkupItems = false }: Props) {
+export function JobMaterials({ jobId, companyId, profileId, materials: initialMaterials, priceItems, costCategories = [], kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80, canMarkupItems = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [materials, setMaterials] = useState(initialMaterials)
@@ -139,7 +142,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
   const [picker, setPicker] = useState<'items' | 'kits' | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })
+  const [form, setForm] = useState({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '', cost_category_id: '' })
   const qtyRef = useRef<HTMLInputElement>(null)
   const unitRef = useRef<HTMLInputElement>(null)
   const costRef = useRef<HTMLInputElement>(null)
@@ -175,6 +178,9 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
   const filteredItems = priceItems.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.code ?? '').toLowerCase().includes(search.toLowerCase()))
   const filteredKits = kits.filter(k => !search || k.name.toLowerCase().includes(search.toLowerCase()) || (k.code ?? '').toLowerCase().includes(search.toLowerCase()))
   const total = materials.reduce((sum, m) => sum + Number(m.quantity) * Number(m.unit_price), 0)
+  function costCategoryName(id: string) {
+    return costCategories.find(c => c.id === id)?.name
+  }
 
   useEffect(() => {
     function key(e: KeyboardEvent) {
@@ -229,11 +235,12 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
       unit_cost: parseFloat(form.unit_cost) || 0,
       unit_price: parseFloat(form.unit_price) || 0,
       markup_pct: canMarkupItems && form.markup_pct.trim() ? parseFloat(form.markup_pct) : null,
-    }).select('id, description, quantity, unit, unit_price, unit_cost, price_list_item_id, markup_pct').single()
+      cost_category_id: form.cost_category_id || null,
+    }).select('id, description, quantity, unit, unit_price, unit_cost, price_list_item_id, markup_pct, cost_category_id').single()
     setLoading(false)
     if (error) return
     setMaterials(prev => [...prev, data])
-    setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })
+    setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '', cost_category_id: '' })
     setShowForm(true)
     if (item) void consumeStock([{ item_id: item.id, quantity: qty }])
     router.refresh()
@@ -394,7 +401,14 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
           <tbody className="divide-y divide-gray-50">
             {materials.map(m => (
               <tr key={m.id} className="hover:bg-gray-50">
-                <td className="px-6 py-2.5 text-gray-700">{m.description}</td>
+                <td className="px-6 py-2.5 text-gray-700">
+                  {m.description}
+                  {m.cost_category_id && costCategoryName(m.cost_category_id) && (
+                    <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                      {costCategoryName(m.cost_category_id)}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2.5 text-right text-gray-600">{m.quantity}</td>
                 <td className="px-3 py-2.5 text-gray-400">{m.unit}</td>
                 {canMarkupItems && <td className="px-3 py-2.5 text-right text-gray-400">{m.unit_cost != null ? formatCurrency(m.unit_cost) : '—'}</td>}
@@ -410,6 +424,16 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
               <tr className="bg-gray-50/50">
                 <td className="px-6 py-2">
                   <DescriptionLookup value={form.description} items={priceItems} onText={value => setForm(f => ({ ...f, description: value, price_list_item_id: '' }))} onPick={applyItem} onEnter={() => qtyRef.current?.focus()} />
+                  {costCategories.length > 0 && (
+                    <select
+                      value={form.cost_category_id}
+                      onChange={e => set('cost_category_id', e.target.value)}
+                      className="mt-1 h-6 rounded border border-gray-200 bg-white px-1.5 text-[11px] text-gray-500"
+                    >
+                      <option value="">No category</option>
+                      {costCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
                 </td>
                 <td className="px-3 py-2"><input ref={qtyRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.quantity} onChange={e => set('quantity', e.target.value)} onKeyDown={e => moveOnEnter(e, unitRef)} /></td>
                 <td className="px-3 py-2"><input ref={unitRef} className="h-8 w-full rounded-lg border border-gray-200 px-2 text-sm" value={form.unit} onChange={e => set('unit', e.target.value)} onKeyDown={e => moveOnEnter(e, canMarkupItems ? costRef : priceRef)} /></td>
@@ -436,7 +460,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
       {showForm && (
         <div className="px-6 py-2 flex gap-2">
           <button onClick={addCurrent} disabled={loading || !form.description.trim()} className="px-3 py-1.5 text-xs font-medium bg-[var(--accent,#f97316)] text-white rounded-lg disabled:opacity-50">{loading ? 'Adding...' : 'Add item'}</button>
-          <button onClick={() => setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Clear</button>
+          <button onClick={() => setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '', cost_category_id: '' })} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Clear</button>
         </div>
       )}
 
@@ -472,7 +496,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
 
       {!picker && (
         <div className="px-6 py-2 flex gap-2 flex-wrap">
-          <button onClick={() => { setShowForm(true); setForm({ price_list_item_id: '', description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0', markup_pct: '' }) }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
+          <button onClick={() => { setShowForm(true); setForm({ price_list_item_id: '', description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0', markup_pct: '', cost_category_id: '' }) }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
             <Plus className="h-3.5 w-3.5" /> Add sundry
           </button>
           {priceItems.length > 0 && (

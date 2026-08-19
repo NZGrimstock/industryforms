@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager } from '@/components/forms/company-lists'
+import { BillingRatesManager, PaymentMethodsManager, TaxRatesManager, EnquiryInboxManager, JobStatusesManager, CostCategoriesManager } from '@/components/forms/company-lists'
 import { PaymentTermsFields } from '@/components/forms/payment-terms-fields'
 import { Upload, Pencil, X, ArrowRightLeft, PenLine, Trash2, Check, Archive } from 'lucide-react'
 import { getPlan, planForSeats } from '@/lib/plans'
@@ -630,6 +630,12 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
             <CardContent>
               <p className="text-xs text-gray-500 mb-3">The columns on the Jobs board and the dropdown on each job.</p>
               <JobStatusesManager companyId={company.id} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Cost categories</CardTitle></CardHeader>
+            <CardContent>
+              <CostCategoriesManager companyId={company.id} />
             </CardContent>
           </Card>
           <Card>

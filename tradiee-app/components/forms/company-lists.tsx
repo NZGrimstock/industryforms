@@ -217,6 +217,53 @@ export function PaymentMethodsManager({ companyId }: { companyId: string }) {
   )
 }
 
+// ── Cost categories ──────────────────────────────────────────────────────────
+type CC = { id: string; name: string }
+
+export function CostCategoriesManager({ companyId }: { companyId: string }) {
+  const supabase = createClient()
+  const { toast } = useToast()
+  const [rows, setRows] = useState<CC[]>([])
+  const [name, setName] = useState('')
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('cost_categories').select('id, name').eq('company_id', companyId).order('sort_order')
+    setRows((data ?? []) as CC[])
+  }, [supabase, companyId])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    if (!name.trim()) return
+    const { error } = await supabase.from('cost_categories').insert({ company_id: companyId, name: name.trim(), sort_order: rows.length })
+    if (error) { toast(error.message, 'error'); return }
+    setName(''); load()
+  }
+  async function remove(id: string) {
+    // The FK is ON DELETE SET NULL — existing job material lines just lose
+    // their category, nothing else breaks.
+    await supabase.from('cost_categories').delete().eq('id', id); load()
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-2">Cost categories</p>
+      <p className="text-xs text-gray-400 mb-3">Group job materials by category (e.g. &ldquo;Electrical&rdquo;, &ldquo;Site costs&rdquo;) for the Job costing breakdown. Optional per line.</p>
+      <div className="space-y-2 mb-3">
+        {rows.map(r => (
+          <div key={r.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+            <span className="text-gray-700">{r.name}</span>
+            <button onClick={() => remove(r.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Electrical, Site costs" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }} />
+        <Button type="button" size="sm" onClick={add}><Plus className="h-4 w-4" /> Add</Button>
+      </div>
+    </div>
+  )
+}
+
 // ── Billing rates ────────────────────────────────────────────────────────────
 type BR = { id: string; name: string; rate: number; is_default: boolean }
 

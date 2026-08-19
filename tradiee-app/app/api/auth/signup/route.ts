@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
+import { DEFAULT_COST_CATEGORIES } from '@/lib/cost-categories'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 
 // Tells the business admin console (admin.industryforms.co.nz) about a new trial signup
@@ -159,6 +160,14 @@ export async function POST(request: Request) {
     if (statusError) {
       await rollbackSignup(userId, company.id)
       return NextResponse.json({ error: statusError.message }, { status: 400 })
+    }
+
+    const { error: categoryError } = await supabase
+      .from('cost_categories')
+      .insert(DEFAULT_COST_CATEGORIES.map((name, i) => ({ company_id: company.id, name, sort_order: i })))
+    if (categoryError) {
+      await rollbackSignup(userId, company.id)
+      return NextResponse.json({ error: categoryError.message }, { status: 400 })
     }
 
     console.log(`[signup] ${companyName} (${company.id}) — trade: ${tradeType || 'not specified'}`)
