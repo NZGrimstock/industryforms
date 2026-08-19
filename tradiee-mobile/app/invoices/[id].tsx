@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, Modal, TextInput, Platform, KeyboardAvoidingView, Linking,
+  ActivityIndicator, Alert, Modal, TextInput, Platform, KeyboardAvoidingView, Linking, Share,
 } from 'react-native'
+import * as Print from 'expo-print'
 import { useLocalSearchParams, Stack, router } from 'expo-router'
 import { useQuery } from '@powersync/react'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -101,6 +102,7 @@ export default function InvoiceDetailScreen() {
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [emailing, setEmailing] = useState(false)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [gstRate, setGstRate] = useState(0.15)
@@ -321,6 +323,45 @@ export default function InvoiceDetailScreen() {
     }
   }
 
+  // Fetches the same signed PDF url as viewPdf, then hands it to the native
+  // print dialog (expo-print resolves a remote uri directly, no download
+  // step needed) or the OS share sheet — one tap instead of "open PDF viewer,
+  // find its own share/print icon".
+  async function printOrShare() {
+    if (!invoice) return
+    setPrinting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not signed in')
+      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+      const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/pdf`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Could not generate PDF')
+      }
+      const { url } = await res.json()
+      Alert.alert(`Invoice ${invoice.invoice_number}`, undefined, [
+        {
+          text: 'Print', onPress: () => {
+            Print.printAsync({ uri: url }).catch((e: any) => Alert.alert('Print failed', e.message ?? 'Unknown error'))
+          },
+        },
+        {
+          text: 'Share', onPress: () => {
+            Share.share(Platform.OS === 'ios' ? { url } : { message: url }).catch(() => {})
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ])
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not open PDF')
+    } finally {
+      setPrinting(false)
+    }
+  }
+
   async function emailInvoice() {
     if (!invoice) return
     setEmailing(true)
@@ -441,6 +482,9 @@ export default function InvoiceDetailScreen() {
             </TouchableOpacity>
             <TouchableOpacity onPress={viewPdf} disabled={loadingPdf} hitSlop={10} accessibilityLabel="View invoice PDF">
               {loadingPdf ? <ActivityIndicator size="small" color="#f97316" /> : <Icon name="file-text" size={20} color="#f97316" />}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={printOrShare} disabled={printing} hitSlop={10} accessibilityLabel="Print or share invoice">
+              {printing ? <ActivityIndicator size="small" color="#f97316" /> : <Icon name="printer" size={20} color="#f97316" />}
             </TouchableOpacity>
             <TouchableOpacity onPress={openEdit} hitSlop={10} accessibilityLabel="Edit invoice">
               <Icon name="edit-2" size={20} color="#f97316" />
