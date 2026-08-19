@@ -21,6 +21,7 @@ export interface Company {
   review_request_enabled: boolean
   standard_markup_enabled?: boolean
   standard_markup_pct?: number
+  job_material_markup_enabled?: boolean
   email: string | null
   phone: string | null
   address: string | null

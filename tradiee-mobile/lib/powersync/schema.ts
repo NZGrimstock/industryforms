@@ -89,6 +89,7 @@ const job_materials = new Table({
   unit: column.text,
   unit_cost: column.real,
   unit_price: column.real,
+  markup_pct: column.real,
   created_at: column.text,
 })
 

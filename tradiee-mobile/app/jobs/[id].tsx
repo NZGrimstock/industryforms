@@ -86,8 +86,8 @@ type Job = {
 }
 
 type Note = { id: string; body: string; author_id: string | null; created_at: string }
-type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number }
-type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string }
+type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number; unit_cost?: number | null; markup_pct?: number | null }
+type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string; markup_pct: string }
 type KitComponent = { quantity: number; price_list_items: { id: string; name: string; unit: string | null; cost_price: number | null; sell_price: number | null } | null }
 type Kit = { id: string; code: string | null; name: string; sell_price: number | null; use_item_sell_total: boolean | null; kit_items: KitComponent[] }
 type MatInsert = { job_id: string; company_id: string; added_by: string | null; price_list_item_id: string | null; description: string; quantity: number; unit: string; unit_cost: number; unit_price: number }
@@ -123,7 +123,7 @@ export default function JobDetailScreen() {
   // publication changes this feature deliberately avoided (see
   // JOB_MESSAGING_SCOPE.md). Few enough people are on one job for this to read fine.
   const [userId, setUserId] = useState<string | null>(null)
-  const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+  const [materialLine, setMaterialLine] = useState<MaterialLine>({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '', markup_pct: '' })
   const [savingMaterial, setSavingMaterial] = useState(false)
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
   const [optimisticMaterials, setOptimisticMaterials] = useState<Material[]>([])
@@ -143,6 +143,7 @@ export default function JobDetailScreen() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState<string | null>(null)
+  const [companyMarkupEnabled, setCompanyMarkupEnabled] = useState(false)
   const [fillTemplate, setFillTemplate] = useState<FormTemplate | null>(null)
   const [fillAnswers, setFillAnswers] = useState<Record<string, string>>({})
   const [savingForm, setSavingForm] = useState(false)
@@ -160,10 +161,28 @@ export default function JobDetailScreen() {
   const materialQtyRef = useRef<TextInput>(null)
   const materialUnitRef = useRef<TextInput>(null)
   const materialPriceRef = useRef<TextInput>(null)
+  const materialCostRef = useRef<TextInput>(null)
+  const materialMarkupRef = useRef<TextInput>(null)
 
   const focusField = (ref: RefObject<TextInput | null>) => {
     setTimeout(() => scrollFieldAboveKeyboard(scrollRef, ref, 12), 50)
   }
+
+  // Mirrors the web JobMaterials component: while a markup % is entered,
+  // unit_price is derived from cost. Clearing markup_pct hands control back
+  // to typing unit_price directly.
+  const setMaterialCost = (v: string) => setMaterialLine(line => {
+    const markup = parseFloat(line.markup_pct)
+    const cost = parseFloat(v) || 0
+    const price = line.markup_pct.trim() && !Number.isNaN(markup) ? (cost * (1 + markup / 100)).toFixed(2) : line.unit_price
+    return { ...line, unit_cost: v, unit_price: price }
+  })
+  const setMaterialMarkup = (v: string) => setMaterialLine(line => {
+    const markup = parseFloat(v)
+    const cost = parseFloat(line.unit_cost) || 0
+    const price = v.trim() && !Number.isNaN(markup) ? (cost * (1 + markup / 100)).toFixed(2) : line.unit_price
+    return { ...line, markup_pct: v, unit_price: price }
+  })
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -173,10 +192,11 @@ export default function JobDetailScreen() {
           if (profile?.company_id) {
             setCompanyId(profile.company_id)
             getJobStatuses(profile.company_id).then(setStatuses)
-            supabase.from('companies').select('name, logo_url').eq('id', profile.company_id).single()
+            supabase.from('companies').select('name, logo_url, job_material_markup_enabled').eq('id', profile.company_id).single()
               .then(({ data: company }) => {
                 setCompanyName(company?.name ?? null)
                 setCompanyLogoUrl(company?.logo_url ?? null)
+                setCompanyMarkupEnabled(!!company?.job_material_markup_enabled)
               })
           }
         })
@@ -395,7 +415,7 @@ export default function JobDetailScreen() {
   }
 
   const { data: materials, refresh: refreshMaterials } = useQuery<Material>(
-    `SELECT id, description, quantity, unit, unit_price
+    `SELECT id, description, quantity, unit, unit_price, unit_cost, markup_pct
      FROM job_materials WHERE job_id = ?
      ORDER BY created_at ASC`,
     [id]
@@ -580,14 +600,15 @@ export default function JobDetailScreen() {
       description: m.description,
       quantity: String(m.quantity),
       unit: m.unit ?? 'ea',
-      unit_cost: '0',
+      unit_cost: m.unit_cost != null ? String(m.unit_cost) : '0',
       unit_price: String(m.unit_price),
+      markup_pct: m.markup_pct != null ? String(m.markup_pct) : '',
     })
   }
 
   function cancelEditMaterial() {
     setEditingMaterialId(null)
-    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '', markup_pct: '' })
   }
 
   function deleteMaterial(m: Material) {
@@ -610,6 +631,8 @@ export default function JobDetailScreen() {
     const qty = parseFloat(materialLine.quantity) || 1
     const unitCost = parseFloat(materialLine.unit_cost) || 0
     const unitPrice = parseFloat(materialLine.unit_price) || 0
+    const canMarkup = companyMarkupEnabled && (role === 'owner' || role === 'admin')
+    const markupPct = canMarkup && materialLine.markup_pct.trim() ? parseFloat(materialLine.markup_pct) : null
     setSavingMaterial(true)
     // job_materials has no update RLS policy — "editing" a line deletes the
     // old row and inserts the new one, same as the web app's own pattern.
@@ -628,11 +651,12 @@ export default function JobDetailScreen() {
       unit: materialLine.unit || 'ea',
       unit_cost: unitCost,
       unit_price: unitPrice,
+      markup_pct: markupPct,
     }
     const { data, error } = await supabase
       .from('job_materials')
       .insert(payload)
-      .select('id, description, quantity, unit, unit_price')
+      .select('id, description, quantity, unit, unit_price, unit_cost, markup_pct')
       .single()
     setSavingMaterial(false)
     if (error) { Alert.alert('Could not add material', error.message); return }
@@ -644,9 +668,11 @@ export default function JobDetailScreen() {
         quantity: payload.quantity,
         unit: payload.unit,
         unit_price: payload.unit_price,
+        unit_cost: payload.unit_cost,
+        markup_pct: payload.markup_pct,
       },
     ])
-    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '' })
+    setMaterialLine({ price_list_item_id: null, description: '', quantity: '1', unit: 'ea', unit_cost: '0', unit_price: '', markup_pct: '' })
     setEditingMaterialId(null)
     refreshMaterials?.()
     hapticSuccess()
@@ -952,6 +978,7 @@ export default function JobDetailScreen() {
   const current = resolveStatus(statuses, job.status)
   const doneStatus = statuses.find(s => s.is_terminal && s.key !== 'cancelled') ?? statuses.find(s => s.key === 'completed')
   const isDone = doneStatus ? job.status === doneStatus.key : false
+  const canMarkupItems = companyMarkupEnabled && (role === 'owner' || role === 'admin')
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
@@ -1214,6 +1241,30 @@ export default function JobDetailScreen() {
                 onFocus={() => focusField(materialPriceRef)}
               />
             </View>
+            {canMarkupItems && (
+              <View style={styles.materialInputsRow}>
+                <TextInput
+                  ref={materialCostRef}
+                  style={[styles.input, { flex: 1.4 }]}
+                  value={materialLine.unit_cost}
+                  onChangeText={setMaterialCost}
+                  placeholder="Cost"
+                  placeholderTextColor="#6b7280"
+                  keyboardType="decimal-pad"
+                  onFocus={() => focusField(materialCostRef)}
+                />
+                <TextInput
+                  ref={materialMarkupRef}
+                  style={[styles.input, { flex: 1.4 }]}
+                  value={materialLine.markup_pct}
+                  onChangeText={setMaterialMarkup}
+                  placeholder="Markup %"
+                  placeholderTextColor="#6b7280"
+                  keyboardType="decimal-pad"
+                  onFocus={() => focusField(materialMarkupRef)}
+                />
+              </View>
+            )}
             <View style={styles.materialActions}>
               <TouchableOpacity
                 style={[styles.saveNoteBtn, (!materialLine.description.trim() || savingMaterial) && { opacity: 0.5 }]}
@@ -1227,7 +1278,7 @@ export default function JobDetailScreen() {
                   <Text style={styles.addLink}>Cancel</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' })}>
+                <TouchableOpacity onPress={() => setMaterialLine({ price_list_item_id: null, description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0', markup_pct: '' })}>
                   <Text style={styles.addLink}>Add sundry</Text>
                 </TouchableOpacity>
               )}
@@ -1246,7 +1297,7 @@ export default function JobDetailScreen() {
               {displayedMaterials.map(m => (
               <View key={m.id} style={styles.materialRow}>
                 <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }} onPress={isDone ? undefined : () => editMaterial(m)} activeOpacity={isDone ? 1 : 0.6}>
-                  <Text style={styles.materialDesc} numberOfLines={1}>{m.description}</Text>
+                  <Text style={styles.materialDesc} numberOfLines={1}>{m.description}{canMarkupItems && m.markup_pct != null ? ` (+${m.markup_pct}%)` : ''}</Text>
                   <Text style={styles.materialQty}>{m.quantity}{m.unit ? ` ${m.unit}` : ''}</Text>
                   <Text style={styles.materialPrice}>${(m.quantity * m.unit_price).toFixed(2)}</Text>
                 </TouchableOpacity>

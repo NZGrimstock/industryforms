@@ -21,7 +21,9 @@ type Material = {
   quantity: number
   unit: string
   unit_price: number
+  unit_cost?: number | null
   price_list_item_id: string | null
+  markup_pct?: number | null
 }
 type QuoteLine = {
   description: string
@@ -52,6 +54,8 @@ interface Props {
   quoteNumber?: string | null
   standardMarkupEnabled?: boolean
   standardMarkupPct?: number
+  /** Company toggle (Settings) AND caller is owner/admin — computed by the page. */
+  canMarkupItems?: boolean
 }
 
 // The dollar figures elsewhere on the job page (job costing, profitability,
@@ -127,7 +131,7 @@ function DescriptionLookup({
   )
 }
 
-export function JobMaterials({ jobId, companyId, profileId, materials: initialMaterials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80 }: Props) {
+export function JobMaterials({ jobId, companyId, profileId, materials: initialMaterials, priceItems, kits = [], quoteLines = [], quoteNumber, standardMarkupEnabled = false, standardMarkupPct = 80, canMarkupItems = false }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [materials, setMaterials] = useState(initialMaterials)
@@ -135,10 +139,33 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
   const [picker, setPicker] = useState<'items' | 'kits' | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
+  const [form, setForm] = useState({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })
   const qtyRef = useRef<HTMLInputElement>(null)
   const unitRef = useRef<HTMLInputElement>(null)
+  const costRef = useRef<HTMLInputElement>(null)
+  const markupRef = useRef<HTMLInputElement>(null)
   const priceRef = useRef<HTMLInputElement>(null)
+
+  // When a markup % is entered, unit_price is derived from cost — the two
+  // stay linked for as long as markup_pct is set. Clearing markup_pct hands
+  // control back to typing unit_price directly, same as when the feature is
+  // off entirely.
+  function setCost(v: string) {
+    setForm(f => {
+      const markup = parseFloat(f.markup_pct)
+      const cost = parseFloat(v) || 0
+      const price = f.markup_pct.trim() && !Number.isNaN(markup) ? (cost * (1 + markup / 100)).toFixed(2) : f.unit_price
+      return { ...f, unit_cost: v, unit_price: price }
+    })
+  }
+  function setMarkup(v: string) {
+    setForm(f => {
+      const markup = parseFloat(v)
+      const cost = parseFloat(f.unit_cost) || 0
+      const price = v.trim() && !Number.isNaN(markup) ? (cost * (1 + markup / 100)).toFixed(2) : f.unit_price
+      return { ...f, markup_pct: v, unit_price: price }
+    })
+  }
 
   // The background router.refresh() re-renders this component with a fresh
   // `materials` prop straight from the DB — accept it as the source of truth
@@ -201,11 +228,12 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
       unit: form.unit,
       unit_cost: parseFloat(form.unit_cost) || 0,
       unit_price: parseFloat(form.unit_price) || 0,
-    }).select('id, description, quantity, unit, unit_price, price_list_item_id').single()
+      markup_pct: canMarkupItems && form.markup_pct.trim() ? parseFloat(form.markup_pct) : null,
+    }).select('id, description, quantity, unit, unit_price, unit_cost, price_list_item_id, markup_pct').single()
     setLoading(false)
     if (error) return
     setMaterials(prev => [...prev, data])
-    setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })
+    setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })
     setShowForm(true)
     if (item) void consumeStock([{ item_id: item.id, quantity: qty }])
     router.refresh()
@@ -356,6 +384,8 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
               <th className="text-left px-6 py-2 font-medium">Description</th>
               <th className="text-right px-3 py-2 font-medium w-24">Qty</th>
               <th className="text-left px-3 py-2 font-medium w-20">Unit</th>
+              {canMarkupItems && <th className="text-right px-3 py-2 font-medium w-24">Cost</th>}
+              {canMarkupItems && <th className="text-right px-3 py-2 font-medium w-20">Markup %</th>}
               <th className="text-right px-3 py-2 font-medium w-28">Unit price</th>
               <th className="text-right px-6 py-2 font-medium w-28">Total</th>
               <th className="w-8" />
@@ -367,6 +397,8 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
                 <td className="px-6 py-2.5 text-gray-700">{m.description}</td>
                 <td className="px-3 py-2.5 text-right text-gray-600">{m.quantity}</td>
                 <td className="px-3 py-2.5 text-gray-400">{m.unit}</td>
+                {canMarkupItems && <td className="px-3 py-2.5 text-right text-gray-400">{m.unit_cost != null ? formatCurrency(m.unit_cost) : '—'}</td>}
+                {canMarkupItems && <td className="px-3 py-2.5 text-right text-gray-400">{m.markup_pct != null ? `${m.markup_pct}%` : '—'}</td>}
                 <td className="px-3 py-2.5 text-right text-gray-600">{formatCurrency(m.unit_price)}</td>
                 <td className="px-6 py-2.5 text-right font-medium text-gray-800">{formatCurrency(Number(m.quantity) * Number(m.unit_price))}</td>
                 <td className="py-2.5 pr-2">
@@ -380,7 +412,9 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
                   <DescriptionLookup value={form.description} items={priceItems} onText={value => setForm(f => ({ ...f, description: value, price_list_item_id: '' }))} onPick={applyItem} onEnter={() => qtyRef.current?.focus()} />
                 </td>
                 <td className="px-3 py-2"><input ref={qtyRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.quantity} onChange={e => set('quantity', e.target.value)} onKeyDown={e => moveOnEnter(e, unitRef)} /></td>
-                <td className="px-3 py-2"><input ref={unitRef} className="h-8 w-full rounded-lg border border-gray-200 px-2 text-sm" value={form.unit} onChange={e => set('unit', e.target.value)} onKeyDown={e => moveOnEnter(e, priceRef)} /></td>
+                <td className="px-3 py-2"><input ref={unitRef} className="h-8 w-full rounded-lg border border-gray-200 px-2 text-sm" value={form.unit} onChange={e => set('unit', e.target.value)} onKeyDown={e => moveOnEnter(e, canMarkupItems ? costRef : priceRef)} /></td>
+                {canMarkupItems && <td className="px-3 py-2"><input ref={costRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.unit_cost} onChange={e => setCost(e.target.value)} onKeyDown={e => moveOnEnter(e, markupRef)} /></td>}
+                {canMarkupItems && <td className="px-3 py-2"><input ref={markupRef} type="number" step="0.1" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.markup_pct} onChange={e => setMarkup(e.target.value)} onKeyDown={e => moveOnEnter(e, priceRef)} /></td>}
                 <td className="px-3 py-2"><input ref={priceRef} type="number" step="0.01" className="h-8 w-full rounded-lg border border-gray-200 px-2 text-right text-sm" value={form.unit_price} onChange={e => set('unit_price', e.target.value)} onKeyDown={moveOnEnter} /></td>
                 <td className="px-6 py-2 text-right font-medium text-gray-800">{formatCurrency((parseFloat(form.quantity) || 0) * (parseFloat(form.unit_price) || 0))}</td>
                 <td className="py-2 pr-2" />
@@ -390,7 +424,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
           {materials.length > 0 && (
             <tfoot>
               <tr className="border-t border-gray-100">
-                <td colSpan={4} className="px-6 py-2 text-right text-xs text-gray-500 font-medium">Total</td>
+                <td colSpan={canMarkupItems ? 6 : 4} className="px-6 py-2 text-right text-xs text-gray-500 font-medium">Total</td>
                 <td className="px-6 py-2 text-right font-semibold text-gray-900">{formatCurrency(total)}</td>
                 <td />
               </tr>
@@ -402,7 +436,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
       {showForm && (
         <div className="px-6 py-2 flex gap-2">
           <button onClick={addCurrent} disabled={loading || !form.description.trim()} className="px-3 py-1.5 text-xs font-medium bg-[var(--accent,#f97316)] text-white rounded-lg disabled:opacity-50">{loading ? 'Adding...' : 'Add item'}</button>
-          <button onClick={() => setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0' })} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Clear</button>
+          <button onClick={() => setForm({ price_list_item_id: '', description: '', quantity: '1', unit: 'each', unit_cost: '0', unit_price: '0', markup_pct: '' })} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg">Clear</button>
         </div>
       )}
 
@@ -438,7 +472,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
 
       {!picker && (
         <div className="px-6 py-2 flex gap-2 flex-wrap">
-          <button onClick={() => { setShowForm(true); setForm({ price_list_item_id: '', description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0' }) }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
+          <button onClick={() => { setShowForm(true); setForm({ price_list_item_id: '', description: 'Sundries', quantity: '1', unit: 'item', unit_cost: '0', unit_price: '0', markup_pct: '' }) }} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
             <Plus className="h-3.5 w-3.5" /> Add sundry
           </button>
           {priceItems.length > 0 && (

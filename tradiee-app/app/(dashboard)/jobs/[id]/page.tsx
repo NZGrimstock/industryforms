@@ -37,7 +37,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, job_material_markup_enabled, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -107,7 +107,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
   const jobPurchaseOrders = purchaseOrdersRes.data ?? []
 
-  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number } | null
+  const companySettings = profile!.companies as { standard_markup_enabled?: boolean; standard_markup_pct?: number; job_material_markup_enabled?: boolean } | null
+  const canMarkupItems = !!companySettings?.job_material_markup_enabled && (profile!.role === 'owner' || profile!.role === 'admin')
   const normalizedJobAssignees = (jobAssigneesRes.data ?? []).map(a => {
     const assigneeProfile = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles
     return {
@@ -415,6 +416,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               kits={kitsRes.data ?? []}
               standardMarkupEnabled={!!companySettings?.standard_markup_enabled}
               standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)}
+              canMarkupItems={canMarkupItems}
               quoteLines={quoteFillLines}
               quoteNumber={(job.quotes as { quote_number: string } | null)?.quote_number ?? null}
             />

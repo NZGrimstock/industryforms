@@ -78,6 +78,7 @@ const job_materials = new Table({
   unit: column.text,
   unit_cost: column.real,
   unit_price: column.real,
+  markup_pct: column.real,
   price_list_item_id: column.text,
   supplier: column.text,
   supplier_invoice_number: column.text,

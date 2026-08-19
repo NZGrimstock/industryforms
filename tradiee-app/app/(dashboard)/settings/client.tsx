@@ -90,6 +90,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     review_request_enabled: company.review_request_enabled ?? true,
     standard_markup_enabled: (company as Company & { standard_markup_enabled?: boolean }).standard_markup_enabled ?? false,
     standard_markup_pct: ((company as Company & { standard_markup_pct?: number }).standard_markup_pct ?? 80).toString(),
+    job_material_markup_enabled: company.job_material_markup_enabled ?? false,
     payment_terms_type: (company as Company & { payment_terms_type?: string }).payment_terms_type ?? 'net_days',
     payment_terms_days: ((company as Company & { payment_terms_days?: number }).payment_terms_days ?? 14).toString(),
     payment_terms_day_of_month: (company as Company & { payment_terms_day_of_month?: number | null }).payment_terms_day_of_month?.toString() ?? '',
@@ -209,6 +210,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       default_terms: companyForm.default_terms || null,
       standard_markup_enabled: companyForm.standard_markup_enabled,
       standard_markup_pct: parseFloat(companyForm.standard_markup_pct) || 0,
+      job_material_markup_enabled: companyForm.job_material_markup_enabled,
       default_job_assignee_id: companyForm.default_job_assignee_id || null,
       payment_terms_days: parseInt(companyForm.payment_terms_days) || 14,
       payment_terms_day_of_month: companyForm.payment_terms_type === 'day_of_month' ? (parseInt(companyForm.payment_terms_day_of_month) || null) : null,
@@ -576,6 +578,10 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
                   <Input type="number" min="0" step="0.01" value={companyForm.standard_markup_pct} onChange={e => setC('standard_markup_pct', e.target.value)} />
                 </div>
               </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={companyForm.job_material_markup_enabled} onChange={e => setCompanyForm(f => ({ ...f, job_material_markup_enabled: e.target.checked }))} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
+                Let owners/admins add a markup % to individual job materials (mobile &amp; web)
+              </label>
               <div>
                 <Label>Default job assignee</Label>
                 <Select
