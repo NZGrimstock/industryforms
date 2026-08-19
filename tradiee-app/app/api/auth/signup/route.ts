@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
@@ -163,8 +163,16 @@ export async function POST(request: Request) {
 
     console.log(`[signup] ${companyName} (${company.id}) — trade: ${tradeType || 'not specified'}`)
 
-    notifyAdminConsole({ fullName, email, phone, companyName }).catch((err) =>
-      console.error('[signup] admin console notify failed (non-fatal):', err)
+    // Root cause of the notify silently never landing: Vercel freezes this function's
+    // execution environment the instant NextResponse.json() below is sent — an un-awaited
+    // fire-and-forget promise gets killed mid-flight, not given a chance to complete or even
+    // reach its own .catch(). Confirmed in runtime logs: the previous TimeoutError showed up
+    // attached to a LATER, unrelated request once the frozen environment thawed again. after()
+    // is the platform-native fix — it keeps the function alive until this work finishes.
+    after(() =>
+      notifyAdminConsole({ fullName, email, phone, companyName }).catch((err) =>
+        console.error('[signup] admin console notify failed (non-fatal):', err)
+      )
     )
 
     return NextResponse.json({ success: true })
