@@ -6,6 +6,28 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **`tradiee-app/.env.local` points `NEXT_PUBLIC_SUPABASE_URL` at PRODUCTION
+  (`quidcdrnzjwarrqdpyao.supabase.co`), not local Supabase (2026-08-20).**
+  Discovered the hard way: ran `npm run dev` to browser-test the new takeoff
+  page, signed up a throwaway test company through the real signup form to
+  reach the dashboard, and only realized afterward that the dev server was
+  never talking to local Postgres at all — it hit production. The test
+  company, its profile, and its Supabase Auth user were found and deleted
+  from production immediately after (confirmed via read-only queries: 0
+  rows remaining for all three), so no lasting data trace — but the signup
+  route's fire-and-forget `notifyAdminConsole()` call almost certainly still
+  fired a real "new trial signup" ping to admin.industryforms.co.nz for
+  `test-takeoff@example.com`, which can't be un-sent; worth a human glance
+  at the admin console to dismiss it if it landed. **Fix the actual problem**:
+  either point `.env.local` at the local Supabase instance (ports
+  54341-54347 per tech-stack memory) for `npm run dev`, or — if this app's
+  dev workflow is deliberately "dev server, production data" — make that
+  unmistakable (a banner, a differently-colored chrome, anything) so the
+  next person running `npm run dev` for a UI check doesn't repeat this.
+  Local Supabase itself was fine throughout — every `docker exec psql`
+  verification this session (migrations, RLS, math) ran against the correct
+  local instance; only the Next.js dev server's own env was wrong.
+
 - **`job_diary_entries` needs a PowerSync Dashboard sync-rules upload
   (2026-08-20).** The migration, publication, and both client schemas are all
   live in production, but `sync-rules.yaml` itself has no CLI push path — per
@@ -246,6 +268,108 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-20 (Claude) — Buildxact gap analysis, six features shipped, a production data incident
+
+Started from a competitive teardown of Buildxact's NZ feature pages (an
+artifact, not saved to this repo), producing a 34-item gap schedule across
+8 domains with a recommended build order. User picked "build variations"
+then "continue through all stages" — six features shipped this session, in
+the sequence the gap schedule recommended, each migrated/verified/committed/
+pushed individually. See Action items above for two things still owed: the
+PowerSync Dashboard upload for the site diary table, and — more
+importantly — the `.env.local` pointing at production that this session
+discovered mid-build.
+
+**1. Variations (change orders).** New `variations`/`variation_items`
+tables — itemised extra work, approved either by the customer signing at
+`/v/<token>` (mirrors quote acceptance) or an owner/admin marking it
+approved on site. The actual payoff: an approved variation raises the job's
+invoiceable ceiling, so a job locked as fully-invoiced
+(`20260815100000_lock_job_once_fully_invoiced.sql`) reopens itself once a
+variation is approved — previously the *only* way out of that lock was the
+admin override, meaning approved extra work had nowhere legitimate to go.
+Found and fixed a real bug while wiring this up: `job_is_locked()` summed
+invoice **subtotal** (ex-GST) against the quote's **inclusive** total, so
+the database needed ~15% more billed than the app (`invoiceGuard()`) before
+agreeing a job was locked — fixed on both the SQL trigger and the mobile
+lock-status route that mirrors it. Web only; mobile is a deliberate
+follow-on, matching the credit-notes precedent (owner/admin-only money,
+staff devices never sync quotes/invoices).
+
+**2. Cost categories.** New per-company `cost_categories` list (mirrors
+`job_statuses`: Settings CRUD, members-select/admins-write RLS), seeded
+with 7 trade-agnostic defaults at signup. Optional per `job_materials` line;
+the Job costing card shows a by-category breakdown once at least one line
+is categorised. Scoped to `job_materials` only — quote/invoice/PO line
+items are a deliberate follow-up, not wired yet.
+
+**3. Site diary.** New `job_diary_entries` — one row per job per day
+(upserted on `(job_id, entry_date)`, so logging again today edits today's
+entry rather than duplicating), with notes/crew-on-site/weather/delays.
+The one feature this session that's genuinely synced via PowerSync
+(sync-rules.yaml + publication + both client schemas) rather than
+web-only — unlike variations/cost-categories, this is a field feature
+crews log on site, often offline. Mobile gets the real add/edit UI; web
+gets a read-only recent-entries card. Weather is free-text the crew types
+themselves, not an auto-fetch from the site's lat/lng — no weather API is
+wired into this codebase, flagged as a real follow-up rather than
+half-built.
+
+**4. Assembly kits.** `kits.is_assembly`/`assembly_unit` +
+`kit_items.waste_pct` — opt-in per kit. When on, `kit_items.quantity` means
+"needed per 1 unit" (e.g. per m²) instead of "per 1 kit", and using the kit
+on a job (both apps) asks for the driving measurement instead of "how many
+kits". Purely additive — every existing kit's `is_assembly` defaults false
+and behaves byte-for-byte as before (driving qty 1, waste 0%, confirmed by
+construction, not just by testing). Deliberately doesn't touch the quote
+builder (`components/forms/quote-builder.tsx`, 861 lines, the single
+highest-traffic revenue-critical component in the app) — quote-time
+assemblies is a real follow-up, scoped out twice this session for the same
+risk reason (see cost categories above too).
+
+**5. Supplier price alerts + import attribution.** Quotes list flags a
+sent-but-unaccepted quote with "Cost up" when a line's price-list item now
+costs more than what was locked in as `unit_cost` at quote time — pure
+comparison, no new schema. Price-list CSV import can now tag every
+inserted/updated row with a supplier (reuses the existing `supplier_id`
+column); re-importing *without* picking one never blanks an item's
+existing attribution. Explicitly not a scheduled/recurring importer — that
+needs a real per-supplier feed or partnership this app doesn't have.
+
+**6. Takeoff tool.** New `/takeoff` — upload a plan photo, calibrate scale
+by clicking two points a known distance apart, then measure length/area
+(shoelace formula)/count. Entirely client-side: the image never leaves the
+browser, nothing persists, no schema, no new attack surface. User was asked
+directly before this one — takeoff is a different order of magnitude from
+the other five (no existing infrastructure to extend) — and picked the
+scoped-MVP option over a full persisted/PDF.js/quote-bound build. Verified
+in two ways: `scripts/check-takeoff.mjs` for the pure geometry, and a real
+end-to-end click-test in a live browser (upload → calibrate against a
+synthetic 4m-wide test image → measure a rectangle → exactly 12.00 m² →
+count three clicks → exactly 3 → remove → zero console errors throughout).
+
+**The production data incident** (see Action items above for the full
+account and what's still owed): browser-testing the takeoff tool meant
+running `npm run dev`, which turned out to be pointed at production
+Supabase via `.env.local`, not local. A throwaway signup created a real
+row in production, caught immediately after and deleted (company, profile,
+auth user — confirmed 0 rows remaining), but the signup route's
+fire-and-forget admin-console notify almost certainly fired for real and
+can't be unsent. Every database-level verification this session (all six
+features' migrations, RLS, math) ran correctly against local Postgres via
+`docker exec psql` — only the one browser click-test session hit
+production, because the dev server's own env pointed there.
+
+Every migration this session applied to **production**, not just local:
+`20260820100000_variations.sql`, `20260820110000_cost_categories.sql`,
+`20260820120000_job_diary.sql`, `20260820130000_kit_assemblies.sql`, plus a
+fix to the previous session's `20260818100000_job_material_markup.sql`
+(its WAL-backfill `update job_materials set id = id` hard-failed against a
+real production job that was already fully-invoiced-locked — the exact
+lock trigger class of bug, caught by `supabase db push --linked` itself
+refusing to apply, not by local dev, which had no locked jobs yet to trip
+it on).
 
 ## Session 2026-08-17 (Claude) — /terms → /login redirect loop: root cause was proxy.ts, not caching
 
