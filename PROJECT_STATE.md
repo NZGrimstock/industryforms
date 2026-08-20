@@ -1,10 +1,20 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-17. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-20. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
+
+- **`job_diary_entries` needs a PowerSync Dashboard sync-rules upload
+  (2026-08-20).** The migration, publication, and both client schemas are all
+  live in production, but `sync-rules.yaml` itself has no CLI push path — per
+  its own header comment, it's uploaded by hand via the PowerSync Dashboard →
+  Sync Rules. Until someone does that, the new table sits in the Postgres
+  publication but PowerSync never actually streams it, so the mobile site
+  diary card will silently show nothing synced (writes still work — they go
+  straight to Supabase — but the local read-back via `useQuery` won't see
+  rows other devices wrote until this is done).
 
 - **Mobile still double-counts GST on the job detail screen**
   (`tradiee-mobile/app/jobs/[id].tsx`, `displayedMaterialsTotal` ~line 916 and
