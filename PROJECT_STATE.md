@@ -6,27 +6,31 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **`tradiee-app/.env.local` points `NEXT_PUBLIC_SUPABASE_URL` at PRODUCTION
-  (`quidcdrnzjwarrqdpyao.supabase.co`), not local Supabase (2026-08-20).**
-  Discovered the hard way: ran `npm run dev` to browser-test the new takeoff
-  page, signed up a throwaway test company through the real signup form to
-  reach the dashboard, and only realized afterward that the dev server was
-  never talking to local Postgres at all — it hit production. The test
-  company, its profile, and its Supabase Auth user were found and deleted
-  from production immediately after (confirmed via read-only queries: 0
-  rows remaining for all three), so no lasting data trace — but the signup
+- ~~`tradiee-app/.env.local` points `NEXT_PUBLIC_SUPABASE_URL` at PRODUCTION~~
+  **Fixed 2026-08-20.** Discovered the hard way: ran `npm run dev` to
+  browser-test the takeoff page, signed up a throwaway test company through
+  the real signup form to reach the dashboard, and only realized afterward
+  that the dev server was never talking to local Postgres at all — it hit
+  production (`quidcdrnzjwarrqdpyao.supabase.co`). The test company, its
+  profile, and its Supabase Auth user were found and deleted from
+  production immediately after (confirmed via read-only queries: 0 rows
+  remaining for all three), so no lasting data trace — but the signup
   route's fire-and-forget `notifyAdminConsole()` call almost certainly still
   fired a real "new trial signup" ping to admin.industryforms.co.nz for
-  `test-takeoff@example.com`, which can't be un-sent; worth a human glance
-  at the admin console to dismiss it if it landed. **Fix the actual problem**:
-  either point `.env.local` at the local Supabase instance (ports
-  54341-54347 per tech-stack memory) for `npm run dev`, or — if this app's
-  dev workflow is deliberately "dev server, production data" — make that
-  unmistakable (a banner, a differently-colored chrome, anything) so the
-  next person running `npm run dev` for a UI check doesn't repeat this.
-  Local Supabase itself was fine throughout — every `docker exec psql`
-  verification this session (migrations, RLS, math) ran against the correct
-  local instance; only the Next.js dev server's own env was wrong.
+  `test-takeoff@example.com`, which can't be un-sent; **still worth a human
+  glance at the admin console to dismiss it if it landed.**
+  `.env.local` now points `NEXT_PUBLIC_SUPABASE_URL`/
+  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`/`SUPABASE_SECRET_KEY` at local
+  Supabase (`http://127.0.0.1:54341`, values from `supabase status` —
+  requires `supabase start`/Docker running), verified by starting the dev
+  server fresh and confirming the local URL is what actually ships in the
+  client JS bundle. The old production values are kept commented out in the
+  same file for if you deliberately need to point dev at prod again. Every
+  OTHER credential in `.env.local` (Stripe, R2, PowerSync, Xero, Twilio/
+  WebSMS, Google, Anthropic/OpenAI) is still live/production — untouched,
+  since only the Supabase fix was asked for; worth deciding separately
+  whether any of those should also move to sandbox/test equivalents for
+  local dev.
 
 - **`job_diary_entries` needs a PowerSync Dashboard sync-rules upload
   (2026-08-20).** The migration, publication, and both client schemas are all
