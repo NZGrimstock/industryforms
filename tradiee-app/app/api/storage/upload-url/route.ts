@@ -15,7 +15,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { effectivePlanKey } from '@/lib/billing'
 
 const bodySchema = z.object({
-  kind: z.enum(['job-photo', 'company-logo']),
+  kind: z.enum(['job-photo', 'company-logo', 'job-plan']),
   jobId: z.string().uuid().optional(),
   ext: z.string().max(10).optional(),
   contentType: z.string().max(100).optional(),
@@ -47,6 +47,10 @@ export async function POST(req: Request) {
     if (!body.jobId) return NextResponse.json({ error: 'jobId required' }, { status: 400 })
     const rand = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     key = `job-photos/${company}/${body.jobId}/${rand}.${ext}`
+  } else if (body.kind === 'job-plan') {
+    if (!body.jobId) return NextResponse.json({ error: 'jobId required' }, { status: 400 })
+    const rand = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    key = `job-plans/${company}/${body.jobId}/${rand}.${ext}`
   } else {
     return NextResponse.json({ error: 'Invalid kind' }, { status: 400 })
   }

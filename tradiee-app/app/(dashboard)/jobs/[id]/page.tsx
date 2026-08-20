@@ -19,6 +19,7 @@ import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
 import { JobMaterials } from './materials'
 import { JobVariations } from './variations'
+import { JobPlans } from './plans'
 import { getCostCategories } from '@/lib/cost-categories'
 import { OrderMaterialsButton } from '@/components/purchase-orders/order-materials-button'
 import { JobPhotoUpload } from '@/components/ui/photo-upload'
@@ -58,7 +59,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories, diaryEntriesRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories, diaryEntriesRes, plansRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -93,6 +94,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('variations').select('*, variation_items(*)').eq('job_id', id).order('created_at'),
     getCostCategories(supabase, profile!.company_id),
     supabase.from('job_diary_entries').select('id, entry_date, notes, crew_on_site, weather, delays, profiles(full_name)').eq('job_id', id).order('entry_date', { ascending: false }).limit(14),
+    supabase.from('job_plans').select('id, name, image_url, image_width, image_height, units_per_pixel, calibration_unit, job_plan_measurements(id, type, label, value, unit, points, sort_order)').eq('job_id', id).order('created_at'),
   ])
 
   const customerSites = customerSitesRes.data
@@ -437,6 +439,24 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
             </CardContent>
           </Card>
         )}
+
+        {/* Plans — upload a photo/screenshot of a plan, calibrate it, measure
+            lengths/areas/counts. Attached to this job so it can be reopened
+            later; was a standalone tool before this was requested. */}
+        <Card>
+          <CardHeader><CardTitle>Plans</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <JobPlans
+              jobId={id}
+              companyId={profile!.company_id}
+              profileId={user!.id}
+              plans={(plansRes.data ?? []).map(p => ({
+                ...p,
+                job_plan_measurements: [...(p.job_plan_measurements ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+              }))}
+            />
+          </CardContent>
+        </Card>
 
         {/* Materials */}
         <Card>

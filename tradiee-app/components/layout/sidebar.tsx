@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, FileText, Briefcase, Calendar,
   Clock, Receipt, BarChart3, Settings, Package,
   MessageSquare, CheckSquare, Map, ClipboardList, ChevronLeft, ChevronRight,
-  Truck, ShoppingCart, FileMinus, Globe, FolderKanban, Inbox, CalendarCheck, FileStack, Ruler
+  Truck, ShoppingCart, FileMinus, Globe, FolderKanban, Inbox, CalendarCheck, FileStack
 } from 'lucide-react'
 
 // Top-level items shown above the groups. Each owns its own gradient.
@@ -46,7 +46,6 @@ const groups: Group[] = [
       { href: '/messages', label: 'Messages', icon: Inbox },
       { href: '/customers', label: 'Customers', icon: Users },
       { href: '/enquiries', label: 'Enquiries', icon: MessageSquare },
-      { href: '/takeoff', label: 'Takeoff', icon: Ruler },
       { href: '/quotes', label: 'Quotes', icon: FileText },
       { href: '/jobs', label: 'Jobs', icon: Briefcase },
       { href: '/invoices', label: 'Invoices', icon: Receipt },
