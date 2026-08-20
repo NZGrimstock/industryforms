@@ -22,7 +22,7 @@ interface ParsedData {
   rows: Record<string, string>[]
 }
 
-export function ImportWizard() {
+export function ImportWizard({ suppliers = [] }: { suppliers?: { id: string; name: string }[] }) {
   const [step, setStep]         = useState<Step>('program')
   const [program, setProgram]   = useState<ProgramConfig | null>(null)
   const [dataType, setDataType] = useState<DataType | null>(null)
@@ -33,6 +33,10 @@ export function ImportWizard() {
   const [fileName, setFileName] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [duplicateMode, setDuplicateMode] = useState<'skip' | 'overwrite'>('skip')
+  // Price-list only: every imported/updated item gets this supplier_id, so a
+  // company that buys its next price file from ITM can re-import it straight
+  // into that supplier's items without re-tagging each one by hand.
+  const [supplierId, setSupplierId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
@@ -111,7 +115,7 @@ export function ImportWizard() {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataType, rows: mapped, duplicateMode }),
+        body: JSON.stringify({ dataType, rows: mapped, duplicateMode, supplierId: dataType === 'price_list' && supplierId ? supplierId : undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -125,7 +129,7 @@ export function ImportWizard() {
 
   function reset() {
     setStep('program'); setProgram(null); setDataType(null)
-    setParsed(null); setMapping({}); setResult(null); setFileName('')
+    setParsed(null); setMapping({}); setResult(null); setFileName(''); setSupplierId('')
   }
 
   const targets = dataType ? TARGET_FIELDS[dataType] : []
@@ -351,6 +355,17 @@ export function ImportWizard() {
               </tbody>
             </table>
           </div>
+
+          {dataType === 'price_list' && suppliers.length > 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attribute these items to a supplier (optional)</label>
+              <p className="text-xs text-gray-500 mb-2">Every imported or updated item gets tagged with this supplier — useful when this file is that supplier&apos;s own price list.</p>
+              <select value={supplierId} onChange={e => setSupplierId(e.target.value)} className="w-full sm:w-64 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">No supplier</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Duplicate handling — only relevant for price list where items have codes/names that might clash */}
           <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4">

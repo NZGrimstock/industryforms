@@ -30,6 +30,28 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
   const { data: quotes } = await query.order(sortCol, { ascending: asc })
   const { data: templates } = await supabase.from('document_templates').select('id, name').eq('company_id', profile!.company_id).eq('kind', 'quote').order('name')
 
+  // Price-change alert: a sent-but-unaccepted quote is still a live promise
+  // to the customer at its quoted price, but supplier costs move underneath
+  // it. Flag any sent quote where a price-list item's cost has gone UP since
+  // this quote locked in unit_cost at send time — the exact margin erosion a
+  // builder wants to catch before accepting a job at a price that's now
+  // under water. A cost decrease isn't flagged; that's not a risk to anyone.
+  const sentQuoteIds = (quotes ?? []).filter(q => q.status === 'sent').map(q => q.id)
+  const quotesWithPriceIncrease = new Set<string>()
+  if (sentQuoteIds.length > 0) {
+    const { data: sentLines } = await supabase
+      .from('quote_line_items')
+      .select('quote_id, unit_cost, price_list_items(cost_price)')
+      .in('quote_id', sentQuoteIds)
+      .not('price_list_item_id', 'is', null)
+    for (const line of sentLines ?? []) {
+      const currentCost = (line.price_list_items as unknown as { cost_price: number } | null)?.cost_price
+      if (currentCost != null && Number(currentCost) > Number(line.unit_cost) + 0.01) {
+        quotesWithPriceIncrease.add(line.quote_id)
+      }
+    }
+  }
+
   return (
     <>
       <Header title="Quotes" profile={profile} />
@@ -84,7 +106,16 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                       {q.is_estimate && <span className="ml-2 text-[10px] font-medium bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full uppercase tracking-wide align-middle">Estimate</span>}
                     </Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-400">{q.reference ?? '—'}</Link></td>
-                    <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3"><StatusBadge status={q.status} /></Link></td>
+                    <td className="p-0">
+                      <Link href={`/quotes/${q.id}`} className="flex items-center gap-1.5 px-6 py-3">
+                        <StatusBadge status={q.status} />
+                        {quotesWithPriceIncrease.has(q.id) && (
+                          <span title="Supplier cost has increased since this quote was sent — margin may be eroded" className="text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                            Cost up
+                          </span>
+                        )}
+                      </Link>
+                    </td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-right font-medium text-gray-900">{formatCurrency(q.total)}</Link></td>
                     <td className="p-0"><Link href={`/quotes/${q.id}`} className="block px-6 py-3 text-gray-500">{formatDate(q.created_at)}</Link></td>
                     <td className="px-3"><DeleteConfirmButton id={q.id} table="quotes" label="quote" /></td>

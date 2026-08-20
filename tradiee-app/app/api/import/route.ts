@@ -11,6 +11,8 @@ const bodySchema = z.object({
   dataType: z.enum(['customers', 'price_list', 'jobs', 'invoices']),
   rows: z.array(z.record(z.string(), z.string())).max(5000),
   duplicateMode: z.enum(['skip', 'overwrite']).optional(),
+  // price_list only — tags every imported/updated row with this supplier.
+  supplierId: z.string().uuid().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -29,8 +31,18 @@ export async function POST(req: NextRequest) {
 
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})))
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
-    const { dataType, rows, duplicateMode } = parsed.data as { dataType: DataType; rows: ImportRow[]; duplicateMode?: 'skip' | 'overwrite' }
+    const { dataType, rows, duplicateMode, supplierId } = parsed.data as { dataType: DataType; rows: ImportRow[]; duplicateMode?: 'skip' | 'overwrite'; supplierId?: string }
     const companyId = profile.company_id
+
+    // service client bypasses RLS — re-check by hand that a supplierId, if
+    // supplied, actually belongs to this company before trusting it, rather
+    // than letting a crafted request tag items with another company's row.
+    let verifiedSupplierId: string | null = null
+    if (supplierId) {
+      const { data: supplier } = await service.from('suppliers').select('id').eq('id', supplierId).eq('company_id', companyId).maybeSingle()
+      if (!supplier) return NextResponse.json({ error: 'Supplier not found' }, { status: 400 })
+      verifiedSupplierId = supplier.id
+    }
 
     let inserted = 0
     let skipped = 0
@@ -79,13 +91,18 @@ export async function POST(req: NextRequest) {
             ? await service.from('price_list_items').select('id').eq('company_id', companyId).eq('code', code).maybeSingle()
             : await service.from('price_list_items').select('id').eq('company_id', companyId).ilike('name', name).maybeSingle()
           if (match.data) {
-            const { error } = await service.from('price_list_items').update(payload).eq('id', match.data.id)
+            // supplier_id only touched when a supplier was actually picked for
+            // this import — leaving it out of the update payload means
+            // re-importing without one never blanks an item's existing
+            // attribution, only setting one ever changes it.
+            const updatePayload = verifiedSupplierId ? { ...payload, supplier_id: verifiedSupplierId } : payload
+            const { error } = await service.from('price_list_items').update(updatePayload).eq('id', match.data.id)
             if (error) skipped++; else updated++
             continue
           }
         }
 
-        const { error } = await service.from('price_list_items').insert(payload)
+        const { error } = await service.from('price_list_items').insert({ ...payload, supplier_id: verifiedSupplierId })
         if (error) skipped++
         else inserted++
       }

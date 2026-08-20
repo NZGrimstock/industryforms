@@ -6,6 +6,7 @@ export default async function ImportPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
+  const { data: suppliers } = await supabase.from('suppliers').select('id, name').eq('company_id', profile!.company_id).order('name')
 
   return (
     <>
@@ -19,7 +20,7 @@ export default async function ImportPage() {
             Import customers first — jobs and invoices will be linked to them automatically.
           </p>
         </div>
-        <ImportWizard />
+        <ImportWizard suppliers={suppliers ?? []} />
       </div>
     </>
   )
