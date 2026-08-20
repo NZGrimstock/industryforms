@@ -487,7 +487,10 @@ export default function PayNowScreen() {
 
           <TouchableOpacity style={s.payBtn} onPress={startPayment} activeOpacity={0.85}>
             <Icon name="credit-card" size={20} color="#fff" />
-            <Text style={s.payBtnText}>Collect Payment</Text>
+            {/* Apple Tap to Pay HIG: the final checkout button must read exactly
+                "Tap to Pay on iPhone" — https://developer.apple.com/design/human-interface-guidelines/tap-to-pay-on-iphone
+                (feedback from the 2026-08-21 entitlement review). */}
+            <Text style={s.payBtnText}>Tap to Pay on iPhone</Text>
           </TouchableOpacity>
 
           <Text style={s.payHint}>Customer taps their card, phone, or watch.</Text>
