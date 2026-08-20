@@ -86,6 +86,7 @@ type Job = {
 }
 
 type Note = { id: string; body: string; author_id: string | null; created_at: string }
+type DiaryEntry = { id: string; entry_date: string; notes: string | null; crew_on_site: string | null; weather: string | null; delays: string | null }
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number; unit_cost?: number | null; markup_pct?: number | null }
 type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string; markup_pct: string }
 type KitComponent = { quantity: number; price_list_items: { id: string; name: string; unit: string | null; cost_price: number | null; sell_price: number | null } | null }
@@ -108,6 +109,9 @@ export default function JobDetailScreen() {
   const [showAddNote, setShowAddNote] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [savingNote, setSavingNote] = useState(false)
+  const [showDiaryForm, setShowDiaryForm] = useState(false)
+  const [diaryForm, setDiaryForm] = useState({ notes: '', crew_on_site: '', weather: '', delays: '' })
+  const [savingDiary, setSavingDiary] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
   const [role, setRole] = useState<string | null>(null)
@@ -366,6 +370,52 @@ export default function JobDetailScreen() {
      ORDER BY created_at ASC`,
     [id]
   )
+
+  // One row per job per day — the DB enforces this (unique(job_id, entry_date)),
+  // logging again today updates the same row rather than creating a second one.
+  const { data: diaryEntries, refresh: refreshDiary } = useQuery<DiaryEntry>(
+    `SELECT id, entry_date, notes, crew_on_site, weather, delays FROM job_diary_entries
+     WHERE job_id = ? ORDER BY entry_date DESC LIMIT 14`,
+    [id]
+  )
+  // en-CA gives YYYY-MM-DD directly — matches Postgres `date` text form, in
+  // the company's own timezone rather than the device's, so a crew logging
+  // near midnight lands on the day the job actually happened.
+  const todayLocal = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date())
+  const todaysDiaryEntry = (diaryEntries ?? []).find(d => d.entry_date === todayLocal) ?? null
+
+  function openDiaryForm() {
+    setDiaryForm(todaysDiaryEntry
+      ? {
+          notes: todaysDiaryEntry.notes ?? '',
+          crew_on_site: todaysDiaryEntry.crew_on_site ?? '',
+          weather: todaysDiaryEntry.weather ?? '',
+          delays: todaysDiaryEntry.delays ?? '',
+        }
+      : { notes: '', crew_on_site: '', weather: '', delays: '' })
+    setShowDiaryForm(true)
+  }
+
+  async function saveDiaryEntry() {
+    if (!companyId) return
+    setSavingDiary(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('job_diary_entries').upsert({
+      job_id: id,
+      company_id: companyId,
+      author_id: user?.id ?? null,
+      entry_date: todayLocal,
+      notes: diaryForm.notes.trim() || null,
+      crew_on_site: diaryForm.crew_on_site.trim() || null,
+      weather: diaryForm.weather.trim() || null,
+      delays: diaryForm.delays.trim() || null,
+    }, { onConflict: 'job_id,entry_date' })
+    setSavingDiary(false)
+    if (error) { Alert.alert('Could not save', error.message); return }
+    setShowDiaryForm(false)
+    refreshDiary?.()
+    hapticSuccess()
+  }
 
   async function refreshLockStatus() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -1506,6 +1556,82 @@ export default function JobDetailScreen() {
               <Text style={styles.saveNoteBtnText}>{sendingMessage ? 'Sending…' : 'Send'}</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Site diary — one entry per day, upserted rather than appended */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Site diary</Text>
+            <TouchableOpacity onPress={openDiaryForm}>
+              <Text style={styles.addLink}>{todaysDiaryEntry ? 'Edit today' : '+ Log today'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showDiaryForm && (
+            <View style={styles.addNoteBox}>
+              <TextInput
+                style={[styles.noteInput, { marginBottom: 8 }]}
+                multiline
+                placeholder="Progress today…"
+                placeholderTextColor="#6b7280"
+                value={diaryForm.notes}
+                onChangeText={v => setDiaryForm(f => ({ ...f, notes: v }))}
+                autoFocus
+              />
+              <TextInput
+                style={[styles.input, { marginBottom: 8 }]}
+                placeholder="Crew on site"
+                placeholderTextColor="#6b7280"
+                value={diaryForm.crew_on_site}
+                onChangeText={v => setDiaryForm(f => ({ ...f, crew_on_site: v }))}
+              />
+              <TextInput
+                style={[styles.input, { marginBottom: 8 }]}
+                placeholder="Weather (e.g. Fine, mild)"
+                placeholderTextColor="#6b7280"
+                value={diaryForm.weather}
+                onChangeText={v => setDiaryForm(f => ({ ...f, weather: v }))}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Delays (optional)"
+                placeholderTextColor="#6b7280"
+                value={diaryForm.delays}
+                onChangeText={v => setDiaryForm(f => ({ ...f, delays: v }))}
+              />
+              <View style={styles.addNoteActions}>
+                <TouchableOpacity onPress={() => setShowDiaryForm(false)}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveNoteBtn, savingDiary && { opacity: 0.5 }]}
+                  onPress={saveDiaryEntry}
+                  disabled={savingDiary}
+                >
+                  <Text style={styles.saveNoteBtnText}>{savingDiary ? 'Saving…' : 'Save'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {(diaryEntries ?? []).length === 0 && !showDiaryForm && (
+            <Text style={styles.emptyText}>No diary entries yet</Text>
+          )}
+          {(diaryEntries ?? []).map(entry => (
+            <View key={entry.id} style={styles.noteCard}>
+              <Text style={styles.noteMeta}>{formatDate(`${entry.entry_date}T00:00:00`)}</Text>
+              {entry.notes ? <Text style={styles.noteBody}>{entry.notes}</Text> : null}
+              {(entry.crew_on_site || entry.weather || entry.delays) && (
+                <Text style={[styles.noteMeta, { marginTop: 4 }]}>
+                  {[
+                    entry.crew_on_site ? `Crew: ${entry.crew_on_site}` : null,
+                    entry.weather ? `Weather: ${entry.weather}` : null,
+                    entry.delays ? `Delays: ${entry.delays}` : null,
+                  ].filter(Boolean).join(' · ')}
+                </Text>
+              )}
+            </View>
+          ))}
         </View>
 
         {/* Notes */}

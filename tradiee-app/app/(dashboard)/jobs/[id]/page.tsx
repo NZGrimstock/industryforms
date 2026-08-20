@@ -8,7 +8,7 @@ import { JobTasksCard } from './tasks-card'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
-import { formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
+import { formatDate, formatDateTime, formatCurrency, quoteLabel } from '@/lib/utils'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard, approvedVariationTotal } from '@/lib/job-financials'
@@ -58,7 +58,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories, diaryEntriesRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -92,6 +92,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     supabase.from('job_notes').select('id, body, author_id, created_at, profiles(full_name)').eq('job_id', id).eq('kind', 'message').order('created_at', { ascending: true }),
     supabase.from('variations').select('*, variation_items(*)').eq('job_id', id).order('created_at'),
     getCostCategories(supabase, profile!.company_id),
+    supabase.from('job_diary_entries').select('id, entry_date, notes, crew_on_site, weather, delays, profiles(full_name)').eq('job_id', id).order('entry_date', { ascending: false }).limit(14),
   ])
 
   const customerSites = customerSitesRes.data
@@ -408,6 +409,34 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         {/* Tasks */}
         <JobTasksCard jobId={job.id} companyId={profile!.company_id} />
+
+        {/* Site diary — read-only here; logged day-to-day from the mobile app,
+            where the crew actually is. */}
+        {(diaryEntriesRes.data ?? []).length > 0 && (
+          <Card>
+            <CardHeader><CardTitle>Site diary</CardTitle></CardHeader>
+            <CardContent className="divide-y divide-gray-50">
+              {(diaryEntriesRes.data ?? []).map(entry => {
+                const author = (entry.profiles as unknown as { full_name: string } | null)?.full_name
+                const meta = [
+                  entry.crew_on_site ? `Crew: ${entry.crew_on_site}` : null,
+                  entry.weather ? `Weather: ${entry.weather}` : null,
+                  entry.delays ? `Delays: ${entry.delays}` : null,
+                ].filter(Boolean).join(' · ')
+                return (
+                  <div key={entry.id} className="py-2.5 first:pt-0 last:pb-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-sm font-medium text-gray-700">{formatDate(entry.entry_date)}</p>
+                      {author && <p className="text-xs text-gray-400">{author}</p>}
+                    </div>
+                    {entry.notes && <p className="text-sm text-gray-600 mt-0.5">{entry.notes}</p>}
+                    {meta && <p className="text-xs text-gray-400 mt-1">{meta}</p>}
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Materials */}
         <Card>

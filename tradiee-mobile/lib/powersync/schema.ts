@@ -68,6 +68,19 @@ const job_notes = new Table({
   created_at: column.text,
 })
 
+const job_diary_entries = new Table({
+  job_id: column.text,
+  company_id: column.text,
+  author_id: column.text,
+  entry_date: column.text,
+  notes: column.text,
+  crew_on_site: column.text,
+  weather: column.text,
+  delays: column.text,
+  created_at: column.text,
+  updated_at: column.text,
+})
+
 const timesheets = new Table({
   company_id: column.text,
   job_id: column.text,
@@ -304,6 +317,7 @@ export const AppSchema = new Schema({
   job_visits,
   job_assignees,
   job_notes,
+  job_diary_entries,
   timesheets,
   job_materials,
   form_templates,

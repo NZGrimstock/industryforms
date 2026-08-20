@@ -34,9 +34,10 @@ declare
   wanted text[] := array[
     'customer_messages', 'customer_sites', 'customers', 'enquiries',
     'form_submissions', 'form_templates', 'invoice_line_items', 'invoices',
-    'job_assignees', 'job_materials', 'job_notes', 'job_photos', 'job_visits',
-    'jobs', 'price_list_items', 'profiles', 'project_stages', 'projects',
-    'quote_line_items', 'quote_sections', 'quotes', 'timesheets', 'travel_logs'
+    'job_assignees', 'job_diary_entries', 'job_materials', 'job_notes',
+    'job_photos', 'job_visits', 'jobs', 'price_list_items', 'profiles',
+    'project_stages', 'projects', 'quote_line_items', 'quote_sections',
+    'quotes', 'timesheets', 'travel_logs'
   ];
 begin
   if not exists (select 1 from pg_publication where pubname = 'powersync') then
