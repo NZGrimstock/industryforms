@@ -6,6 +6,31 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
+- **Confirm the 2026-08-20 mobile OTA push actually reached real devices, and
+  check whether the Google Play Production track itself needs a fresh native
+  build.** A live user report ("phone number isn't showing up when people
+  try to sign up on mobile app") turned out, from a real screenshot, to be a
+  build old enough to predate the phone field *and* the whole "Mobile app
+  overhaul" commit entirely (different field order, no phone field, copy
+  still says "Free 30-day trial" vs current "28-day"). The mechanism: that
+  old client never collects phone, but the live signup API now requires it
+  server-side (`if (!phone?.trim()) return 400`), so anyone on that build
+  can fill out the whole form and get a signup failure with no field to fix
+  it. `eas update --branch production --environment production` was
+  published (Update group `c10a20ac-73ec-492f-8a79-b648dc2f5363`, commit
+  `5501644`) to close a 2-week gap on the OTA channel — user confirmed the
+  installed app **is** on the Production Play Store track. If OTA delivery
+  is genuinely working for that install, it should now show the phone
+  field; if the report persists after this, the device is very likely on a
+  native binary whose OTA channel plumbing itself is broken (the exact
+  failure mode documented below under "EAS Build injects the update
+  channel; raw Gradle does NOT") or one that predates OTA config entirely —
+  in which case only a fresh native build, submitted and promoted through
+  Google Play's **Production** track (not just Internal testing, which is
+  what `eas.json`'s submit config targets by default), fixes it. Needs a
+  human to check the affected user's app again and, if still broken, cut
+  and promote a new build.
+
 - ~~`tradiee-app/.env.local` points `NEXT_PUBLIC_SUPABASE_URL` at PRODUCTION~~
   **Fixed 2026-08-20.** Discovered the hard way: ran `npm run dev` to
   browser-test the takeoff page, signed up a throwaway test company through
@@ -352,6 +377,24 @@ in two ways: `scripts/check-takeoff.mjs` for the pure geometry, and a real
 end-to-end click-test in a live browser (upload → calibrate against a
 synthetic 4m-wide test image → measure a rectangle → exactly 12.00 m² →
 count three clicks → exactly 3 → remove → zero console errors throughout).
+
+**Same-session follow-up: takeoff moved onto the job page, plans persist.**
+Immediately after shipping the MVP above, asked to attach plans to jobs and
+move the tool "under projects." Clarified with the user which entry point
+they actually wanted (job-page card vs project-page vs standalone-with-a-
+job-picker) rather than guess given three genuinely different data models —
+picked "a card on the job page," matching Materials/Variations/Site diary.
+The standalone `/takeoff` page and its sidebar entry are gone; new
+`job_plans`/`job_plan_measurements` tables persist the image (uploaded to
+the existing R2 public bucket via a new `job-plan` upload kind), calibration,
+and every measurement's points (not just its computed value, so a reopened
+plan redraws the overlay). A job can hold several plans, each independently
+reopenable and addable-to. Web only, matching the tool's existing scope —
+mobile takeoff is a real follow-up. Verified against real Postgres: RLS
+(assignee-scoped read, company-scoped write, matching site diary's own
+precedent), cascade delete, and the exact insert sequence the client
+produces (new-plan save, reopen-and-add-another-measurement with sort_order
+continuing correctly, deleting one saved measurement).
 
 **The production data incident** (see Action items above for the full
 account and what's still owed): browser-testing the takeoff tool meant
