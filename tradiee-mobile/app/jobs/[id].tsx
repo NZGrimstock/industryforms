@@ -89,8 +89,8 @@ type Note = { id: string; body: string; author_id: string | null; created_at: st
 type DiaryEntry = { id: string; entry_date: string; notes: string | null; crew_on_site: string | null; weather: string | null; delays: string | null }
 type Material = { id: string; description: string; quantity: number; unit: string | null; unit_price: number; unit_cost?: number | null; markup_pct?: number | null }
 type MaterialLine = { price_list_item_id: string | null; description: string; quantity: string; unit: string; unit_cost: string; unit_price: string; markup_pct: string }
-type KitComponent = { quantity: number; price_list_items: { id: string; name: string; unit: string | null; cost_price: number | null; sell_price: number | null } | null }
-type Kit = { id: string; code: string | null; name: string; sell_price: number | null; use_item_sell_total: boolean | null; kit_items: KitComponent[] }
+type KitComponent = { quantity: number; waste_pct?: number | null; price_list_items: { id: string; name: string; unit: string | null; cost_price: number | null; sell_price: number | null } | null }
+type Kit = { id: string; code: string | null; name: string; sell_price: number | null; use_item_sell_total: boolean | null; is_assembly?: boolean | null; assembly_unit?: string | null; kit_items: KitComponent[] }
 type MatInsert = { job_id: string; company_id: string; added_by: string | null; price_list_item_id: string | null; description: string; quantity: number; unit: string; unit_cost: number; unit_price: number }
 type Visit = { id: string; scheduled_start: string; scheduled_end: string | null; status: string }
 type JobInvoice = { id: string; invoice_number: string; status: string; total: number; amount_paid: number; invoice_date: string | null }
@@ -134,6 +134,11 @@ export default function JobDetailScreen() {
   const [kits, setKits] = useState<Kit[]>([])
   const [showKitPicker, setShowKitPicker] = useState(false)
   const [addingKit, setAddingKit] = useState(false)
+  // Assembly kits ask "how many m²/lm/..." before adding — this holds which
+  // kit/mode is mid-prompt, swapping the kit list for a quantity input in the
+  // same modal rather than a second one.
+  const [assemblyPrompt, setAssemblyPrompt] = useState<{ kit: Kit; mode: 'bundle' | 'split' } | null>(null)
+  const [assemblyQtyText, setAssemblyQtyText] = useState('1')
   const [showStatusPicker, setShowStatusPicker] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null)
@@ -737,17 +742,25 @@ export default function JobDetailScreen() {
     let cancelled = false
     supabase
       .from('kits')
-      .select('id, code, name, sell_price, use_item_sell_total, kit_items(quantity, price_list_items(id, name, unit, cost_price, sell_price))')
+      .select('id, code, name, sell_price, use_item_sell_total, is_assembly, assembly_unit, kit_items(quantity, waste_pct, price_list_items(id, name, unit, cost_price, sell_price))')
       .eq('company_id', companyId)
       .order('name')
       .then(({ data }) => { if (!cancelled) setKits((data as Kit[] | null) ?? []) })
     return () => { cancelled = true }
   }, [companyId])
 
+  // For an assembly kit, kit_items.quantity means "per 1 assembly_unit" and
+  // waste_pct adds wastage on top — drivingQty is how many units this job
+  // needs. A non-assembly kit always passes drivingQty=1 with no waste_pct
+  // ever set, so this reduces to exactly the pre-assembly behaviour.
+  function componentQty(ki: KitComponent, drivingQty: number) {
+    return Number(ki.quantity) * drivingQty * (1 + Number(ki.waste_pct ?? 0) / 100)
+  }
+
   // Bundle = one aggregate "kit" line at the kit price. Split = one editable,
   // stock-tracked line per component, so a tech can swap/delete a single part
   // on site. Both consume component stock identically.
-  async function addKit(kit: Kit, mode: 'bundle' | 'split') {
+  async function addKit(kit: Kit, mode: 'bundle' | 'split', drivingQty = 1) {
     if (!companyId || addingKit) return
     const components = kit.kit_items.filter(ki => ki.price_list_items)
     if (components.length === 0) return
@@ -757,7 +770,7 @@ export default function JobDetailScreen() {
       const p = ki.price_list_items!
       return {
         job_id: id, company_id: companyId, added_by: user?.id ?? null,
-        price_list_item_id: p.id, description: p.name, quantity: Number(ki.quantity),
+        price_list_item_id: p.id, description: p.name, quantity: componentQty(ki, drivingQty),
         unit: p.unit || 'ea', unit_cost: Number(p.cost_price) || 0,
         unit_price: Number(p.sell_price) || Number(p.cost_price) || 0,
       }
@@ -766,14 +779,19 @@ export default function JobDetailScreen() {
     if (mode === 'split') {
       rows = compRows
     } else {
-      const kitCost = compRows.reduce((s, r) => s + r.unit_cost * r.quantity, 0)
-      const kitSell = kit.use_item_sell_total
-        ? compRows.reduce((s, r) => s + r.unit_price * r.quantity, 0)
+      // Bundle mode sums are already "per 1 unit" (each compRow's quantity
+      // already carries drivingQty), so divide it back out to keep
+      // unit_cost/unit_price per-unit — the line reads "12 m² @ $x", not a
+      // giant unit_price for a quantity of 1.
+      const kitCostPerUnit = compRows.reduce((s, r) => s + r.unit_cost * r.quantity, 0) / drivingQty
+      const kitSellPerUnit = kit.use_item_sell_total
+        ? compRows.reduce((s, r) => s + r.unit_price * r.quantity, 0) / drivingQty
         : Number(kit.sell_price) || 0
       rows = [{
         job_id: id, company_id: companyId, added_by: user?.id ?? null,
         price_list_item_id: null, description: kit.code ? `${kit.name} (${kit.code})` : kit.name,
-        quantity: 1, unit: 'kit', unit_cost: Number(kitCost.toFixed(2)), unit_price: Number(kitSell.toFixed(2)),
+        quantity: kit.is_assembly ? drivingQty : 1, unit: kit.is_assembly ? (kit.assembly_unit || 'unit') : 'kit',
+        unit_cost: Number(kitCostPerUnit.toFixed(2)), unit_price: Number(kitSellPerUnit.toFixed(2)),
       }]
     }
     const { data, error } = await supabase
@@ -782,14 +800,20 @@ export default function JobDetailScreen() {
       .select('id, description, quantity, unit, unit_price')
     setAddingKit(false)
     setShowKitPicker(false)
+    setAssemblyPrompt(null)
     if (error) { Alert.alert('Could not add kit', error.message); return }
     setOptimisticMaterials(prev => [...prev, ...((data as Material[] | null) ?? [])])
     await supabase.rpc('consume_price_list_stock', {
       p_company_id: companyId,
-      p_lines: components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })),
+      p_lines: components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: componentQty(ki, drivingQty) })),
     })
     refreshMaterials?.()
     hapticSuccess()
+  }
+
+  function pickKit(kit: Kit, mode: 'bundle' | 'split') {
+    if (kit.is_assembly) { setAssemblyQtyText('1'); setAssemblyPrompt({ kit, mode }); return }
+    void addKit(kit, mode)
   }
 
   async function addNote() {
@@ -1762,23 +1786,51 @@ export default function JobDetailScreen() {
       </Modal>
 
       <Modal visible={showKitPicker} transparent animationType="fade" onRequestClose={() => !addingKit && setShowKitPicker(false)}>
-        <TouchableOpacity style={styles.overlay} onPress={() => !addingKit && setShowKitPicker(false)} activeOpacity={1}>
+        <TouchableOpacity style={styles.overlay} onPress={() => !addingKit && (assemblyPrompt ? setAssemblyPrompt(null) : setShowKitPicker(false))} activeOpacity={1}>
           <View style={styles.picker}>
-            <Text style={styles.pickerTitle}>Add kit</Text>
-            {kits.map(kit => (
-              <View key={kit.id} style={styles.kitRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.pickerLabel} numberOfLines={1}>{kit.name}</Text>
-                  <Text style={styles.kitMeta}>{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</Text>
+            {assemblyPrompt ? (
+              <>
+                <Text style={styles.pickerTitle}>{assemblyPrompt.kit.name}</Text>
+                <Text style={styles.kitMeta}>How many {assemblyPrompt.kit.assembly_unit || 'units'}?</Text>
+                <TextInput
+                  style={[styles.input, { marginTop: 10, marginBottom: 12 }]}
+                  value={assemblyQtyText}
+                  onChangeText={setAssemblyQtyText}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity style={{ flex: 1 }} onPress={() => setAssemblyPrompt(null)}>
+                    <Text style={[styles.kitBtnText, styles.kitBtnTextAlt, { textAlign: 'center' }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.kitBtn, { flex: 1 }]}
+                    disabled={addingKit || !(parseFloat(assemblyQtyText) > 0)}
+                    onPress={() => addKit(assemblyPrompt.kit, assemblyPrompt.mode, parseFloat(assemblyQtyText) || 1)}
+                  >
+                    <Text style={styles.kitBtnText}>Add</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.kitBtn} disabled={addingKit} onPress={() => addKit(kit, 'bundle')}>
-                  <Text style={styles.kitBtnText}>Bundle</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.kitBtn, styles.kitBtnAlt]} disabled={addingKit} onPress={() => addKit(kit, 'split')}>
-                  <Text style={[styles.kitBtnText, styles.kitBtnTextAlt]}>Split</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+              </>
+            ) : (
+              <>
+                <Text style={styles.pickerTitle}>Add kit</Text>
+                {kits.map(kit => (
+                  <View key={kit.id} style={styles.kitRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickerLabel} numberOfLines={1}>{kit.name}</Text>
+                      <Text style={styles.kitMeta}>{kit.is_assembly ? `per ${kit.assembly_unit || 'unit'} · ` : ''}{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.kitBtn} disabled={addingKit} onPress={() => pickKit(kit, 'bundle')}>
+                      <Text style={styles.kitBtnText}>Bundle</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.kitBtn, styles.kitBtnAlt]} disabled={addingKit} onPress={() => pickKit(kit, 'split')}>
+                      <Text style={[styles.kitBtnText, styles.kitBtnTextAlt]}>Split</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>

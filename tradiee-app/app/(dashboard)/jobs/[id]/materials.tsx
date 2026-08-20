@@ -42,7 +42,9 @@ type Kit = {
   name: string
   sell_price?: number | null
   use_item_sell_total?: boolean | null
-  kit_items: { quantity: number; price_list_items: PriceItem | null }[]
+  is_assembly?: boolean | null
+  assembly_unit?: string | null
+  kit_items: { quantity: number; waste_pct?: number | null; price_list_items: PriceItem | null }[]
 }
 
 interface Props {
@@ -276,17 +278,38 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
     router.refresh()
   }
 
+  // For an assembly kit, kit_items.quantity means "per 1 assembly_unit" and
+  // waste_pct adds wastage on top — ask how many units this job needs and
+  // fold that + wastage into a single per-component multiplier. A normal
+  // (non-assembly) kit always gets multiplier 1 with 0 waste, so every
+  // formula below reduces to exactly today's behaviour for it.
+  function assemblyQty(kit: Kit): number | null {
+    if (!kit.is_assembly) return 1
+    const raw = window.prompt(`How many ${kit.assembly_unit || 'units'} of "${kit.name}"?`, '1')
+    if (raw === null) return null
+    const qty = parseFloat(raw)
+    return qty > 0 ? qty : null
+  }
+  function componentQty(ki: { quantity: number; waste_pct?: number | null }, drivingQty: number) {
+    return Number(ki.quantity) * drivingQty * (1 + Number(ki.waste_pct ?? 0) / 100)
+  }
+
   async function addKit(kit: Kit) {
+    const drivingQty = assemblyQty(kit)
+    if (drivingQty === null) return
     const components = kit.kit_items.filter(ki => ki.price_list_items)
     for (const component of components) {
-      if (!confirmStock(component.price_list_items!, Number(component.quantity))) return
+      if (!confirmStock(component.price_list_items!, componentQty(component, drivingQty))) return
     }
     if (components.length === 0) return
     // Add the kit as a single line — kit name + kit price — not its components.
-    // Stock is still consumed per underlying component below.
-    const kitCost = components.reduce((sum, ki) => sum + Number(ki.price_list_items!.cost_price) * Number(ki.quantity), 0)
-    const kitSell = kit.use_item_sell_total
-      ? components.reduce((sum, ki) => sum + sellPrice(ki.price_list_items!, standardMarkupEnabled, standardMarkupPct) * Number(ki.quantity), 0)
+    // Stock is still consumed per underlying component below. For an assembly,
+    // the per-component sums below are already "per 1 unit" (kit_items.quantity's
+    // own meaning), so unit_cost/unit_price stay per-unit and quantity carries
+    // the driving amount — the line reads "12 m² @ $x" rather than "1 kit".
+    const kitCostPerUnit = components.reduce((sum, ki) => sum + Number(ki.price_list_items!.cost_price) * Number(ki.quantity) * (1 + Number(ki.waste_pct ?? 0) / 100), 0)
+    const kitSellPerUnit = kit.use_item_sell_total
+      ? components.reduce((sum, ki) => sum + sellPrice(ki.price_list_items!, standardMarkupEnabled, standardMarkupPct) * Number(ki.quantity) * (1 + Number(ki.waste_pct ?? 0) / 100), 0)
       : Number(kit.sell_price ?? 0)
     setLoading(true)
     const { data, error } = await supabase.from('job_materials').insert({
@@ -295,17 +318,17 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
       added_by: profileId,
       price_list_item_id: null,
       description: kit.code ? `${kit.name} (${kit.code})` : kit.name,
-      quantity: 1,
-      unit: 'kit',
-      unit_cost: Number(kitCost.toFixed(2)),
-      unit_price: Number(kitSell.toFixed(2)),
+      quantity: kit.is_assembly ? drivingQty : 1,
+      unit: kit.is_assembly ? (kit.assembly_unit || 'unit') : 'kit',
+      unit_cost: Number(kitCostPerUnit.toFixed(2)),
+      unit_price: Number(kitSellPerUnit.toFixed(2)),
     }).select('id, description, quantity, unit, unit_price, price_list_item_id').single()
     setLoading(false)
     if (error) return
     setMaterials(prev => [...prev, data])
     setPicker(null)
     setSearch('')
-    void consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })))
+    void consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: componentQty(ki, drivingQty) })))
     router.refresh()
   }
 
@@ -314,10 +337,12 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
   // touching the others. Each line is a normal tracked price-list item priced
   // at its own standard sell, so stock and job-costing stay accurate.
   async function addKitAsItems(kit: Kit) {
+    const drivingQty = assemblyQty(kit)
+    if (drivingQty === null) return
     const components = kit.kit_items.filter(ki => ki.price_list_items)
     if (components.length === 0) return
     for (const c of components) {
-      if (!confirmStock(c.price_list_items!, Number(c.quantity))) return
+      if (!confirmStock(c.price_list_items!, componentQty(c, drivingQty))) return
     }
     setLoading(true)
     const { data, error } = await supabase.from('job_materials').insert(
@@ -327,7 +352,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
         added_by: profileId,
         price_list_item_id: c.price_list_items!.id,
         description: c.price_list_items!.name,
-        quantity: Number(c.quantity),
+        quantity: componentQty(c, drivingQty),
         unit: c.price_list_items!.unit,
         unit_cost: Number(c.price_list_items!.cost_price),
         unit_price: sellPrice(c.price_list_items!, standardMarkupEnabled, standardMarkupPct),
@@ -338,7 +363,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
     setMaterials(prev => [...prev, ...(data ?? [])])
     setPicker(null)
     setSearch('')
-    void consumeStock(components.map(c => ({ item_id: c.price_list_items!.id, quantity: Number(c.quantity) })))
+    void consumeStock(components.map(c => ({ item_id: c.price_list_items!.id, quantity: componentQty(c, drivingQty) })))
     router.refresh()
   }
 
@@ -473,7 +498,7 @@ export function JobMaterials({ jobId, companyId, profileId, materials: initialMa
           <div className="max-h-52 overflow-y-auto space-y-0.5">
             {picker === 'kits' ? filteredKits.map(kit => (
               <div key={kit.id} className="w-full px-3 py-2 rounded-lg flex items-center justify-between gap-3 text-sm hover:bg-white">
-                <span className="text-gray-800 truncate">{kit.name}<span className="ml-2 text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{formatCurrency(Number(kit.sell_price ?? 0))} · {kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span></span>
+                <span className="text-gray-800 truncate">{kit.name}<span className="ml-2 text-xs text-gray-400">{kit.code ? `${kit.code} · ` : ''}{kit.is_assembly ? `per ${kit.assembly_unit || 'unit'} · ` : `${formatCurrency(Number(kit.sell_price ?? 0))} · `}{kit.kit_items.length} item{kit.kit_items.length === 1 ? '' : 's'}</span></span>
                 <span className="flex shrink-0 items-center gap-2">
                   <button onClick={() => addKit(kit)} disabled={loading} className="rounded-md px-2 py-1 text-xs font-medium text-[var(--accent,#f97316)] hover:bg-[var(--accent,#f97316)]/10 disabled:opacity-50">Bundle</button>
                   <button onClick={() => addKitAsItems(kit)} disabled={loading} title="Add each component as its own editable line" className="rounded-md px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50">Split</button>

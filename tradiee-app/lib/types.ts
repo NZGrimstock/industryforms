@@ -122,6 +122,8 @@ export interface Kit {
   description: string | null
   sell_price: number
   use_item_sell_total: boolean
+  is_assembly?: boolean
+  assembly_unit?: string | null
   created_at: string
   kit_items?: KitItem[]
 }
@@ -131,6 +133,7 @@ export interface KitItem {
   kit_id: string
   price_list_item_id: string
   quantity: number
+  waste_pct?: number | null
   sort_order: number
   price_list_items?: PriceListItem
 }

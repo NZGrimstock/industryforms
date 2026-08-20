@@ -326,7 +326,10 @@ export function PriceListClient({ companyId, standardMarkupEnabled, standardMark
             {kits.map(k => (
               <tr key={k.id} className="hover:bg-gray-50">
                 <td className="px-6 py-3">
-                  <p className="font-medium text-gray-900">{k.name}</p>
+                  <p className="font-medium text-gray-900">
+                    {k.name}
+                    {k.is_assembly && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">per {k.assembly_unit || 'unit'}</span>}
+                  </p>
                   {k.description && <p className="text-xs text-gray-400">{k.description}</p>}
                 </td>
                 <td className="px-6 py-3 text-gray-500">{k.code || <span className="text-gray-300">—</span>}</td>
@@ -600,9 +603,11 @@ function KitForm({
     description: kit?.description ?? '',
     sell_price: String(kit?.sell_price ?? 0),
     use_item_sell_total: !!kit?.use_item_sell_total,
+    is_assembly: !!kit?.is_assembly,
+    assembly_unit: kit?.assembly_unit ?? '',
   })
-  const [components, setComponents] = useState<Array<{ price_list_item_id: string; quantity: string }>>(
-    (kit?.kit_items ?? []).map(ki => ({ price_list_item_id: ki.price_list_item_id, quantity: String(ki.quantity) }))
+  const [components, setComponents] = useState<Array<{ price_list_item_id: string; quantity: string; waste_pct: string }>>(
+    (kit?.kit_items ?? []).map(ki => ({ price_list_item_id: ki.price_list_item_id, quantity: String(ki.quantity), waste_pct: ki.waste_pct != null ? String(ki.waste_pct) : '' }))
   )
   const [newItem, setNewItem] = useState({
     type: 'material',
@@ -620,12 +625,12 @@ function KitForm({
 
   const selected = components
     .map(component => ({ ...component, item: items.find(item => item.id === component.price_list_item_id) }))
-    .filter((component): component is { price_list_item_id: string; quantity: string; item: PriceListItem } => !!component.item)
+    .filter((component): component is { price_list_item_id: string; quantity: string; waste_pct: string; item: PriceListItem } => !!component.item)
   const componentCost = selected.reduce((sum, component) => sum + (parseFloat(component.quantity) || 0) * Number(component.item.cost_price), 0)
   const componentSell = selected.reduce((sum, component) => sum + (parseFloat(component.quantity) || 0) * itemSell(component.item), 0)
   const effectiveSell = form.use_item_sell_total ? componentSell : (parseFloat(form.sell_price) || 0)
 
-  function updateComponent(index: number, key: 'price_list_item_id' | 'quantity', value: string) {
+  function updateComponent(index: number, key: 'price_list_item_id' | 'quantity' | 'waste_pct', value: string) {
     setComponents(prev => prev.map((component, i) => i === index ? { ...component, [key]: value } : component))
   }
 
@@ -646,7 +651,7 @@ function KitForm({
     const { data, error } = await supabase.from('price_list_items').insert(payload).select('*').single()
     if (error) { toast(error.message, 'error'); return }
     onItemCreated(data as PriceListItem)
-    setComponents(prev => [...prev, { price_list_item_id: data.id, quantity: '1' }])
+    setComponents(prev => [...prev, { price_list_item_id: data.id, quantity: '1', waste_pct: '' }])
     setNewItem({ type: 'material', code: '', name: '', unit: 'each', cost_price: '0', sell_price: '0', quantity_on_hand: '' })
     setShowNewItem(false)
     toast('Standard item added')
@@ -664,6 +669,8 @@ function KitForm({
       description: form.description || null,
       sell_price: form.use_item_sell_total ? componentSell : (parseFloat(form.sell_price) || 0),
       use_item_sell_total: form.use_item_sell_total,
+      is_assembly: form.is_assembly,
+      assembly_unit: form.is_assembly ? (form.assembly_unit.trim() || null) : null,
     }
     const saved = kit
       ? await supabase.from('kits').update(payload).eq('id', kit.id).select('id').single()
@@ -677,6 +684,7 @@ function KitForm({
         kit_id: kitId,
         price_list_item_id: component.price_list_item_id,
         quantity: parseFloat(component.quantity) || 1,
+        waste_pct: form.is_assembly && component.waste_pct.trim() ? parseFloat(component.waste_pct) : null,
         sort_order: index,
       })))
       if (error) { toast(error.message, 'error'); setLoading(false); return }
@@ -704,17 +712,30 @@ function KitForm({
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-          <Label>Kit cost</Label>
+          <Label>{form.is_assembly ? `Cost per ${form.assembly_unit || 'unit'}` : 'Kit cost'}</Label>
           <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600">{formatCurrency(componentCost)}</div>
         </div>
         <div>
-          <Label>Kit sell price</Label>
+          <Label>{form.is_assembly ? `Sell per ${form.assembly_unit || 'unit'}` : 'Kit sell price'}</Label>
           <Input type="number" step="0.01" value={form.use_item_sell_total ? componentSell.toFixed(2) : form.sell_price} disabled={form.use_item_sell_total} onChange={e => setForm(f => ({ ...f, sell_price: e.target.value }))} />
         </div>
         <label className="flex items-end gap-2 pb-2 text-sm text-gray-600">
           <input type="checkbox" checked={form.use_item_sell_total} onChange={e => setForm(f => ({ ...f, use_item_sell_total: e.target.checked }))} className="rounded" />
           Sum item sell prices
         </label>
+      </div>
+      <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={form.is_assembly} onChange={e => setForm(f => ({ ...f, is_assembly: e.target.checked }))} className="rounded" />
+          This is a measured assembly (quantities scale from a measurement, e.g. per m² or per linear metre)
+        </label>
+        {form.is_assembly && (
+          <div className="pl-6">
+            <Label>Measured in</Label>
+            <Input value={form.assembly_unit} onChange={e => setForm(f => ({ ...f, assembly_unit: e.target.value }))} placeholder="e.g. m², lm, each" className="max-w-[10rem]" />
+            <p className="text-xs text-gray-500 mt-1">Item quantities below become &ldquo;needed per 1 {form.assembly_unit || 'unit'}&rdquo;, plus each item&apos;s own wastage %. Entering this kit on a job or quote asks for the total measurement instead of &ldquo;how many kits&rdquo;.</p>
+          </div>
+        )}
       </div>
       <div className="rounded-lg border border-gray-200 p-3">
         <div className="flex items-center justify-between mb-3">
@@ -727,14 +748,22 @@ function KitForm({
           </Button>
         </div>
         <div className="space-y-2">
+          {form.is_assembly && (
+            <div className="grid grid-cols-[1fr_6rem_5rem_2rem] gap-2 text-xs text-gray-400 px-1">
+              <span>Item</span><span className="text-right">Qty / {form.assembly_unit || 'unit'}</span><span className="text-right">Waste %</span><span />
+            </div>
+          )}
           {components.map((component, index) => (
-            <div key={index} className="grid grid-cols-[1fr_6rem_2rem] gap-2">
+            <div key={index} className={form.is_assembly ? 'grid grid-cols-[1fr_6rem_5rem_2rem] gap-2' : 'grid grid-cols-[1fr_6rem_2rem] gap-2'}>
               <Select value={component.price_list_item_id} onChange={e => updateComponent(index, 'price_list_item_id', e.target.value)} options={[{ value: '', label: 'Select item...' }, ...items.map(item => ({ value: item.id, label: `${item.name}${item.code ? ` (${item.code})` : ''}` }))]} />
               <Input type="number" step="0.01" value={component.quantity} onChange={e => updateComponent(index, 'quantity', e.target.value)} />
+              {form.is_assembly && (
+                <Input type="number" step="0.1" value={component.waste_pct} onChange={e => updateComponent(index, 'waste_pct', e.target.value)} placeholder="0" />
+              )}
               <button type="button" onClick={() => setComponents(prev => prev.filter((_, i) => i !== index))} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" onClick={() => setComponents(prev => [...prev, { price_list_item_id: '', quantity: '1' }])}>Add existing item</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setComponents(prev => [...prev, { price_list_item_id: '', quantity: '1', waste_pct: '' }])}>Add existing item</Button>
         </div>
       </div>
       {showNewItem && (
