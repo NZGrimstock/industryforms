@@ -268,7 +268,7 @@ async function handleReferralCredit(service: any, stripe: Stripe, invoice: Strip
   const monthNumber = (count ?? 0) + 1
 
   const { data: referrer } = await service.from('companies')
-    .select('id, name, subscription_plan, subscription_status, trial_ends_at, billing_exempt, country, stripe_customer_id')
+    .select('id, name, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until, country, stripe_customer_id')
     .eq('id', referrerCompanyId).single()
   if (!referrer) return
 

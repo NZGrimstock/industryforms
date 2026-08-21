@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: invoice } = await service
     .from('invoices')
-    .select('*, customers(name, email, billing_address), jobs(job_number, title), invoice_line_items(*), companies(name, email, phone, gst_number, logo_url, payment_instructions, invoice_footer, subscription_plan, subscription_status, trial_ends_at, billing_exempt)')
+    .select('*, customers(name, email, billing_address), jobs(job_number, title), invoice_line_items(*), companies(name, email, phone, gst_number, logo_url, payment_instructions, invoice_footer, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)')
     .eq('id', id)
     .eq('company_id', auth.companyId)
     .single()
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     name: string; email: string | null; phone: string | null; gst_number: string | null; logo_url: string | null
     payment_instructions: string | null; invoice_footer: string | null
     subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+    comp_plan: string | null; comp_until: string | null
   } | null
 
   const data: InvoicePdfData = {

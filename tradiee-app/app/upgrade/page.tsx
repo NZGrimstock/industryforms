@@ -10,15 +10,17 @@ export default async function UpgradePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_super_admin, companies!company_id(name, subscription_status, subscription_plan, trial_ends_at, billing_exempt)')
+    .select('is_super_admin, companies!company_id(name, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)')
     .eq('id', user.id)
     .single()
   const company = (profile?.companies ?? null) as BillingCompany | null
+  const compActive = !!company?.comp_plan && !!company?.comp_until && new Date(company.comp_until).getTime() > Date.now()
 
-  // Already on a real paid plan (or exempt)? No need to see the upgrade page —
-  // send them into the app. Trial and free-tier companies still see it, since
-  // access is no longer all-or-nothing (see effectivePlanKey() in lib/billing.ts).
-  if (profile?.is_super_admin || company?.billing_exempt || company?.subscription_status === 'active') redirect('/dashboard')
+  // Already on a real paid plan (or exempt, or comped)? No need to see the
+  // upgrade page — send them into the app. Trial and free-tier companies
+  // still see it, since access is no longer all-or-nothing (see
+  // effectivePlanKey() in lib/billing.ts).
+  if (profile?.is_super_admin || company?.billing_exempt || company?.subscription_status === 'active' || compActive) redirect('/dashboard')
 
   const companyName = (profile?.companies as { name?: string } | null)?.name ?? ''
   // Trial and free-tier companies land here voluntarily now (clicking an

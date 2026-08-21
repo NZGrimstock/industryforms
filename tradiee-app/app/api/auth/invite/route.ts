@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     // ── Server-side seat check: don't let the client bypass the plan cap ──
     const [{ count }, { data: company }] = await Promise.all([
       service.from('profiles').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('is_active', true),
-      service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', companyId).single(),
+      service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until').eq('id', companyId).single(),
     ])
     const exempt = company?.billing_exempt === true
     if (!exempt) {

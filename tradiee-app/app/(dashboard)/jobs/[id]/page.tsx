@@ -40,7 +40,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, job_material_markup_enabled, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, job_material_markup_enabled, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -285,6 +285,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const co = profile?.companies as {
     name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string
     subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+    comp_plan: string | null; comp_until: string | null
   } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
   const currency = co?.country === 'AU' ? 'AUD' : 'NZD'

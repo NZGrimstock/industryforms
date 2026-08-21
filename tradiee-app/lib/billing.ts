@@ -5,6 +5,8 @@ export type BillingCompany = {
   subscription_plan: string | null
   trial_ends_at: string | null
   billing_exempt?: boolean | null
+  comp_plan?: string | null
+  comp_until?: string | null
 }
 
 /**
@@ -12,14 +14,18 @@ export type BillingCompany = {
  * `subscription_plan` column, which stays 'trial' forever once the trial
  * lapses (nothing transitions it). Once trial_ends_at passes with no active
  * subscription, a company falls through to the permanent 'free' floor rather
- * than losing access (see hasAccess() below). Mirrored in SQL by
- * company_effective_plan() for the job/customer row-cap triggers — flagged
- * there as a drift risk, same as job_is_locked()/invoiceGuard().
+ * than losing access (see hasAccess() below). comp_plan/comp_until is an
+ * operator-granted temporary plan (set from the separate Industry Forms
+ * Admin console — friends/testers, not a customer billing mechanism):
+ * outranks trial/free but never a real active subscription or billing_exempt.
+ * Mirrored in SQL by company_effective_plan() for the job/customer row-cap
+ * triggers — flagged there as a drift risk, same as job_is_locked()/invoiceGuard().
  */
 export function effectivePlanKey(company: BillingCompany | null): PlanKey {
   if (!company) return 'free'
   if (company.billing_exempt) return 'pro'
   if (company.subscription_status === 'active') return (company.subscription_plan as PlanKey) ?? 'free'
+  if (company.comp_plan && company.comp_until && new Date(company.comp_until).getTime() > Date.now()) return company.comp_plan as PlanKey
   if (company.trial_ends_at && new Date(company.trial_ends_at).getTime() > Date.now()) return 'trial'
   return 'free'
 }
@@ -32,7 +38,7 @@ export function effectivePlanKey(company: BillingCompany | null): PlanKey {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function isFreePlanCompany(service: any, companyId: string): Promise<boolean> {
-  const { data } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', companyId).single()
+  const { data } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until').eq('id', companyId).single()
   return effectivePlanKey(data) === 'free'
 }
 

@@ -15,8 +15,8 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
-  const billingCompany = profile?.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null } | null
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const billingCompany = profile?.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null; comp_plan: string | null; comp_until: string | null } | null
 
   const [{ data: quote }, nextJobNumber, { data: quoteList }] = await Promise.all([
     supabase

@@ -207,7 +207,7 @@ async function run() {
   const freeCompanyIds = new Set<string>()
   if (candidateCompanyIds.length) {
     const { data: candidateCompanies } = await svc.from('companies')
-      .select('id, subscription_plan, subscription_status, trial_ends_at, billing_exempt')
+      .select('id, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until')
       .in('id', candidateCompanyIds)
     for (const co of candidateCompanies ?? []) {
       if (effectivePlanKey(co) === 'free') freeCompanyIds.add(co.id as string)

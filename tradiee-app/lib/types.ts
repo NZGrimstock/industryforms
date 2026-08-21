@@ -30,6 +30,8 @@ export interface Company {
   subscription_plan: string
   subscription_status: string
   billing_exempt?: boolean | null
+  comp_plan?: string | null
+  comp_until?: string | null
   addons?: Record<string, { active?: boolean } & Record<string, unknown>> | null
   trial_ends_at: string | null
   xero_tenant_id: string | null

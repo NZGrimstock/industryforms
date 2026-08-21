@@ -23,7 +23,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url, subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, default_gst_rate, xero_tenant_id, prices_include_tax, payment_instructions, invoice_footer, logo_url, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
 
   const { data: invoice } = await supabase
     .from('invoices')
@@ -64,6 +64,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     name: string; email: string | null; phone: string | null; gst_number: string | null; default_gst_rate: number
     xero_tenant_id: string | null; prices_include_tax: boolean | null; payment_instructions: string | null; invoice_footer: string | null; logo_url: string | null
     subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
+    comp_plan: string | null; comp_until: string | null
   } | null
   const gstRate = co?.default_gst_rate ?? 0.15
   const xeroConnected = !!co?.xero_tenant_id

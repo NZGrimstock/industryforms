@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     // convenience, not the real gate, since the client writes logo_url to
     // Supabase directly (no server route for that step).
     const service = createServiceClient()
-    const { data: co } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt').eq('id', company).single()
+    const { data: co } = await service.from('companies').select('subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until').eq('id', company).single()
     if (effectivePlanKey(co) === 'free') {
       return NextResponse.json({ error: 'Upgrade to add a company logo.' }, { status: 403 })
     }

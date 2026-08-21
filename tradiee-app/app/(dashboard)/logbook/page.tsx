@@ -7,11 +7,11 @@ import { effectivePlanKey } from '@/lib/billing'
 export default async function LogbookPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; profileId?: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(subscription_plan, subscription_status, trial_ends_at, billing_exempt)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
 
   if (!profile || !['owner', 'admin'].includes(profile.role)) redirect('/dashboard')
   // GPS-tracked vehicle logbook (and its CSV export) is a paid feature.
-  const co = profile.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null } | null
+  const co = profile.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null; comp_plan: string | null; comp_until: string | null } | null
   if (effectivePlanKey(co) === 'free') redirect('/upgrade')
 
   const sp = await searchParams
