@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import { lineNet, round2 } from '@/lib/pricing'
+import { approvedVariationTotal } from '@/lib/job-financials'
 import { Plus, Trash2, Send, Link2, Check, X, PenLine } from 'lucide-react'
 
 export type VariationItem = {
@@ -168,9 +169,7 @@ export function JobVariations({ jobId, companyId, profileId, quoteId, variations
     }
   }
 
-  const approvedTotal = variations
-    .filter(v => v.status === 'approved')
-    .reduce((s, v) => s + Number(v.total), 0)
+  const approvedTotal = approvedVariationTotal(variations.map(v => ({ status: v.status, amount: v.total })))
 
   return (
     <div>

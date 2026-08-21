@@ -686,8 +686,12 @@ export default function JobDetailScreen() {
     const qty = parseFloat(materialLine.quantity) || 1
     const unitCost = parseFloat(materialLine.unit_cost) || 0
     const unitPrice = parseFloat(materialLine.unit_price) || 0
-    const canMarkup = companyMarkupEnabled && (role === 'owner' || role === 'admin')
-    const markupPct = canMarkup && materialLine.markup_pct.trim() ? parseFloat(materialLine.markup_pct) : null
+    // No `canMarkup` gate here: the markup input is only ever rendered when
+    // canMarkupItems is true, so a non-privileged user's materialLine.markup_pct
+    // can only be non-empty via editMaterial() carrying forward an existing
+    // value they can't edit. Gating on role here would silently null out that
+    // untouched value on every edit by a non-privileged user.
+    const markupPct = materialLine.markup_pct.trim() ? parseFloat(materialLine.markup_pct) : null
     setSavingMaterial(true)
     // job_materials has no update RLS policy — "editing" a line deletes the
     // old row and inserts the new one, same as the web app's own pattern.

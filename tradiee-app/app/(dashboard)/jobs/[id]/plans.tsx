@@ -104,6 +104,8 @@ export function JobPlans({ jobId, companyId, profileId, plans: initialPlans }: P
   }
 
   function loadFile(file: File) {
+    if (!file.type.startsWith('image/')) { toast('Please choose an image file', 'error'); return }
+    if (file.size > 10 * 1024 * 1024) { toast('Max 10MB per plan image', 'error'); return }
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {

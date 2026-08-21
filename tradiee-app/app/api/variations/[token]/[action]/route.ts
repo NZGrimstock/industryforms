@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { putObject, publicUrl, PUBLIC_BUCKET } from '@/lib/r2'
 
@@ -75,8 +75,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
 
   // Tell the team the ceiling moved — the job may have just come off its
   // fully-invoiced lock and there's now more to bill. Best-effort: the
-  // approval itself has already been recorded and must not fail on this.
-  try {
+  // approval itself has already been recorded and must not fail on this,
+  // and must not block the customer's response either. after() (not a bare
+  // un-awaited call) because Vercel freezes this function's execution
+  // environment the instant the response is sent — see the identical fix in
+  // app/api/auth/signup/route.ts's notifyAdminConsole() for the incident.
+  after(async () => {
     await service.from('todos').insert({
       company_id: variation.company_id,
       title: `Variation ${variation.variation_number} approved by customer — $${Number(variation.total).toFixed(2)} now billable`,
@@ -84,9 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       status: 'pending',
       job_id: variation.job_id,
     })
-  } catch {
-    // non-fatal
-  }
+  })
 
   return NextResponse.json({ success: true })
 }

@@ -300,22 +300,29 @@ export default function InvoiceDetailScreen() {
     refreshInvoice?.()
   }
 
+  // Shared by viewPdf/printOrShare below — one signed-PDF-url fetch, so the
+  // auth header, error shape, and response field name only live in one place.
+  async function getInvoicePdfUrl(invoiceId: string): Promise<string> {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Not signed in')
+    const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
+    const res = await fetch(`${apiBase}/api/invoices/${invoiceId}/pdf`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error ?? 'Could not generate PDF')
+    }
+    const { url } = await res.json()
+    return url
+  }
+
   async function viewPdf() {
     if (!invoice) return
     setLoadingPdf(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not signed in')
-      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
-      const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/pdf`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Could not generate PDF')
-      }
-      const json = await res.json()
-      await Linking.openURL(json.url)
+      const url = await getInvoicePdfUrl(invoice.id)
+      await Linking.openURL(url)
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not open PDF')
     } finally {
@@ -323,25 +330,14 @@ export default function InvoiceDetailScreen() {
     }
   }
 
-  // Fetches the same signed PDF url as viewPdf, then hands it to the native
-  // print dialog (expo-print resolves a remote uri directly, no download
-  // step needed) or the OS share sheet — one tap instead of "open PDF viewer,
-  // find its own share/print icon".
+  // Hands the same signed PDF url to the native print dialog (expo-print
+  // resolves a remote uri directly, no download step needed) or the OS share
+  // sheet — one tap instead of "open PDF viewer, find its own share/print icon".
   async function printOrShare() {
     if (!invoice) return
     setPrinting(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not signed in')
-      const apiBase = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '')
-      const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/pdf`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Could not generate PDF')
-      }
-      const { url } = await res.json()
+      const url = await getInvoicePdfUrl(invoice.id)
       Alert.alert(`Invoice ${invoice.invoice_number}`, undefined, [
         {
           text: 'Print', onPress: () => {

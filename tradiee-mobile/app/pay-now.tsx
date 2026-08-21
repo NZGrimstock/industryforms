@@ -487,10 +487,12 @@ export default function PayNowScreen() {
 
           <TouchableOpacity style={s.payBtn} onPress={startPayment} activeOpacity={0.85}>
             <Icon name="credit-card" size={20} color="#fff" />
-            {/* Apple Tap to Pay HIG: the final checkout button must read exactly
-                "Tap to Pay on iPhone" — https://developer.apple.com/design/human-interface-guidelines/tap-to-pay-on-iphone
-                (feedback from the 2026-08-21 entitlement review). */}
-            <Text style={s.payBtnText}>Tap to Pay on iPhone</Text>
+            {/* Apple Tap to Pay HIG requires the final checkout button read exactly
+                "Tap to Pay on iPhone" on iOS — https://developer.apple.com/design/human-interface-guidelines/tap-to-pay-on-iphone
+                (feedback from the 2026-08-21 entitlement review). This screen also
+                supports Android via Stripe Terminal (see the Platform.OS === 'android'
+                branch above) — the Apple-specific copy must not show there. */}
+            <Text style={s.payBtnText}>{Platform.OS === 'ios' ? 'Tap to Pay on iPhone' : 'Collect Payment'}</Text>
           </TouchableOpacity>
 
           <Text style={s.payHint}>Customer taps their card, phone, or watch.</Text>
