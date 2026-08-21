@@ -6,34 +6,46 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **Comp-plan feature (2026-08-21) needs a shared secret set in both apps'
-  production env vars before it works live.** Built `companies.comp_plan`/
-  `comp_until` here (grant a real paid plan free, for a fixed window —
-  friends/testers, not billing) plus two new endpoints,
+- **Comp-plan feature — production env vars now set, redeploy confirmed
+  live for the admin console; tradiee-app's redeploy still pending
+  (blocked on an unrelated `vercel deploy` local-upload issue — see
+  below).** `ADMIN_CONSOLE_API_KEY` (tradiee-app) and
+  `TRADIEE_ADMIN_API_KEY`/`TRADIEE_API_BASE_URL` (admin console) are both
+  set in production. Also found and fixed along the way: `CRON_SECRET` was
+  blank in **both** projects' production env (not just the admin console) —
+  since both apps' cron routes fail closed on a blank secret, tradiee-app's
+  own `daily-todos`/`reminders` crons had likely never actually run in
+  production. Generated one real secret, set identically in both. The
+  admin console's new hourly sync-tradiee-companies cron also had to be
+  changed to daily (`0 4 * * *`) — Vercel's Hobby plan only allows daily
+  crons, and the mismatch failed that whole deployment (safely — the
+  previous deployment stayed live) until caught and fixed.
+  **Still owed**: confirm tradiee-app's redeploy actually landed (a
+  `vercel deploy` from the CLI hit "Request body too large, limit 10mb" —
+  this repo's local upload includes the whole monorepo including
+  tradiee-mobile, well over that; the real fix is to let the existing
+  git-integration auto-deploy pick up a fresh push instead, which is how
+  every other deploy this session actually happened) — then do the real
+  click-through: trigger a sync from the admin console, confirm a real
+  company shows up as a subscriber, grant a comp, confirm the company's
+  `/upgrade` page and paid-feature gates actually unlock for the window.
+
+  Background: comp-plan lets an operator grant a company a real paid plan
+  free for a fixed window (friends/testers, not billing) via
+  `companies.comp_plan`/`comp_until` here, and two new endpoints,
   `GET /api/admin/companies` and `POST /api/admin/companies/[id]/comp`,
   authenticated by `ADMIN_CONSOLE_API_KEY`. The separate **Industry Forms
   Admin console** (`D:\Industry Forms Admin`, different repo, different
   Supabase project — `ixqanvwohppohttbnrzz` — github.com/NZGrimstock/
   industryforms-admin) calls these to sync real companies into its own
-  `subscribers` table (hourly cron) and to grant/clear comps from a new
-  "Comp period" panel on the subscriber detail sheet. A real secret was
-  generated and set in both repos' **local** `.env.local` for dev testing
-  only — needs the same value added as `ADMIN_CONSOLE_API_KEY` (this app's
-  Vercel project) and `TRADIEE_ADMIN_API_KEY` (the admin console's Vercel
-  project) in production, plus `TRADIEE_API_BASE_URL=https://app.industryforms.app`
-  on the admin console side. Until then the sync cron and comp UI there
-  will fail closed (missing-config error), not silently do the wrong
-  thing — but nothing is live until this is set.
+  `subscribers` table (daily cron) and to grant/clear comps from a new
+  "Comp period" panel on the subscriber detail sheet.
   **Also unverified**: the admin console's own local `.env.local` has no
   `SUPABASE_SERVICE_ROLE_KEY` filled in (pre-existing, not caused by this
   work), so the sync cron's actual database upsert was never exercised
   locally — only that it authenticates correctly and reaches the real
   handler. The comp-write and company-list endpoints on the tradiee side
-  *were* fully verified live (real dev server, real Postgres). Worth a
-  real end-to-end click-through once the production secret is set:
-  trigger a sync, confirm a real company shows up as a subscriber, grant
-  a comp, confirm the company's `/upgrade` page and paid-feature gates
-  actually unlock for the comp window.
+  *were* fully verified live (real dev server, real Postgres).
 
 - **Staff-role users see silently-understated financial figures on
   `/customers/[id]` and `/jobs`** (found 2026-08-21, during an 8-angle
