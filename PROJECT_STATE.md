@@ -6,29 +6,31 @@ signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
 
-- **Comp-plan feature — production env vars now set, redeploy confirmed
-  live for the admin console; tradiee-app's redeploy still pending
-  (blocked on an unrelated `vercel deploy` local-upload issue — see
-  below).** `ADMIN_CONSOLE_API_KEY` (tradiee-app) and
+- **Comp-plan feature — production env vars set, both apps redeployed and
+  confirmed live.** `ADMIN_CONSOLE_API_KEY` (tradiee-app) and
   `TRADIEE_ADMIN_API_KEY`/`TRADIEE_API_BASE_URL` (admin console) are both
-  set in production. Also found and fixed along the way: `CRON_SECRET` was
-  blank in **both** projects' production env (not just the admin console) —
-  since both apps' cron routes fail closed on a blank secret, tradiee-app's
-  own `daily-todos`/`reminders` crons had likely never actually run in
+  set in production; a fresh deployment for each has actually picked them
+  up (confirmed via `vercel ls --prod` showing a Ready deployment newer
+  than the env-var change, not just that the vars were set). Also found
+  and fixed along the way: `CRON_SECRET` was blank in **both** projects'
+  production env (not just the admin console) — since both apps' cron
+  routes fail closed on a blank secret, tradiee-app's own
+  `daily-todos`/`reminders` crons had likely never actually run in
   production. Generated one real secret, set identically in both. The
-  admin console's new hourly sync-tradiee-companies cron also had to be
-  changed to daily (`0 4 * * *`) — Vercel's Hobby plan only allows daily
-  crons, and the mismatch failed that whole deployment (safely — the
-  previous deployment stayed live) until caught and fixed.
-  **Still owed**: confirm tradiee-app's redeploy actually landed (a
-  `vercel deploy` from the CLI hit "Request body too large, limit 10mb" —
-  this repo's local upload includes the whole monorepo including
-  tradiee-mobile, well over that; the real fix is to let the existing
-  git-integration auto-deploy pick up a fresh push instead, which is how
-  every other deploy this session actually happened) — then do the real
-  click-through: trigger a sync from the admin console, confirm a real
-  company shows up as a subscriber, grant a comp, confirm the company's
-  `/upgrade` page and paid-feature gates actually unlock for the window.
+  admin console's new sync-tradiee-companies cron was originally hourly,
+  which failed that whole deployment — Vercel's Hobby plan only allows
+  daily crons (previous deployment stayed live throughout, nothing was
+  ever down); changed to daily (`0 4 * * *`) and redeployed clean.
+  One CLI wrinkle worth remembering: `vercel deploy` from tradiee-app's
+  own directory failed ("Request body too large, limit 10mb") because it
+  uploads the whole local monorepo including tradiee-mobile — the fix was
+  a real commit + push, using the existing git-integration auto-deploy
+  (pulls from GitHub directly, no local upload, no size limit) — that's
+  how every other deploy this session actually happened anyway.
+  **Still owed**: the real click-through — trigger a sync from the admin
+  console, confirm a real company shows up as a subscriber, grant a comp,
+  confirm the company's `/upgrade` page and paid-feature gates actually
+  unlock for the window.
 
   Background: comp-plan lets an operator grant a company a real paid plan
   free for a fixed window (friends/testers, not billing) via
