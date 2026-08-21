@@ -1,10 +1,29 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-20. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-21. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
 ## Action items (needs a human — not code)
+
+- **Staff-role users see silently-understated financial figures on
+  `/customers/[id]` and `/jobs`** (found 2026-08-21, during an 8-angle
+  reality-check pass over the 2026-08-20/21 session — pre-existing, not
+  introduced by that session). Both pages run under the viewer's own
+  RLS-scoped session (`createClient()`, not the service client). `invoices`
+  has been owner/admin-only SELECT since `031_role_based_access.sql` —
+  predating this by a long way — so any staff member who can reach these
+  pages (no page-level role gate blocks them) gets an empty `invoices`
+  result set, and every stat derived from it ("To invoice" on the customer
+  page, the Jobs list "To Invoice"/"Invoiced in Full" split) is silently
+  wrong for them, with no error and no indication anything was omitted.
+  The 2026-08-20 variations feature added one more query with the same
+  correctly-matching RLS shape, which is what surfaced this on review — but
+  the underlying gap is older and broader than that one feature. Needs a
+  scoped decision before touching it: either loosen `invoices`/`variations`
+  SELECT to all company members (if seeing the numbers is fine, just not
+  the line-item detail), or add an explicit role gate so staff get an
+  honest "you don't have access to this" instead of a wrong number.
 
 - **Confirm the 2026-08-20 mobile OTA push actually reached real devices, and
   check whether the Google Play Production track itself needs a fresh native
@@ -297,6 +316,26 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-21 (Claude) — Mobile native build, Tap to Pay HIG fix, reality-check on the 08-20 diff
+
+Continuation of the 2026-08-20 session (crossed midnight). Four pieces:
+
+**Fresh Android native build, versionCode 9, OTA channel verified in the actual artifact.** The `.env.local`-pointed-at-production incident (previous session) turned out to have a second consequence: a live user couldn't sign up on mobile — the installed app was old enough to predate the phone-number field entirely (screenshot showed "Free 30-day trial" copy vs current "28-day", different field order, no phone field at all), meaning the client never collects phone but the live signup API now requires it server-side, so signup silently 400s with no field to fix it. An OTA push closed a 2-week gap on the production channel but couldn't help — the installed build predates OTA config or has the documented broken-channel issue. Tried promoting the existing "v7" (Internal testing, already had the phone field + channel fix) straight to Production via the Google Play API — blocked, `androidpublisher.googleapis.com` has never been enabled on this Google Cloud project. User tried the manual Play Console promotion instead — rejected ("doesn't allow existing users to upgrade... does not add or remove any app bundles"), revealing something not previously known: an EAS-cloud-built **versionCode 8** (mid-July, from a commit no longer reachable in this repo's history — squashed at some point) is very likely what's actually live on Production, not the local-Gradle v7. Cut a fresh local Gradle build at **versionCode 9** to beat it. The gitignored `android/` folder (no git safety net — confirmed via `git check-ignore`) was backed up before running `expo prebuild` to sync `app.json`; keystore/signing config survived intact (verified by diff against the backup). **Critically, verified the OTA channel header in the actual built AAB, not just the source config** — decoded the real manifest with `bundletool dump manifest` (downloaded fresh, none was installed) and confirmed `expo-channel-name: production` is genuinely baked in, plus the runtime version matches what's live on the OTA channel. This is the exact verification step a past incident skipped. AAB uploaded by the user to Play Console; outcome not yet confirmed live.
+
+**Apple Tap to Pay entitlement review response.** Apple's reply required two things: the final checkout button read exactly "Tap to Pay on iPhone" (was "Collect Payment") per their HIG, and a fresh recording showing the ToS-acceptance prompt after the "awareness moment" screen (already correctly ordered in code — `tap-to-pay-help.tsx` before `pay-now.tsx` on first use, per `TAP_TO_PAY_EDUCATION_KEY`). Fixed the button copy, then built and shipped a fresh iOS **preview** (ad-hoc, no TestFlight/App Store review) build via EAS cloud — local builds aren't possible for iOS on this Windows machine. First upload attempt failed with a transient `ECONNRESET` at 383/462MB; retry succeeded (7m44s upload, credentials already valid — device already provisioned, cert good until 2027). Delivered as an installable link for the user to record from.
+
+**Reality-check pass over the entire 2026-08-20 session diff** (`5ae38db..HEAD` at the time, ~2900 lines across 44 files — variations, cost categories, site diary, assembly kits, job plans/takeoff persistence, the earlier per-item markup feature). 8 finder angles + a separate security pass, all via background agents, findings verified directly against the code before reporting. Found and fixed six real bugs, all committed together:
+- **Self-inflicted regression, caught within the same session**: the Tap to Pay button-copy fix above was applied unconditionally, so it also showed "Tap to Pay on iPhone" on Android — which this same screen explicitly supports via a `Platform.OS === 'android'` branch a few lines up. Two independent finder angles caught this independently. Now iOS-only.
+- **Mobile markup data loss**: editing a job material line (even just the quantity) silently nulled its `markup_pct` whenever the editor wasn't owner/admin — the markup input only renders for privileged users, so a value carried forward in state via `editMaterial()` was always trustworthy and shouldn't have been re-gated at save time.
+- **`job_plan_measurements` missing an UPDATE RLS policy** — had select/insert/delete but no update, unlike every sibling table added the same day. Nothing calls `.update()` yet, but it would have silently no-op'd (Postgres RLS filters rather than errors) the moment something did. New migration adds it; verified against real Postgres for both an assigned and an unrelated staff member (correctly allowed/blocked respectively).
+- **Drift risk**: `variations.tsx` recomputed the "approved" ceiling inline instead of importing `approvedVariationTotal()` — the exact helper the 08-20 session added specifically to stop this class of drift, which had already happened once (SQL trigger vs. TS guard, fixed in the same migration).
+- **Missing upload validation**: `plans.tsx`'s plan-image upload had no file-size/type check, unlike every other upload surface in the app.
+- **Needless latency**: the variations-approval route awaited a best-effort `todos` insert its own comment called non-critical. Moved to `after()` (not a bare fire-and-forget) — this repo already has one prior incident (`5ae38db`) from exactly that shortcut, since Vercel freezes the function the instant the response ships.
+
+Two more findings turned out to be **pre-existing, not introduced by the 08-20 diff** — see Action items above (staff-role users see understated financial figures on the customer/jobs pages, because `invoices` has been owner/admin-only RLS since well before this session; the new `variations` query just added one more correctly-matching symptom of the same older gap). Security pass: zero findings at high confidence.
+
+`tsc` clean on both apps after every fix. Migration pushed to production (`supabase db push --linked`). A fresh mobile OTA update was queued to ship the two mobile-side fixes.
 
 ## Session 2026-08-20 (Claude) — Buildxact gap analysis, six features shipped, a production data incident
 
