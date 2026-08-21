@@ -21,11 +21,16 @@ export type BillingCompany = {
  * Mirrored in SQL by company_effective_plan() for the job/customer row-cap
  * triggers — flagged there as a drift risk, same as job_is_locked()/invoiceGuard().
  */
+/** Whether a comp grant is currently in effect (not expired, not cleared). */
+export function isCompActive(company: BillingCompany | null): boolean {
+  return !!company?.comp_plan && !!company?.comp_until && new Date(company.comp_until).getTime() > Date.now()
+}
+
 export function effectivePlanKey(company: BillingCompany | null): PlanKey {
   if (!company) return 'free'
   if (company.billing_exempt) return 'pro'
   if (company.subscription_status === 'active') return (company.subscription_plan as PlanKey) ?? 'free'
-  if (company.comp_plan && company.comp_until && new Date(company.comp_until).getTime() > Date.now()) return company.comp_plan as PlanKey
+  if (isCompActive(company)) return company.comp_plan as PlanKey
   if (company.trial_ends_at && new Date(company.trial_ends_at).getTime() > Date.now()) return 'trial'
   return 'free'
 }

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
+import { effectivePlanKey, isCompActive, type BillingCompany } from '@/lib/billing'
 import { UpgradeClient } from './client'
 
 export default async function UpgradePage() {
@@ -14,7 +14,7 @@ export default async function UpgradePage() {
     .eq('id', user.id)
     .single()
   const company = (profile?.companies ?? null) as BillingCompany | null
-  const compActive = !!company?.comp_plan && !!company?.comp_until && new Date(company.comp_until).getTime() > Date.now()
+  const compActive = isCompActive(company)
 
   // Already on a real paid plan (or exempt, or comped)? No need to see the
   // upgrade page — send them into the app. Trial and free-tier companies
