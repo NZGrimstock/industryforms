@@ -7,11 +7,12 @@ import { useToast } from '@/components/ui/toast'
 import { Send, PackageCheck, XCircle, Trash2, Mail, FileMinus } from 'lucide-react'
 
 interface Props {
-  po: { id: string; po_number: string; status: string; supplier_email: string | null; supplier_phone: string | null; job_id: string | null }
+  po: { id: string; po_number: string; status: string; supplier_email: string | null; supplier_phone: string | null; job_id: string | null; company_id: string }
   supplierName: string
+  stockLines: { item_id: string; quantity: number }[]
 }
 
-export function PurchaseOrderActions({ po, supplierName }: Props) {
+export function PurchaseOrderActions({ po, supplierName, stockLines }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -21,6 +22,13 @@ export function PurchaseOrderActions({ po, supplierName }: Props) {
     setLoading(status)
     const { error } = await supabase.from('purchase_orders').update({ status, ...extra }).eq('id', po.id)
     if (error) { toast(error.message, 'error'); setLoading(''); return }
+    // Full-receive puts the ordered quantities back on the shelf for any
+    // stock-tracked price-list item on this PO (no-op for untracked items —
+    // the RPC only touches rows where quantity_on_hand isn't null).
+    if (status === 'received' && stockLines.length) {
+      const { error: stockError } = await supabase.rpc('replenish_price_list_stock', { p_company_id: po.company_id, p_lines: stockLines })
+      if (stockError) toast(`Stock update failed: ${stockError.message}`, 'error')
+    }
     // Materials arriving is exactly what the job's Messages thread is for
     // ("Between you and the workers on this job") — the crew on site should
     // know supplies have turned up without having to check Purchase Orders.

@@ -79,10 +79,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 400 })
     }
 
-    // In production, send a password reset email here so the user sets their own password
-    // await supabase.auth.admin.generateLink({ type: 'recovery', email })
+    // The account's real password is the random tempPassword above, which is
+    // never shown to anyone — the invited user's only way in is this recovery
+    // email, reusing the exact flow /forgot-password already sends (same
+    // GoTrue endpoint, same /reset-password landing page, no new email
+    // template or page needed). Best-effort: the account already exists even
+    // if the email send fails, so don't fail the invite over it — an
+    // owner/admin can always trigger the same email again from /forgot-password.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/reset-password` }).catch(() => null)
 
-    return NextResponse.json({ success: true, tempPassword }) // Return temp pw for dev convenience
+    return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

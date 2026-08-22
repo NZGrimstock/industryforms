@@ -100,7 +100,7 @@ interface Props {
   companyId: string
 }
 
-export function LogbookClient({ logs, team, jobs, fromDate, toDate, selectedProfileId }: Props) {
+export function LogbookClient({ logs, team, jobs, fromDate, toDate, selectedProfileId, companyId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const timezone = useTimezone()
@@ -117,8 +117,36 @@ export function LogbookClient({ logs, team, jobs, fromDate, toDate, selectedProf
   const [draftPurpose, setDraftPurpose] = useState<'work' | 'personal' | 'ignore'>('work')
   const [draftJobId, setDraftJobId] = useState('')
   const [allocSavingId, setAllocSavingId] = useState<string | null>(null)
+  const [addingTrip, setAddingTrip] = useState(false)
+  const [addSaving, setAddSaving] = useState(false)
+  const [newTrip, setNewTrip] = useState({ date: new Date().toISOString().slice(0, 10), distanceKm: '', profileId: selectedProfileId || (team[0]?.id ?? ''), purpose: 'work' as 'work' | 'personal', jobId: '', notes: '' })
 
   useEffect(() => setLocalLogs(logs), [logs])
+
+  async function addManualTrip() {
+    if (!newTrip.distanceKm || Number(newTrip.distanceKm) <= 0) { alert('Enter a distance in km'); return }
+    if (!newTrip.profileId) { alert('Choose a team member'); return }
+    setAddSaving(true)
+    const startedAt = `${newTrip.date}T12:00:00`
+    const { data, error } = await supabase.from('travel_logs').insert({
+      company_id: companyId,
+      profile_id: newTrip.profileId,
+      started_at: startedAt,
+      ended_at: startedAt,
+      distance_km: Number(newTrip.distanceKm),
+      purpose: newTrip.purpose,
+      job_id: newTrip.jobId || null,
+      notes: newTrip.notes || null,
+      is_auto: false,
+    }).select('*').single()
+    setAddSaving(false)
+    if (error) { alert(error.message); return }
+    const job = newTrip.jobId ? jobs.find(j => j.id === newTrip.jobId) ?? null : null
+    setLocalLogs(prev => [{ ...data, jobs: job } as Log, ...prev])
+    setAddingTrip(false)
+    setNewTrip(t => ({ ...t, distanceKm: '', notes: '' }))
+    router.refresh()
+  }
 
   async function verifyTrip(logId: string) {
     setVerifying(logId)
@@ -205,9 +233,56 @@ export function LogbookClient({ logs, team, jobs, fromDate, toDate, selectedProf
             <Button variant="outline" onClick={() => downloadCSV(localLogs, team, timezone)}>
               <Download className="h-4 w-4" /> Export CSV
             </Button>
+            <Button variant="outline" onClick={() => setAddingTrip(v => !v)}>
+              <Car className="h-4 w-4" /> Add trip
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      {addingTrip && (
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Log a trip manually</p>
+            <div className="flex flex-wrap gap-4 items-end">
+              <div>
+                <Label>Date</Label>
+                <Input type="date" value={newTrip.date} onChange={e => setNewTrip(t => ({ ...t, date: e.target.value }))} className="w-36" />
+              </div>
+              <div>
+                <Label>Distance (km)</Label>
+                <Input type="number" min={0} step={0.1} value={newTrip.distanceKm} onChange={e => setNewTrip(t => ({ ...t, distanceKm: e.target.value }))} className="w-28" />
+              </div>
+              <div>
+                <Label>Team member</Label>
+                <select value={newTrip.profileId} onChange={e => setNewTrip(t => ({ ...t, profileId: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                  {team.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Purpose</Label>
+                <select value={newTrip.purpose} onChange={e => setNewTrip(t => ({ ...t, purpose: e.target.value as 'work' | 'personal' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                  <option value="work">Work</option>
+                  <option value="personal">Personal</option>
+                </select>
+              </div>
+              <div>
+                <Label>Job (optional)</Label>
+                <select value={newTrip.jobId} onChange={e => setNewTrip(t => ({ ...t, jobId: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                  <option value="">No job</option>
+                  {jobs.map(j => <option key={j.id} value={j.id}>{j.job_number} — {j.title}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[160px]">
+                <Label>Notes (optional)</Label>
+                <Input value={newTrip.notes} onChange={e => setNewTrip(t => ({ ...t, notes: e.target.value }))} placeholder="e.g. forgot to track" />
+              </div>
+              <Button loading={addSaving} onClick={addManualTrip}>Save trip</Button>
+              <Button variant="ghost" onClick={() => setAddingTrip(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

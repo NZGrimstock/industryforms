@@ -296,7 +296,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     })
     const data = await res.json()
     if (!res.ok) { toast(data.error ?? 'Failed to invite', 'error'); setLoading(false); return }
-    toast(`Team member added. Temp password: ${data.tempPassword}`)
+    toast(`Team member added — they'll get an email to set their password.`)
     setInviteOpen(false)
     setInviteForm({ email: '', full_name: '', role: 'staff', hourly_bill_rate: '', hourly_cost_rate: '' })
     const { data: newProfile } = await supabase

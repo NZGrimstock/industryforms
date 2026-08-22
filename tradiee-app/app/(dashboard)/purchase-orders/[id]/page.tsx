@@ -45,8 +45,9 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
             <p className="text-sm text-gray-500 mt-0.5">Ordered {formatDate(po.order_date)}{po.expected_date && ` · Expected ${formatDate(po.expected_date)}`}</p>
           </div>
           <PurchaseOrderActions
-            po={{ id: po.id, po_number: po.po_number, status: po.status, supplier_email: supplier?.email ?? null, supplier_phone: supplier?.phone ?? null, job_id: po.job_id }}
+            po={{ id: po.id, po_number: po.po_number, status: po.status, supplier_email: supplier?.email ?? null, supplier_phone: supplier?.phone ?? null, job_id: po.job_id, company_id: po.company_id }}
             supplierName={supplier?.name ?? 'the supplier'}
+            stockLines={items.filter(i => i.price_list_item_id).map(i => ({ item_id: i.price_list_item_id as string, quantity: Number(i.quantity) }))}
           />
         </div>
 

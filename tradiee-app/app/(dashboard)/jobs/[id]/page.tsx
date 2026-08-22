@@ -291,7 +291,8 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
   const currency = co?.country === 'AU' ? 'AUD' : 'NZD'
-  const isFreePlan = effectivePlanKey(co) === 'free'
+  const planTier = effectivePlanKey(co)
+  const isFreePlan = planTier === 'free'
   const projects = projectsRes.data ?? []
   const currentProjectName = projects.find(p => p.id === job.project_id)?.name ?? null
   // Gates both the project-attach selector below and the Plans/takeoff card
@@ -475,7 +476,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               />
             ) : (
               <p className="text-sm text-gray-500">
-                Measure lengths, areas and counts straight off an uploaded plan image. Included on Pro, or add it to Team for $19/mo — <Link href="/upgrade" className="text-orange-500 hover:underline">upgrade</Link>.
+                Measure lengths, areas and counts straight off an uploaded plan image. Included on Pro.{' '}
+                {planTier === 'team' ? (
+                  <>Add it to your plan for $19/mo — <Link href="/settings?tab=subscription" className="text-orange-500 hover:underline">add the add-on</Link>.</>
+                ) : (
+                  <>Available from Team plan and up — <Link href="/upgrade" className="text-orange-500 hover:underline">upgrade</Link>.</>
+                )}
               </p>
             )}
           </CardContent>
