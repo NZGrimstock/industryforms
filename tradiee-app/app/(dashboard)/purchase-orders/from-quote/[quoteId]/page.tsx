@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { OrderPartsReview, type PO } from '@/components/purchase-orders/order-parts-review'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 // Review screen for the "Order parts" flow — shows the draft POs generated from a
 // quote, one per supplier, back to back, with line items populated. User assigns
@@ -11,7 +13,8 @@ export default async function OrderPartsPage({ params }: { params: Promise<{ quo
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(id)').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(id, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user.id).single()
+  redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
   const companyId = profile!.company_id
 
   const [posRes, suppliersRes] = await Promise.all([

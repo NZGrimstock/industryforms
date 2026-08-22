@@ -14,11 +14,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('company_id, full_name, role, is_super_admin, companies!company_id(addons, billing_exempt)')
+    .select('company_id, full_name, role, is_super_admin, companies!company_id(addons, billing_exempt, subscription_plan, subscription_status, trial_ends_at, comp_plan, comp_until)')
     .eq('id', user!.id).single()
   if (profile?.role === 'staff') redirect('/dashboard')
 
-  const company = profile?.companies as unknown as { addons: Record<string, { active?: boolean }> | null; billing_exempt: boolean | null } | null
+  const company = profile?.companies as unknown as {
+    addons: Record<string, { active?: boolean }> | null; billing_exempt: boolean | null
+    subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null
+    comp_plan: string | null; comp_until: string | null
+  } | null
   if (!hasAddon(!!profile?.is_super_admin, company, 'projects')) redirect('/projects')
 
   const { data: project } = await supabase

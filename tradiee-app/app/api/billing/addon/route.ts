@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { resolveCompanyUser } from '@/lib/api-auth'
-import { BILLING_ADDONS, type BillingAddonSlug, setAddonActive } from '@/lib/billing'
+import { BILLING_ADDONS, type BillingAddonSlug, setAddonActive, effectivePlanKey } from '@/lib/billing'
 import { getStripe } from '@/lib/stripe'
 import { createServiceClient } from '@/lib/supabase/server'
 
@@ -37,10 +37,21 @@ export async function POST(req: Request) {
 
   const { data: company } = await svc
     .from('companies')
-    .select('name, billing_exempt, stripe_customer_id, addons')
+    .select('name, billing_exempt, stripe_customer_id, addons, subscription_plan, subscription_status, trial_ends_at, comp_plan, comp_until')
     .eq('id', auth.companyId)
     .single()
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 })
+
+  // Projects (which also unlocks the plan-takeoff tool) is sold as Team+
+  // only: Pro has it bundled (hasAddon() in lib/billing.ts grants it without
+  // this flag), Team can buy it for $19/mo, nothing below Team can buy it at
+  // all — no point letting a Solo/free/trial company pay for an add-on that
+  // still wouldn't unlock anything without also being on Team.
+  if (slug === 'projects' && active !== false && !caller.is_super_admin && !company.billing_exempt) {
+    const plan = effectivePlanKey(company)
+    if (plan === 'pro') return NextResponse.json({ error: 'Projects is already included on your Pro plan.' }, { status: 400 })
+    if (plan !== 'team') return NextResponse.json({ error: 'Projects requires the Team plan or higher — upgrade first.' }, { status: 403 })
+  }
 
   if (caller.is_super_admin || company.billing_exempt) {
     await setAddonActive(svc, auth.companyId, slug, active)

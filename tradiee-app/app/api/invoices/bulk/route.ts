@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { nextDocNumber } from '@/lib/numbering'
 import { round2 } from '@/lib/pricing'
+import { isFreePlanCompany } from '@/lib/billing'
 
 const bodySchema = z.object({ jobIds: z.array(z.string().uuid()).min(1).max(500) })
 
@@ -23,6 +24,9 @@ export async function POST(req: NextRequest) {
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
   const companyId = profile.company_id as string
   const gstRate = Number((profile.companies as unknown as { default_gst_rate: number } | null)?.default_gst_rate ?? 0.15)
+  if (await isFreePlanCompany(service, companyId)) {
+    return NextResponse.json({ error: 'Bulk invoicing requires a paid plan.' }, { status: 403 })
+  }
 
   const { data: jobs } = await service
     .from('jobs')

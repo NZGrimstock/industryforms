@@ -1,5 +1,13 @@
 // Subscription plans (single source of truth). Keep the labels and seat caps
 // in sync with what Settings → Billing and the upgrade prompts show.
+//
+// Free plan, beyond the row caps below: no AI (drafting/rewrite/voice — see
+// isFreePlanCompany() call sites), no job photo uploads, no Xero sync, no
+// bulk invoicing, no timesheets/vehicle logbook, no purchase orders/bills.
+// Everything else (jobs/quotes/invoices/customers up to the caps, price list,
+// customer portal) works. Projects + the plan-takeoff measurement tool are a
+// step above even Solo — Pro includes them, Team can add them for $19/mo,
+// nothing below Team can (see hasAddon() in lib/billing.ts).
 
 export type PlanKey = 'free' | 'trial' | 'solo' | 'team' | 'pro'
 
@@ -10,9 +18,10 @@ export type Plan = {
   maxSeats: number
   /** Monthly price (NZD). 0 for trial/free. */
   monthly: number
-  /** Max *active* jobs/customers on this plan; `Infinity` for unlimited. Only `free` restricts these. */
+  /** Max *active* jobs/customers/price-list-items on this plan; `Infinity` for unlimited. Only `free` restricts these. */
   maxJobs: number
   maxCustomers: number
+  maxStockItems: number
 }
 
 // Prices mirror the Stripe products (NZD). Stripe is the source of truth for
@@ -24,11 +33,11 @@ export type Plan = {
 // company_effective_plan()/enforce_plan_row_cap() (see the free-plan-row-caps
 // migration) — if these numbers change, that trigger needs updating too.
 export const PLANS: Plan[] = [
-  { key: 'free',  label: 'Free',                maxSeats: 1,        monthly: 0,  maxJobs: 3,        maxCustomers: 10       },
-  { key: 'trial', label: 'Trial',                maxSeats: 1,        monthly: 0,  maxJobs: Infinity, maxCustomers: Infinity },
-  { key: 'solo',  label: 'Solo (1 user)',       maxSeats: 1,        monthly: 29, maxJobs: Infinity, maxCustomers: Infinity },
-  { key: 'team',  label: 'Team (up to 10)',     maxSeats: 10,       monthly: 49, maxJobs: Infinity, maxCustomers: Infinity },
-  { key: 'pro',   label: 'Pro (unlimited)',     maxSeats: Infinity, monthly: 99, maxJobs: Infinity, maxCustomers: Infinity },
+  { key: 'free',  label: 'Free',                maxSeats: 1,        monthly: 0,  maxJobs: 3,        maxCustomers: 10,       maxStockItems: 50       },
+  { key: 'trial', label: 'Trial',                maxSeats: 1,        monthly: 0,  maxJobs: Infinity, maxCustomers: Infinity, maxStockItems: Infinity },
+  { key: 'solo',  label: 'Solo (1 user)',       maxSeats: 1,        monthly: 29, maxJobs: Infinity, maxCustomers: Infinity, maxStockItems: Infinity },
+  { key: 'team',  label: 'Team (up to 10)',     maxSeats: 10,       monthly: 49, maxJobs: Infinity, maxCustomers: Infinity, maxStockItems: Infinity },
+  { key: 'pro',   label: 'Pro (unlimited)',     maxSeats: Infinity, monthly: 99, maxJobs: Infinity, maxCustomers: Infinity, maxStockItems: Infinity },
 ]
 
 const BY_KEY: Record<PlanKey, Plan> = Object.fromEntries(PLANS.map(p => [p.key, p])) as Record<PlanKey, Plan>

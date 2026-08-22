@@ -3,11 +3,14 @@ import { Header } from '@/components/layout/header'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Receipt } from 'lucide-react'
 import { BulkInvoiceClient } from './client'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 export default async function BulkInvoicePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
 
   // Completed jobs that don't yet have an invoice.
   const { data: invoiced } = await supabase.from('invoices').select('job_id').eq('company_id', profile!.company_id).not('job_id', 'is', null)

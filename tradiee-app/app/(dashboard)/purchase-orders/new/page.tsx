@@ -2,12 +2,15 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { PurchaseOrderBuilder } from '@/components/forms/purchase-order-builder'
 import { nextDocNumber } from '@/lib/numbering'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 export default async function NewPurchaseOrderPage({ searchParams }: { searchParams: Promise<{ supplierId?: string; jobId?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
   const companyId = profile!.company_id
 
   const [suppliersRes, jobsRes, priceRes, nextNumber] = await Promise.all([

@@ -7,12 +7,15 @@ import { BillForm } from '@/components/forms/bill-form'
 import { BillActions } from './client'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 export default async function BillDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
   const companyId = profile!.company_id
 
   const { data: bill } = await supabase

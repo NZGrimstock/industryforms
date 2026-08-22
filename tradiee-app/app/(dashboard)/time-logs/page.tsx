@@ -8,13 +8,16 @@ import { Clock } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { TimesheetActions } from '../timesheets/client'
 import { TimesheetTable } from '@/components/timesheets/timesheet-table'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 export default async function TimeLogsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, hourly_bill_rate, timezone').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, hourly_bill_rate, timezone, companies!company_id(subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user.id).single()
   if (!profile) redirect('/login')
+  redirectIfFreePlan(profile.companies as unknown as BillingCompany | null)
   const timezone = profile.timezone ?? DEFAULT_TIMEZONE
 
   const [timesheetsRes, jobsRes] = await Promise.all([

@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { redirect } from 'next/navigation'
 import { LogbookClient } from './client'
-import { effectivePlanKey } from '@/lib/billing'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 import { now } from '@/lib/utils'
 
 export default async function LogbookPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; profileId?: string }> }) {
@@ -12,8 +13,7 @@ export default async function LogbookPage({ searchParams }: { searchParams: Prom
 
   if (!profile || !['owner', 'admin'].includes(profile.role)) redirect('/dashboard')
   // GPS-tracked vehicle logbook (and its CSV export) is a paid feature.
-  const co = profile.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null; comp_plan: string | null; comp_until: string | null } | null
-  if (effectivePlanKey(co) === 'free') redirect('/upgrade')
+  redirectIfFreePlan(profile.companies as unknown as BillingCompany | null)
 
   const sp = await searchParams
   const today = new Date().toISOString().slice(0, 10)

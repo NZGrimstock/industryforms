@@ -35,6 +35,7 @@ export function effectivePlanKey(company: BillingCompany | null): PlanKey {
   return 'free'
 }
 
+
 /**
  * Server-route convenience for the many free-tier feature gates below — one
  * query instead of repeating the select + effectivePlanKey() call at every
@@ -102,12 +103,19 @@ export function hasPaidPlan(isSuperAdmin: boolean, company: Pick<BillingCompany,
  * on `companies.addons` as `{ "<slug>": { "active": true } }` — flipped by the
  * Stripe webhook. Billing-exempt/review accounts may still be toggled directly
  * by /api/billing/addon because they never enter Stripe.
+ *
+ * 'projects' (which also gates the plan-takeoff measurement tool — they're
+ * sold as one thing) is additionally bundled into the Pro plan: Pro doesn't
+ * need to buy it separately. Team can buy it for $19/mo; nothing below Team
+ * can buy it at all (enforced in /api/billing/addon, not here — this
+ * function only answers "do they have it", not "can they get it").
  */
-type CompanyWithAddons = { addons?: Record<string, { active?: boolean } & Record<string, unknown>> | null; billing_exempt?: boolean | null }
+type CompanyWithAddons = Partial<BillingCompany> & { addons?: Record<string, { active?: boolean } & Record<string, unknown>> | null }
 export function hasAddon(isSuperAdmin: boolean, company: CompanyWithAddons | null, slug: string): boolean {
   if (isSuperAdmin) return true
   if (!company) return false
   if (company.billing_exempt) return true
+  if (slug === 'projects' && effectivePlanKey(company as BillingCompany) === 'pro') return true
   return company.addons?.[slug]?.active === true
 }
 

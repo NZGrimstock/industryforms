@@ -1295,7 +1295,7 @@ const PLAN_DETAILS = [
     price: 'Free forever',
     users: '1 user',
     desc: 'No credit card, no time limit',
-    features: ['Customers, quotes, jobs & invoices', '3 active jobs, 10 customers', 'Mobile app access'],
+    features: ['Customers, quotes, jobs & invoices', '3 active jobs, 10 customers, 50 price list items', 'Mobile app access', 'No AI drafting, no job photos'],
     highlight: false,
   },
   {
@@ -1313,7 +1313,7 @@ const PLAN_DETAILS = [
     price: '$29/mo',
     users: '1 user',
     desc: 'Perfect for sole traders',
-    features: ['All core features', 'Unlimited jobs & quotes', 'Invoice payments', 'Customer portal', 'Price list & materials', 'Email included; SMS add-on'],
+    features: ['All core features', 'Unlimited jobs & quotes', 'Invoice payments', 'Customer portal', 'Price list & materials', 'Timesheets & travel logs', 'Supplier/PO/Bills module', 'Bulk invoicing', 'Xero & accounting sync', 'Email included; SMS add-on'],
     highlight: false,
   },
   {
@@ -1322,7 +1322,7 @@ const PLAN_DETAILS = [
     price: '$49/mo',
     users: 'Up to 10 users',
     desc: 'Grow your crew',
-    features: ['Everything in Solo', 'Team scheduling & GPS map', 'Role-based access', 'Timesheets & travel logs', 'Supplier/PO/Bills module', 'Projects add-on ($19/mo)', 'Instant website ($19/mo)'],
+    features: ['Everything in Solo', 'Team scheduling & GPS map', 'Role-based access', 'Projects & plan takeoff add-on ($19/mo)', 'Instant website ($19/mo)'],
     highlight: true,
   },
   {
@@ -1331,7 +1331,7 @@ const PLAN_DETAILS = [
     price: '$99/mo',
     users: 'Unlimited users',
     desc: 'For larger operations',
-    features: ['Everything in Team', 'Unlimited team members', 'Priority support', 'Advanced reporting', 'Bulk invoicing', 'Xero & accounting sync'],
+    features: ['Everything in Team', 'Unlimited team members', 'Priority support', 'Advanced reporting', 'Projects & plan takeoff included'],
     highlight: false,
   },
 ]
@@ -1493,9 +1493,14 @@ function BillingTab({ company }: { company: Company }) {
           <p className="text-base font-semibold text-gray-900">Add-ons</p>
           {([
             { slug: 'bookings_website' as const, name: 'Instant Bookings Website', price: '$19/mo', blurb: 'Build and preview your site free — a subscription is required to publish it and take online bookings.' },
-            { slug: 'projects' as const, name: 'Projects', price: '$19/mo', blurb: 'Multi-stage project management with progress tracking and money rollups.' },
+            { slug: 'projects' as const, name: 'Projects & plan takeoff', price: '$19/mo on Team, included on Pro', blurb: 'Multi-stage project management with progress tracking and money rollups, plus measuring lengths/areas/counts off an uploaded plan image.' },
           ]).map(a => {
-            const active = isExempt || companyAddons[a.slug]?.active === true
+            // Projects is bundled into Pro (hasAddon() in lib/billing.ts) and
+            // can only be bought as an add-on from Team — Solo/free/trial
+            // can't buy it at all, matching /api/billing/addon's own check.
+            const bundledOnPro = a.slug === 'projects' && displayPlanKey === 'pro'
+            const active = isExempt || bundledOnPro || companyAddons[a.slug]?.active === true
+            const canBuy = a.slug !== 'projects' || isExempt || displayPlanKey === 'team'
             return (
               <div key={a.slug} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-3">
                 <div>
@@ -1504,13 +1509,15 @@ function BillingTab({ company }: { company: Company }) {
                 </div>
                 {active ? (
                   <span className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-medium text-green-600">Active</span>
-                    {!isExempt && (
+                    <span className="text-xs font-medium text-green-600">{bundledOnPro ? 'Included on Pro' : 'Active'}</span>
+                    {!isExempt && !bundledOnPro && (
                       <Button variant="outline" size="sm" loading={addonLoading === a.slug} onClick={() => toggleAddon(a.slug, false)}>Manage</Button>
                     )}
                   </span>
-                ) : (
+                ) : canBuy ? (
                   <Button size="sm" className="shrink-0" loading={addonLoading === a.slug} onClick={() => toggleAddon(a.slug, true)}>Add</Button>
+                ) : (
+                  <span className="text-xs text-gray-400 shrink-0 text-right">Requires Team or higher</span>
                 )}
               </div>
             )

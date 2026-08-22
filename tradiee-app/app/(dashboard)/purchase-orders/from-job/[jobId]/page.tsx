@@ -2,6 +2,8 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { OrderMaterialsWizard, type WizardPO } from '@/components/purchase-orders/order-materials-wizard'
+import { redirectIfFreePlan } from '@/lib/billing-guards'
+import type { BillingCompany } from '@/lib/billing'
 
 // Steps through the draft POs generated from a job's materials, one per
 // supplier, opening them one after the other to be completed and sent.
@@ -10,7 +12,8 @@ export default async function OrderMaterialsPage({ params }: { params: Promise<{
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user.id).single()
+  redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
   const companyId = profile!.company_id
 
   const [jobRes, posRes, suppliersRes] = await Promise.all([

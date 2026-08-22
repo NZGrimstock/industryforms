@@ -294,7 +294,9 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const isFreePlan = effectivePlanKey(co) === 'free'
   const projects = projectsRes.data ?? []
   const currentProjectName = projects.find(p => p.id === job.project_id)?.name ?? null
-  const showProjectSelector = hasAddon(!!profile?.is_super_admin, co, 'projects')
+  // Gates both the project-attach selector below and the Plans/takeoff card
+  // further down — Projects and plan-takeoff are sold as one add-on.
+  const hasProjectsAddon = hasAddon(!!profile?.is_super_admin, co, 'projects')
   const sheetData = {
     job: {
       id: job.id,
@@ -372,7 +374,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               currentAddress={(job.customer_sites as {address: string} | null)?.address ?? null}
               customerSites={customerSites ?? []}
             />
-            {showProjectSelector && (
+            {hasProjectsAddon && (
               <JobProjectSelector
                 jobId={id}
                 currentProjectId={job.project_id ?? null}
@@ -456,19 +458,26 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         {/* Plans — upload a photo/screenshot of a plan, calibrate it, measure
             lengths/areas/counts. Attached to this job so it can be reopened
-            later; was a standalone tool before this was requested. */}
+            later; was a standalone tool before this was requested. Sold as
+            the same add-on as Projects (hasProjectsAddon above). */}
         <Card>
           <CardHeader><CardTitle>Plans</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <JobPlans
-              jobId={id}
-              companyId={profile!.company_id}
-              profileId={user!.id}
-              plans={(plansRes.data ?? []).map(p => ({
-                ...p,
-                job_plan_measurements: [...(p.job_plan_measurements ?? [])].sort((a, b) => a.sort_order - b.sort_order),
-              }))}
-            />
+          <CardContent className={hasProjectsAddon ? 'p-0' : undefined}>
+            {hasProjectsAddon ? (
+              <JobPlans
+                jobId={id}
+                companyId={profile!.company_id}
+                profileId={user!.id}
+                plans={(plansRes.data ?? []).map(p => ({
+                  ...p,
+                  job_plan_measurements: [...(p.job_plan_measurements ?? [])].sort((a, b) => a.sort_order - b.sort_order),
+                }))}
+              />
+            ) : (
+              <p className="text-sm text-gray-500">
+                Measure lengths, areas and counts straight off an uploaded plan image. Included on Pro, or add it to Team for $19/mo — <Link href="/upgrade" className="text-orange-500 hover:underline">upgrade</Link>.
+              </p>
+            )}
           </CardContent>
         </Card>
 
