@@ -34,7 +34,6 @@ interface Props {
 }
 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent']
-const STATUSES = ['pending', 'in_progress', 'done']
 
 const priorityColors: Record<string, string> = {
   low: 'text-gray-400',
@@ -154,7 +153,7 @@ export function TodoClient({ todos, companyId, profileId, team, jobs, currentSta
       </div>
 
       {isShowingDone ? (
-        <TodoList todos={todos} onToggle={toggleStatus} onDelete={deleteTodo} onEdit={openEdit} showDone />
+        <TodoList todos={todos} onToggle={toggleStatus} onDelete={deleteTodo} onEdit={openEdit} />
       ) : (
         <div className="space-y-6">
           {(['urgent', 'high', 'medium', 'low'] as const).map(p => {
@@ -310,12 +309,11 @@ export function TodoClient({ todos, companyId, profileId, team, jobs, currentSta
   )
 }
 
-function TodoList({ todos, onToggle, onDelete, onEdit, showDone }: {
+function TodoList({ todos, onToggle, onDelete, onEdit }: {
   todos: Todo[]
   onToggle: (t: Todo) => void
   onDelete: (id: string) => void
   onEdit: (t: Todo) => void
-  showDone?: boolean
 }) {
   return (
     <div className="space-y-1.5">

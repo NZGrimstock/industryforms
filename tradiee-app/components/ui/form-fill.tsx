@@ -205,7 +205,7 @@ function FieldInput({ field, value, onChange, canvasRef }: {
         </select>
       )
     case 'signature':
-      return <SignaturePad fieldId={field.id} canvasRef={canvasRef} />
+      return <SignaturePad canvasRef={canvasRef} />
     case 'photo':
       return (
         <input
@@ -227,9 +227,8 @@ function FieldInput({ field, value, onChange, canvasRef }: {
   }
 }
 
-function SignaturePad({ fieldId, canvasRef }: { fieldId: string; canvasRef: (el: HTMLCanvasElement | null) => void }) {
+function SignaturePad({ canvasRef }: { canvasRef: (el: HTMLCanvasElement | null) => void }) {
   const [drawing, setDrawing] = useState(false)
-  const [hasSig, setHasSig] = useState(false)
   const ref = useRef<HTMLCanvasElement | null>(null)
 
   function setRefs(el: HTMLCanvasElement | null) {
@@ -251,7 +250,6 @@ function SignaturePad({ fieldId, canvasRef }: { fieldId: string; canvasRef: (el:
     ctx.beginPath()
     ctx.moveTo(pos.x, pos.y)
     setDrawing(true)
-    setHasSig(true)
   }
 
   function draw(e: React.MouseEvent | React.TouchEvent) {
@@ -272,7 +270,6 @@ function SignaturePad({ fieldId, canvasRef }: { fieldId: string; canvasRef: (el:
     const canvas = ref.current; if (!canvas) return
     const ctx = canvas.getContext('2d'); if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    setHasSig(false)
   }
 
   return (

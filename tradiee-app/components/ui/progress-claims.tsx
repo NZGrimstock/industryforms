@@ -43,7 +43,7 @@ const STATUS_CONFIG = {
 }
 
 export function ProgressClaims({
-  jobId, companyId, profileId, jobTitle, customerId, gstRate,
+  jobId, companyId, customerId, gstRate,
   nextInvoiceNumber, initialClaims, totalQuoted,
 }: Props) {
   const timezone = useTimezone()

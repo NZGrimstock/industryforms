@@ -33,7 +33,7 @@ interface Props {
 
 const STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost']
 
-export function EnquiryDetailClient({ enquiry, companyId, profileId, team, customers, nextQuoteNumber, nextJobNumber }: Props) {
+export function EnquiryDetailClient({ enquiry, companyId, customers, nextQuoteNumber, nextJobNumber }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)

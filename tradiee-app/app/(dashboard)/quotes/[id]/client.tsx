@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog } from '@/components/ui/dialog'
-import { Send, CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2, ShoppingCart } from 'lucide-react'
+import { CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2, ShoppingCart } from 'lucide-react'
 import { quoteLabel } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -47,8 +47,8 @@ export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan }: Pr
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Could not create purchase orders')
       router.push(`/purchase-orders/from-quote/${quote.id}`)
-    } catch (e: any) {
-      toast(e.message ?? 'Could not create purchase orders', 'error')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Could not create purchase orders', 'error')
       setLoading('')
     }
   }
@@ -90,8 +90,8 @@ export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan }: Pr
       toast(`${label} accepted — job created!`)
       setAcceptOpen(false)
       router.push(`/jobs/${job.id}`)
-    } catch (e: any) {
-      toast(e.message ?? `Failed to accept ${label.toLowerCase()}`, 'error')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : `Failed to accept ${label.toLowerCase()}`, 'error')
     }
     setLoading('')
   }

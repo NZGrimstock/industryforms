@@ -1,7 +1,7 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, GripVertical, Save, CheckCircle } from 'lucide-react'
+import { Trash2, GripVertical, Save, CheckCircle } from 'lucide-react'
 
 export type FieldType = 'text' | 'textarea' | 'number' | 'checkbox' | 'select' | 'date' | 'signature' | 'photo'
 
@@ -30,7 +30,7 @@ interface Props {
   companyId: string
 }
 
-export function FormBuilder({ template, companyId }: Props) {
+export function FormBuilder({ template }: Props) {
   const [fields, setFields] = useState<FormField[]>((template.fields as FormField[]) ?? [])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)

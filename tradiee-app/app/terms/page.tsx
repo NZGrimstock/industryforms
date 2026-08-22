@@ -6,13 +6,13 @@ export default function TermsPage() {
       <h1 className="text-3xl font-bold mb-2">Terms of Service</h1>
       <p className="text-sm text-gray-500 mb-10">Last updated: July 2026</p>
 
-      <p className="mb-6">These Terms of Service ("Terms") govern your use of IndustryForms, a job management platform for trade businesses operated by Industry Forms Limited ("we", "us", or "our"). By accessing or using the Service — including the web portal and the mobile application — you agree to be bound by these Terms. If you do not agree, you must not use the Service.</p>
+      <p className="mb-6">These Terms of Service (&quot;Terms&quot;) govern your use of IndustryForms, a job management platform for trade businesses operated by Industry Forms Limited (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;). By accessing or using the Service — including the web portal and the mobile application — you agree to be bound by these Terms. If you do not agree, you must not use the Service.</p>
 
       <p className="mb-10">If you use the Service to collect payments from your customers (including Tap to Pay on iPhone), <strong>Section 4 (Payment Processing and Merchant Services)</strong> applies to you and forms part of these Terms. Section 4 contains important obligations about chargebacks, disputes, and negative account balances.</p>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">1. The Service</h2>
-        <p>IndustryForms provides a cloud-based job management system including a web admin portal, a mobile application for field staff, and related integrations (collectively, the "Service"). The Service is intended for use by trade businesses including electricians, plumbers, builders, HVAC technicians, and similar trades in New Zealand and Australia.</p>
+        <p>IndustryForms provides a cloud-based job management system including a web admin portal, a mobile application for field staff, and related integrations (collectively, the &quot;Service&quot;). The Service is intended for use by trade businesses including electricians, plumbers, builders, HVAC technicians, and similar trades in New Zealand and Australia.</p>
       </section>
 
       <section className="mb-8">
@@ -39,10 +39,10 @@ export default function TermsPage() {
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">4. Payment Processing and Merchant Services</h2>
-        <p className="mb-4">This Section 4 applies to you if you enable and use the Service to collect payments from your own customers, including online invoice payments, booking deposits, and in-person Tap to Pay card payments (together, "Payment Collection"). It supplements, and does not replace, your separate agreement with our payment processor.</p>
+        <p className="mb-4">This Section 4 applies to you if you enable and use the Service to collect payments from your own customers, including online invoice payments, booking deposits, and in-person Tap to Pay card payments (together, &quot;Payment Collection&quot;). It supplements, and does not replace, your separate agreement with our payment processor.</p>
 
         <h3 className="font-semibold mb-2">4.1 Role of the Parties</h3>
-        <p className="mb-4">Payment Collection is powered by Stripe, Inc. and its affiliates ("Stripe") as the payment processor. Funds you collect settle to a Stripe connected account held in your name — <strong>we do not take custody of, hold, or route your customers&apos; payments, and we do not charge a commission or application fee on them.</strong> Stripe is the merchant of record&apos;s processor; we operate the platform that enables the connection. We are a Stripe Connect platform, which means we have certain risk and compliance responsibilities to Stripe in respect of connected accounts on our platform (see 4.6–4.9).</p>
+        <p className="mb-4">Payment Collection is powered by Stripe, Inc. and its affiliates (&quot;Stripe&quot;) as the payment processor. Funds you collect settle to a Stripe connected account held in your name — <strong>we do not take custody of, hold, or route your customers&apos; payments, and we do not charge a commission or application fee on them.</strong> Stripe is the merchant of record&apos;s processor; we operate the platform that enables the connection. We are a Stripe Connect platform, which means we have certain risk and compliance responsibilities to Stripe in respect of connected accounts on our platform (see 4.6–4.9).</p>
 
         <h3 className="font-semibold mb-2">4.2 Eligibility</h3>
         <p className="mb-4">Payment Collection, and Tap to Pay in particular, is available only to accounts on a current paid subscription and only to bona fide trade businesses operating in New Zealand or Australia. You must complete Stripe&apos;s identity verification and onboarding (KYC) before you can collect payments. We may decline, suspend, or discontinue Payment Collection for any account that does not meet these requirements.</p>
@@ -101,7 +101,7 @@ export default function TermsPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">7. Your Data</h2>
         <h3 className="font-semibold mb-2">7.1 Ownership</h3>
-        <p className="mb-4">You retain ownership of all data you input into the Service ("Customer Data"), including job records, customer details, and business information.</p>
+        <p className="mb-4">You retain ownership of all data you input into the Service (&quot;Customer Data&quot;), including job records, customer details, and business information.</p>
         <h3 className="font-semibold mb-2">7.2 Licence to Us</h3>
         <p className="mb-4">By using the Service, you grant us a limited licence to store, process, and display your Customer Data solely to provide and improve the Service.</p>
         <h3 className="font-semibold mb-2">7.3 Data Export and Deletion</h3>
@@ -120,7 +120,7 @@ export default function TermsPage() {
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-4">10. Warranties and Disclaimers</h2>
-        <p>The Service is provided "as is" and "as available". To the maximum extent permitted by law, we disclaim all warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, and non-infringement. Nothing in this section limits guarantees or rights that apply to you and cannot be excluded under the New Zealand Consumer Guarantees Act 1993 or the Australian Consumer Law.</p>
+        <p>The Service is provided &quot;as is&quot; and &quot;as available&quot;. To the maximum extent permitted by law, we disclaim all warranties, express or implied, including warranties of merchantability, fitness for a particular purpose, and non-infringement. Nothing in this section limits guarantees or rights that apply to you and cannot be excluded under the New Zealand Consumer Guarantees Act 1993 or the Australian Consumer Law.</p>
       </section>
 
       <section className="mb-8">

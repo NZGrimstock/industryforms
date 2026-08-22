@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { Card, CardContent } from '@/components/ui/card'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, daysUntil } from '@/lib/utils'
 import { CheckSquare, Briefcase, Receipt, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { getProfitabilityStatus } from '@/components/ui/profitability-badge'
@@ -255,7 +255,7 @@ export default async function DashboardPage() {
         {/* Trial banner */}
         {profile?.companies && (profile.companies as {subscription_plan: string; trial_ends_at: string | null}).subscription_plan === 'trial' && (() => {
           const trialEndsAt = (profile.companies as {trial_ends_at: string | null}).trial_ends_at
-          const daysLeft = trialEndsAt ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000)) : null
+          const daysLeft = trialEndsAt ? Math.max(0, Math.ceil(daysUntil(trialEndsAt))) : null
           return (
             <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-800 flex items-center justify-between">
               <span>You&apos;re on a free trial{daysLeft !== null && <> — <strong>{daysLeft} day{daysLeft === 1 ? '' : 's'} remaining</strong></>}.</span>

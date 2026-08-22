@@ -1,9 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
-import { Card } from '@/components/ui/card'
-import { EmptyState } from '@/components/ui/empty-state'
-import { formatDate } from '@/lib/utils'
-import { CheckSquare } from 'lucide-react'
 import { TodoClient } from './client'
 
 export default async function TodosPage({ searchParams }: { searchParams: Promise<{ status?: string; mine?: string }> }) {

@@ -6,7 +6,7 @@ export default function PrivacyPage() {
       <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
       <p className="text-sm text-gray-500 mb-10">Last updated: July 2026</p>
 
-      <p className="mb-6">This Privacy Policy describes how Industry Forms Limited ("we", "us", or "our") collects, uses, and protects your personal information when you use our mobile application and SaaS platform (collectively, the "Service"). We are committed to protecting your privacy and complying with the New Zealand Privacy Act 2020 and the Australian Privacy Act 1988.</p>
+      <p className="mb-6">This Privacy Policy describes how Industry Forms Limited (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) collects, uses, and protects your personal information when you use our mobile application and SaaS platform (collectively, the &quot;Service&quot;). We are committed to protecting your privacy and complying with the New Zealand Privacy Act 2020 and the Australian Privacy Act 1988.</p>
       <p className="mb-10">By using our Service, you agree to the collection and use of information as described in this policy. If you do not agree, please discontinue use of the Service.</p>
 
       <section className="mb-8">
@@ -16,19 +16,19 @@ export default function PrivacyPage() {
 
         <h3 className="font-semibold mb-2">1.2 Payment Information</h3>
         <p className="mb-4">To process your subscription, we collect billing details including credit or debit card details (processed and stored by our payment provider, Stripe — we do not store full card numbers on our servers), billing address, and transaction history. Payments are processed by a PCI DSS-compliant third-party payment processor.</p>
-        <p className="mb-4">If you use the Service to collect payments from your own customers — including online invoice payments and in-person card payments via Tap to Pay on a supported device — those payments are also processed by Stripe. The customer's card details are captured and handled directly by Stripe and are never stored on our servers; we receive only transaction metadata (amount, status, timestamps, last four digits, and dispute or chargeback information) needed to reconcile the invoice and manage payment risk. Contactless card and mobile-wallet data used for Tap to Pay is processed by Stripe and the device operating system, not by us.</p>
+        <p className="mb-4">If you use the Service to collect payments from your own customers — including online invoice payments and in-person card payments via Tap to Pay on a supported device — those payments are also processed by Stripe. The customer&apos;s card details are captured and handled directly by Stripe and are never stored on our servers; we receive only transaction metadata (amount, status, timestamps, last four digits, and dispute or chargeback information) needed to reconcile the invoice and manage payment risk. Contactless card and mobile-wallet data used for Tap to Pay is processed by Stripe and the device operating system, not by us.</p>
 
         <h3 className="font-semibold mb-2">1.3 Customer Data</h3>
-        <p className="mb-4">As part of using our productivity tools, you may input or upload business data, documents, contacts, or other customer information ("Customer Data"). We process this data solely to provide the Service to you.</p>
+        <p className="mb-4">As part of using our productivity tools, you may input or upload business data, documents, contacts, or other customer information (&quot;Customer Data&quot;). We process this data solely to provide the Service to you.</p>
 
         <h3 className="font-semibold mb-2">1.4 Location Data</h3>
-        <p className="mb-4">With your permission, the mobile app collects precise GPS location data — including <strong>in the background</strong> while the app is not open — to provide the automated vehicle travel logbook feature (recording trip start/end points and distance) and to show assigned jobs on a map. Background collection only occurs while you have the feature enabled and location permission granted. Location data is associated with your account and is accessible to your company's administrators. You can disable location access at any time through your device settings, which will disable these features.</p>
+        <p className="mb-4">With your permission, the mobile app collects precise GPS location data — including <strong>in the background</strong> while the app is not open — to provide the automated vehicle travel logbook feature (recording trip start/end points and distance) and to show assigned jobs on a map. Background collection only occurs while you have the feature enabled and location permission granted. Location data is associated with your account and is accessible to your company&apos;s administrators. You can disable location access at any time through your device settings, which will disable these features.</p>
 
         <h3 className="font-semibold mb-2">1.5 Photos and Signatures</h3>
         <p className="mb-4">With your permission, the app accesses your camera and photo library so you can attach job photos and capture customer sign-off signatures. These images are stored against the relevant job and are visible to your company.</p>
 
         <h3 className="font-semibold mb-2">1.6 Voice Input</h3>
-        <p className="mb-4">Where you choose to use voice input to fill in fields, your speech is converted to text using your device's or browser's built-in speech-recognition service, and the resulting text (not the raw audio) is processed by the Service to populate the relevant fields. We do not retain audio recordings.</p>
+        <p className="mb-4">Where you choose to use voice input to fill in fields, your speech is converted to text using your device&apos;s or browser&apos;s built-in speech-recognition service, and the resulting text (not the raw audio) is processed by the Service to populate the relevant fields. We do not retain audio recordings.</p>
 
         <h3 className="font-semibold mb-2">1.7 Usage and Technical Data</h3>
         <p>We automatically collect certain technical data including device type, operating system, app version, IP address, log data (pages visited, features used, timestamps), and crash reports.</p>

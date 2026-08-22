@@ -15,7 +15,7 @@ interface Props {
   team: TeamMember[]
 }
 
-export function JobAssigneesCard({ jobId, companyId, assignees: initial, team }: Props) {
+export function JobAssigneesCard({ jobId, assignees: initial, team }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const [assignees, setAssignees] = useState(initial)

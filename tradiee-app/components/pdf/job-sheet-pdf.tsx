@@ -149,6 +149,9 @@ export function JobSheetPdf({ data }: { data: JobSheetData }) {
         {/* ── Header ── */}
         <View style={s.header}>
           <View style={s.headerLeft}>
+            {/* react-pdf's Image (not next/image or <img>) has no alt prop — this
+                renders into a PDF document, not the DOM, so alt-text doesn't apply. */}
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
             {company.logo_url ? <Image style={s.logo} src={company.logo_url} /> : null}
             {company.name ? <Text style={s.companyName}>{company.name}</Text> : null}
             {company.address ? <Text style={s.companyMeta}>{company.address}</Text> : null}

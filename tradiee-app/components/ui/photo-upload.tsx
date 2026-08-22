@@ -84,6 +84,10 @@ export function JobPhotoUpload({ jobId, companyId, profileId, photos: initial, o
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3 px-6">
           {photos.map(photo => (
             <div key={photo.id} className="relative group aspect-square">
+              {/* Dynamic Supabase Storage URLs — next/image needs a configured
+                  remote pattern per bucket/host, not worth it for a small
+                  thumbnail grid. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={getPublicUrl(photo.storage_path)}
                 alt={photo.caption ?? 'Job photo'}

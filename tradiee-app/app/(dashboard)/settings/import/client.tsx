@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import PROGRAMS, { TARGET_FIELDS, type DataType, type ProgramConfig } from '@/lib/import/programs'
 import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
-import { Upload, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, FileText, X } from 'lucide-react'
+import { Upload, ChevronRight, ChevronLeft, CheckCircle2, AlertCircle, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type Step = 'program' | 'type' | 'instructions' | 'upload' | 'mapping' | 'preview' | 'done'

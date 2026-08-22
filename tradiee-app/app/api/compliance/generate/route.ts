@@ -11,7 +11,6 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateComplianceDoc, DOC_TYPE_FORM_CODES } from '@/lib/compliance/generate'
-import { sendEmail } from '@/lib/email'
 import { putObject, presignedDownload, PRIVATE_BUCKET } from '@/lib/r2'
 
 const bodySchema = z.object({

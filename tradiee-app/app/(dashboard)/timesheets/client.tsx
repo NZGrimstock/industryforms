@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { Plus } from 'lucide-react'
+import { now } from '@/lib/utils'
 
 interface Props {
   companyId: string
@@ -25,7 +26,7 @@ export function TimesheetActions({ companyId, profileId, jobs, billRate }: Props
   const { toast } = useToast()
   const [form, setForm] = useState({
     jobId: '',
-    start: new Date(Date.now() - 3600000).toISOString().slice(0, 16),
+    start: new Date(now() - 3600000).toISOString().slice(0, 16),
     end: new Date().toISOString().slice(0, 16),
     breakMinutes: '0',
     billRate: billRate?.toString() ?? '',

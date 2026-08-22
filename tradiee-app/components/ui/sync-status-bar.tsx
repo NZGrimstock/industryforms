@@ -10,6 +10,8 @@ export function SyncStatusBar() {
   const [syncing, setSyncing] = useState(false)
 
   useEffect(() => {
+    // navigator.onLine is a browser API, unavailable during SSR/render — this
+    // has to run in an effect after mount, not as a lazy useState initializer.
     setOnline(navigator.onLine)
 
     function handleOnline() {

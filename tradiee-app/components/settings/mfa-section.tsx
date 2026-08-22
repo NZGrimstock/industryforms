@@ -20,16 +20,17 @@ export function MfaSection() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    refreshFactors()
-  }, [])
-
   async function refreshFactors() {
     setLoading(true)
     const { data } = await supabase.auth.mfa.listFactors()
     setFactors((data?.totp ?? []) as Factor[])
     setLoading(false)
   }
+
+  useEffect(() => {
+    refreshFactors()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function startEnroll() {
     setError('')

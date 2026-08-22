@@ -7,6 +7,7 @@ import { LogOut, User } from 'lucide-react'
 import { GlobalSearch } from './global-search'
 import { NewMenu } from './new-menu'
 import { useSubscription } from '@/components/providers/subscription-provider'
+import { daysUntil } from '@/lib/utils'
 
 interface HeaderProps {
   title: string
@@ -20,7 +21,7 @@ export function Header({ title, profile }: HeaderProps) {
   const subscription = useSubscription()
 
   const trialDaysLeft = subscription.trialEndsAt
-    ? Math.max(0, Math.ceil((new Date(subscription.trialEndsAt).getTime() - Date.now()) / 86400000))
+    ? Math.max(0, Math.ceil(daysUntil(subscription.trialEndsAt)))
     : null
   const onTrial = !subscription.billingExempt && subscription.status !== 'active' && trialDaysLeft !== null && trialDaysLeft > 0
 

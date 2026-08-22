@@ -35,7 +35,7 @@ export function SaveInvoiceTemplateButton({ invoiceId, defaultName }: { invoiceI
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Save invoice template">
         <form onSubmit={save} className="space-y-4">
-          <p className="text-sm text-gray-500">Saves this invoice's line items and terms as a reusable template without a customer.</p>
+          <p className="text-sm text-gray-500">Saves this invoice&apos;s line items and terms as a reusable template without a customer.</p>
           <div><Label>Template name</Label><Input value={name} onChange={e => setName(e.target.value)} required /></div>
           <div className="flex gap-3"><Button type="submit" loading={saving}>Save</Button><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button></div>
         </form>

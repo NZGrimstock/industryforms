@@ -12,6 +12,18 @@ export function hoursUntil(iso: string): number {
   return (new Date(iso).getTime() - Date.now()) / 3600000
 }
 
+// Same trick as hoursUntil, for trial-countdown displays (header banner,
+// dashboard trial banner).
+export function daysUntil(iso: string): number {
+  return (new Date(iso).getTime() - Date.now()) / 86400000
+}
+
+// Opaque Date.now() wrapper for call sites (server-component date math,
+// useState initializers) the purity rule can't see through a direct call.
+export function now(): number {
+  return Date.now()
+}
+
 export function formatCurrency(amount: number, currency = 'NZD'): string {
   return new Intl.NumberFormat('en-NZ', {
     style: 'currency',

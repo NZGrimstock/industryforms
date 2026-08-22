@@ -103,7 +103,7 @@ export function ComplianceDocs({
         jobId={jobId}
         prefillAddress={projectAddress || ''}
         profileHasSignature={profileHasSignature}
-        onSuccess={(docNumber, pdfUrl) => {
+        onSuccess={(docNumber) => {
           // Optimistically add the new doc to the list (full data will be available on refresh)
           setDocs(prev => [{
             id: crypto.randomUUID(),

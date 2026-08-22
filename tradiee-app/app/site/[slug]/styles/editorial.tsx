@@ -40,7 +40,7 @@ export function Footer({ company }: { company: Company }) {
 
 const ghostBtn = 'inline-block border border-white/50 px-8 py-3 text-xs font-medium uppercase tracking-[0.2em] text-white transition-colors hover:border-white hover:bg-white/10'
 
-export function Section({ section, primary, businessName, ContactForm, BookingForm }: {
+export function Section({ section, businessName, ContactForm, BookingForm }: {
   section: WebsiteSection; primary: string; businessName?: string; ContactForm: React.ReactNode; BookingForm: React.ReactNode
 }) {
   switch (section.type) {

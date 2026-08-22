@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import Link from 'next/link'
 import { MapPin, Loader2, AlertCircle, Phone, User } from 'lucide-react'
 import { geocodeAddress } from '@/lib/geocode'
@@ -61,14 +61,14 @@ export function JobMap({ jobs, team }: { jobs: MapJob[]; team: TeamMember[] }) {
     return () => { cancelled = true }
   }, [jobs])
 
-  function matches(j: { assigned_to: string | null }) {
+  const matches = useCallback((j: { assigned_to: string | null }) => {
     if (assignee === 'all') return true
     if (assignee === 'unassigned') return j.assigned_to == null
     return j.assigned_to === assignee
-  }
+  }, [assignee])
 
-  const filteredJobs = useMemo(() => jobs.filter(matches), [jobs, assignee])
-  const filteredGeoJobs = useMemo(() => geoJobs.filter(matches), [geoJobs, assignee])
+  const filteredJobs = useMemo(() => jobs.filter(matches), [jobs, matches])
+  const filteredGeoJobs = useMemo(() => geoJobs.filter(matches), [geoJobs, matches])
 
   // (Re)draw the map + markers for the current filter.
   useEffect(() => {

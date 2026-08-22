@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CreditCard, Loader2, CheckCircle } from 'lucide-react'
 import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
-export function PayNowButton({ token, amountDue }: { token: string; amountDue: number }) {
+export function PayNowButton({ token }: { token: string; amountDue: number }) {
   const [step, setStep] = useState<'idle' | 'loading' | 'form' | 'done' | 'pending' | 'error'>('idle')
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')

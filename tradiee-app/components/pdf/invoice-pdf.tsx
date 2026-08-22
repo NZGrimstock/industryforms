@@ -87,6 +87,9 @@ export function InvoicePdf({ data }: { data: InvoicePdfData }) {
       <Page size="A4" style={s.page}>
         <View style={s.header}>
           <View>
+            {/* react-pdf's Image (not next/image or <img>) has no alt prop — this
+                renders into a PDF document, not the DOM, so alt-text doesn't apply. */}
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
             {data.company.logo_url ? <Image style={s.logo} src={data.company.logo_url} /> : null}
             <Text style={s.companyName}>{data.company.name}</Text>
             {data.company.email ? <Text style={s.muted}>{data.company.email}</Text> : null}

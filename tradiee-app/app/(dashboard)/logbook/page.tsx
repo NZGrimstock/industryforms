@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/header'
 import { redirect } from 'next/navigation'
 import { LogbookClient } from './client'
 import { effectivePlanKey } from '@/lib/billing'
+import { now } from '@/lib/utils'
 
 export default async function LogbookPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; profileId?: string }> }) {
   const supabase = await createClient()
@@ -16,7 +17,7 @@ export default async function LogbookPage({ searchParams }: { searchParams: Prom
 
   const sp = await searchParams
   const today = new Date().toISOString().slice(0, 10)
-  const fromDate = sp.from ?? new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const fromDate = sp.from ?? new Date(now() - 30 * 86400000).toISOString().slice(0, 10)
   const toDate = sp.to ?? today
 
   const [teamRes, logsRes, jobsRes] = await Promise.all([

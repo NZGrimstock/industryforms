@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/header'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
+import { now } from '@/lib/utils'
 import { Clock } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { TimesheetActions } from '../timesheets/client'
@@ -23,7 +24,7 @@ export default async function TimeLogsPage() {
 
   const timesheets = timesheetsRes.data ?? []
   const totalHoursThisWeek = timesheets
-    .filter(t => t.ended_at && new Date(t.started_at) >= new Date(Date.now() - 7 * 86400000))
+    .filter(t => t.ended_at && new Date(t.started_at) >= new Date(now() - 7 * 86400000))
     .reduce((sum, t) => {
       const ms = new Date(t.ended_at!).getTime() - new Date(t.started_at).getTime()
       return sum + Math.max(0, ms / 3600000 - t.break_minutes / 60)

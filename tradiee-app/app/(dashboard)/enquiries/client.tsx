@@ -18,7 +18,7 @@ interface Props {
 
 const SOURCES = ['website', 'phone', 'email', 'referral', 'walk_in', 'other']
 
-export function EnquiryActions({ companyId, profileId, team, mode, initialOpen = false }: Props) {
+export function EnquiryActions({ companyId, team, initialOpen = false }: Props) {
   const [open, setOpen] = useState(initialOpen)
   const [loading, setLoading] = useState(false)
   const router = useRouter()

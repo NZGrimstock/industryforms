@@ -28,12 +28,14 @@ export function GlobalSearch() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Reacts to the external `open` toggle: focuses the input on open, resets
+  // search state on close. Not mount-time init, so this stays an effect.
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 30)
     else { setQ(''); setResults([]); setActive(0) }
   }, [open])
 
-  // Debounced search.
+  // Debounced search — fetches from the server as `q` changes.
   useEffect(() => {
     if (q.trim().length < 2) { setResults([]); setLoading(false); return }
     setLoading(true)
