@@ -44,13 +44,14 @@ interface Props {
   initialTitle?: string
   initialDescription?: string
   initialCustomerId?: string
+  initialProjectId?: string
 }
 
 const emptyLine = (): QuickLine => ({
   description: '', quantity: '1', unit: 'each', unit_cost: '', sell_price: '', price_list_item_id: null, type: 'material',
 })
 
-export function NewJobButton({ companyId, customers, teamMembers = [], defaultJobAssigneeId = null, nextJobNumber, priceItems = [], standardMarkupEnabled = false, standardMarkupPct = 80, initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '' }: Props) {
+export function NewJobButton({ companyId, customers, teamMembers = [], defaultJobAssigneeId = null, nextJobNumber, priceItems = [], standardMarkupEnabled = false, standardMarkupPct = 80, initialOpen = false, initialTitle = '', initialDescription = '', initialCustomerId = '', initialProjectId = '' }: Props) {
   const initialAssigneeId = teamMembers.some(member => member.id === defaultJobAssigneeId)
     ? defaultJobAssigneeId!
     : teamMembers.length === 1
@@ -203,6 +204,7 @@ export function NewJobButton({ companyId, customers, teamMembers = [], defaultJo
       reference: form.reference || null,
       site_id: form.siteId || null,
       assigned_to: form.assigneeId || null,
+      project_id: initialProjectId || null,
     }
     if (createdJobId) {
       const { error } = await supabase.from('jobs').update(payload).eq('id', createdJobId)
@@ -243,6 +245,7 @@ export function NewJobButton({ companyId, customers, teamMembers = [], defaultJo
         reference: form.reference || null,
         site_id: form.siteId || null,
         assigned_to: form.assigneeId || null,
+        project_id: initialProjectId || null,
       }).eq('id', createdJobId)
       setLoading(false)
       if (error) { toast(error.message, 'error'); return }
@@ -295,6 +298,7 @@ export function NewJobButton({ companyId, customers, teamMembers = [], defaultJo
       reference: form.reference || null,
       site_id: siteId,
       assigned_to: form.assigneeId || null,
+      project_id: initialProjectId || null,
     }).select('id').single()
     setLoading(false)
     if (error) { toast(error.message, 'error'); return }

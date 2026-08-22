@@ -123,3 +123,19 @@ export function invoiceGuard(
   if (subtotal > INVOICE_EPS && alreadyInvoiced + subtotal > jobTotal + INVOICE_EPS) return 'over-quote'
   return null
 }
+
+/**
+ * Bill-through subcontractor bridge (SubcontractorStatus.tsx): a linked
+ * sub's job is ready to pull onto the contractor's own job as a cost line
+ * once the sub marks their job 'completed', an agreed price exists on the
+ * invitation, and it hasn't already been pulled in (contractor_material_id
+ * set). 'completed' matches DEFAULT_JOB_STATUSES's terminal key
+ * (lib/job-statuses.ts) — same simplification JOB_STATUS_COLORS in that
+ * component already makes for a company's custom statuses.
+ */
+export function subCostReadyToBill(
+  { subJobStatus, agreedPrice, contractorMaterialId }:
+  { subJobStatus: string; agreedPrice: number | null; contractorMaterialId: string | null }
+): boolean {
+  return subJobStatus === 'completed' && agreedPrice != null && !contractorMaterialId
+}

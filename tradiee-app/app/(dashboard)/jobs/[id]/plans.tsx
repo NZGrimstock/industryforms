@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/card'
+import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +25,10 @@ export type PlanWithMeasurements = {
   job_plan_measurements: SavedMeasurement[]
 }
 
-const MAX_DISPLAY_WIDTH = 900
+// Opens full-screen (see the Dialog wrapper below), so there's a lot more
+// room than the old inline-in-card view had — a wider canvas means more
+// precision when clicking points to measure.
+const MAX_DISPLAY_WIDTH = 1400
 
 interface Props {
   jobId: string
@@ -281,39 +285,43 @@ export function JobPlans({ jobId, companyId, profileId, plans: initialPlans }: P
   const liveArea = mode === 'area' && unitsPerPixel ? polygonArea(points) * unitsPerPixel ** 2 : null
   const dirty = !active?.id || pendingMeasurements.length > 0
 
-  if (!active) {
-    return (
-      <div>
-        {plans.length === 0 ? (
-          <p className="px-6 py-4 text-sm text-gray-400">No plans yet. Upload one to measure lengths, areas or counts.</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {plans.map(p => (
-              <div key={p.id} className="px-6 py-3 flex items-center justify-between gap-3">
-                <button onClick={() => openPlan(p)} className="flex items-center gap-2 text-left min-w-0 flex-1">
-                  <FileImage className="h-4 w-4 text-gray-300 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-gray-800 truncate">{p.name}</span>
-                    <span className="block text-xs text-gray-400">{p.job_plan_measurements.length} measurement{p.job_plan_measurements.length === 1 ? '' : 's'}{!p.units_per_pixel && ' · not calibrated'}</span>
-                  </span>
-                </button>
-                <button onClick={() => deletePlan(p.id)} className="text-gray-300 hover:text-red-400 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="px-6 py-2">
-          <button onClick={startNewPlan} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
-            <Upload className="h-3.5 w-3.5" /> New plan
-          </button>
-        </div>
-      </div>
-    )
+  function closeActive() {
+    setActive(null)
   }
 
+  const listView = (
+    <div>
+      {plans.length === 0 ? (
+        <p className="px-6 py-4 text-sm text-gray-400">No plans yet. Upload one to measure lengths, areas or counts.</p>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {plans.map(p => (
+            <div key={p.id} className="px-6 py-3 flex items-center justify-between gap-3">
+              <button onClick={() => openPlan(p)} className="flex items-center gap-2 text-left min-w-0 flex-1">
+                <FileImage className="h-4 w-4 text-gray-300 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-800 truncate">{p.name}</span>
+                  <span className="block text-xs text-gray-400">{p.job_plan_measurements.length} measurement{p.job_plan_measurements.length === 1 ? '' : 's'}{!p.units_per_pixel && ' · not calibrated'}</span>
+                </span>
+              </button>
+              <button onClick={() => deletePlan(p.id)} className="text-gray-300 hover:text-red-400 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="px-6 py-2">
+        <button onClick={startNewPlan} className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[var(--accent,#f97316)] font-medium">
+          <Upload className="h-3.5 w-3.5" /> New plan
+        </button>
+      </div>
+    </div>
+  )
+
   return (
-    <div className="px-6 py-4">
-      {!canvasSize ? (
+    <>
+      {listView}
+      <Dialog open={!!active} onClose={closeActive} title={active?.name || 'Plan'} className="max-w-[96vw] w-full h-[92vh] max-h-[92vh]">
+      {active && (!canvasSize ? (
         <div className="space-y-3">
           <Input value={active.name} onChange={e => setActive(a => a && ({ ...a, name: e.target.value }))} placeholder="Plan name (e.g. Floor plan)" className="max-w-xs" />
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && loadFile(e.target.files[0])} />
@@ -418,7 +426,8 @@ export function JobPlans({ jobId, companyId, profileId, plans: initialPlans }: P
             </div>
           )}
         </>
-      )}
-    </div>
+      ))}
+      </Dialog>
+    </>
   )
 }

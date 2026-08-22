@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
-import { Calendar, User, Briefcase, Receipt } from 'lucide-react'
+import { Calendar, User, Briefcase, Receipt, Plus } from 'lucide-react'
 import { ProjectDetailClient } from './client'
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -72,7 +72,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   {project.target_end_date && <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Target {formatDate(project.target_end_date)}</span>}
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right space-y-2">
+                <Link
+                  href={`/jobs?newJob=1${cust ? `&customerId=${cust.id}` : ''}&projectId=${project.id}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-800"
+                >
+                  <Plus className="h-3.5 w-3.5" /> New job
+                </Link>
                 <p className="text-3xl font-bold tracking-tight text-gray-900 tabular-nums">{pct}%</p>
                 <p className="text-xs text-gray-400">complete</p>
                 {currentStage && <p className="text-xs text-gray-500 mt-1">Up next: <span className="font-medium text-gray-700">{currentStage.name}</span></p>}

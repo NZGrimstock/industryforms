@@ -53,8 +53,15 @@ export async function POST(request: Request) {
   const contractorCompanyId = profile.company_id
   const contractorCompanyName = (profile.companies as unknown as { name: string } | null)?.name ?? 'A contractor'
 
-  // 2. Check if subcontractorEmail matches an active platform user
-  const { data: subProfile } = await supabase
+  const serviceClient = createServiceClient()
+
+  // 2. Check if subcontractorEmail matches an active platform user. This is
+  // a deliberate cross-company lookup (is this email on the platform at
+  // all?), so it must use the service client — "select profiles in own
+  // company" RLS (002_rls_policies.sql) means the contractor's own session
+  // can never see another company's profile, which silently made every
+  // invite look like a non-platform one regardless of the real answer.
+  const { data: subProfile } = await serviceClient
     .from('profiles')
     .select('company_id, timezone')
     .eq('email', subcontractorEmail)
@@ -69,8 +76,6 @@ export async function POST(request: Request) {
   const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
-
-  const serviceClient = createServiceClient()
   const { data: invitation, error: invError } = await serviceClient
     .from('job_invitations')
     .insert({

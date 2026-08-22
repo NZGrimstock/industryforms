@@ -1,10 +1,15 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
+import { AddSubCostButton } from './add-sub-cost-button'
+import { subCostReadyToBill } from '@/lib/job-financials'
+import { CheckCircle2 } from 'lucide-react'
 
 interface Props {
   contractorJobId: string
   companyId: string
+  profileId: string
+  subCostCategoryId: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -45,7 +50,7 @@ function InvitationBadge({ status }: { status: string }) {
   )
 }
 
-export async function SubcontractorStatus({ contractorJobId, companyId }: Props) {
+export async function SubcontractorStatus({ contractorJobId, companyId, profileId, subCostCategoryId }: Props) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: viewerProfile } = user
@@ -60,10 +65,18 @@ export async function SubcontractorStatus({ contractorJobId, companyId }: Props)
       .eq('job_id', contractorJobId)
       .eq('contractor_company_id', companyId)
       .order('created_at', { ascending: false }),
-    supabase
+    // The embedded jobs!subcontractor_job_id(...) join reads the SUB's own
+    // job row (and their company name) from the CONTRACTOR's session — RLS
+    // on both jobs and companies is company-scoped, so that join always came
+    // back null under the normal client and every linked row was silently
+    // dropped below. Same cross-company display-name case as
+    // settings/page.tsx's referral_credits query; .eq('contractor_company_id')
+    // re-establishes the scoping that RLS would otherwise have provided.
+    createServiceClient()
       .from('job_links')
-      .select('id, subcontractor_job_id, jobs!subcontractor_job_id(title, status, job_number, companies(name))')
-      .eq('contractor_job_id', contractorJobId),
+      .select('id, subcontractor_job_id, contractor_material_id, jobs!subcontractor_job_id(title, status, job_number, companies(name)), job_invitations!invitation_id(agreed_price)')
+      .eq('contractor_job_id', contractorJobId)
+      .eq('contractor_company_id', companyId),
   ])
 
   const invitations = invitationsRes.data ?? []
@@ -85,19 +98,39 @@ export async function SubcontractorStatus({ contractorJobId, companyId }: Props)
             if (!linkedJob) return null
             const statusColor = JOB_STATUS_COLORS[linkedJob.status] ?? '#6b7280'
             const companyName = linkedJob.companies?.name ?? 'Subcontractor'
+            const agreedPrice = (link.job_invitations as unknown as { agreed_price: number | null } | null)?.agreed_price ?? null
+            const readyToBill = subCostReadyToBill({ subJobStatus: linkedJob.status, agreedPrice, contractorMaterialId: link.contractor_material_id })
             return (
-              <div key={link.id} className="px-6 py-3 flex items-center justify-between">
+              <div key={link.id} className="px-6 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{companyName}</p>
                   <p className="text-xs text-gray-400">{linkedJob.job_number} — {linkedJob.title}</p>
                 </div>
-                <span
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
-                  style={{ backgroundColor: `${statusColor}18`, color: statusColor }}
-                >
-                  <StatusDot color={statusColor} />
-                  {linkedJob.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: `${statusColor}18`, color: statusColor }}
+                  >
+                    <StatusDot color={statusColor} />
+                    {linkedJob.status.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  </span>
+                  {readyToBill && agreedPrice != null && (
+                    <AddSubCostButton
+                      jobLinkId={link.id}
+                      contractorJobId={contractorJobId}
+                      contractorCompanyId={companyId}
+                      profileId={profileId}
+                      description={`${companyName} — ${linkedJob.title}`}
+                      agreedPrice={agreedPrice}
+                      costCategoryId={subCostCategoryId}
+                    />
+                  )}
+                  {link.contractor_material_id && (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Added to job cost
+                    </span>
+                  )}
+                </div>
               </div>
             )
           })}

@@ -13,7 +13,7 @@ import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { FinancialStatBox, type FinancialStat } from '@/components/ui/financial-stat-box'
 import { summarizeInvoices, jobTotal, toInvoice, invoiceGuard, approvedVariationTotal } from '@/lib/job-financials'
 import { round2, lineNet } from '@/lib/pricing'
-import { effectivePlanKey } from '@/lib/billing'
+import { effectivePlanKey, hasAddon } from '@/lib/billing'
 import { JobDetailClient } from './client'
 import { JobMessagesCard, type JobMessage } from './messages-card'
 import { JobLockBanner } from './lock-banner'
@@ -33,6 +33,7 @@ import { JobAssigneesCard } from './assignees'
 import { VisitsCard } from './visits-card'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { JobSiteSelector } from '@/components/jobs/job-site-selector'
+import { JobProjectSelector } from '@/components/jobs/job-project-selector'
 import { TimesheetTable } from '@/components/timesheets/timesheet-table'
 import Link from 'next/link'
 
@@ -40,7 +41,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, job_material_markup_enabled, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, phone, email, address, gst_number, default_gst_rate, prices_include_tax, logo_url, country, standard_markup_enabled, standard_markup_pct, job_material_markup_enabled, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until, addons)').eq('id', user!.id).single()
 
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -59,7 +60,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   // ~8 sequential round trips (each one paying full Supabase latency).
   const [
     customerSitesRes, visitsRes, notesRes, timesheetsRes, invoicesRes, teamRes, materialsRes, purchaseOrdersRes, priceItemsRes, kitsRes, photosRes, formTemplatesRes, formSubmissionsRes, claimsRes, complianceDocsRes,
-    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories, diaryEntriesRes, plansRes,
+    jobAssigneesRes, jobStatuses, nextInvoiceNumber, qLinesRes, jobsForPickerRes, messagesRes, variationsRes, costCategories, diaryEntriesRes, plansRes, projectsRes,
   ] = await Promise.all([
     supabase.from('customer_sites').select('id, address, label').eq('customer_id', job.customer_id).order('created_at'),
     supabase.from('job_visits').select('*, profiles(full_name)').eq('job_id', id).order('scheduled_start'),
@@ -95,6 +96,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     getCostCategories(supabase, profile!.company_id),
     supabase.from('job_diary_entries').select('id, entry_date, notes, crew_on_site, weather, delays, profiles(full_name)').eq('job_id', id).order('entry_date', { ascending: false }).limit(14),
     supabase.from('job_plans').select('id, name, image_url, image_width, image_height, units_per_pixel, calibration_unit, job_plan_measurements(id, type, label, value, unit, points, sort_order)').eq('job_id', id).order('created_at'),
+    supabase.from('projects').select('id, name').eq('company_id', profile!.company_id).order('name'),
   ])
 
   const customerSites = customerSitesRes.data
@@ -285,11 +287,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
   const co = profile?.companies as {
     name: string; phone: string | null; email: string | null; address: string | null; logo_url: string | null; gst_number: string | null; default_gst_rate: number; country: string
     subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null
-    comp_plan: string | null; comp_until: string | null
+    comp_plan: string | null; comp_until: string | null; addons: Record<string, { active?: boolean }> | null
   } | null
   const isNZ = (co?.country ?? 'NZ') === 'NZ'
   const currency = co?.country === 'AU' ? 'AUD' : 'NZD'
   const isFreePlan = effectivePlanKey(co) === 'free'
+  const projects = projectsRes.data ?? []
+  const currentProjectName = projects.find(p => p.id === job.project_id)?.name ?? null
+  const showProjectSelector = hasAddon(!!profile?.is_super_admin, co, 'projects')
   const sheetData = {
     job: {
       id: job.id,
@@ -367,6 +372,14 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
               currentAddress={(job.customer_sites as {address: string} | null)?.address ?? null}
               customerSites={customerSites ?? []}
             />
+            {showProjectSelector && (
+              <JobProjectSelector
+                jobId={id}
+                currentProjectId={job.project_id ?? null}
+                currentProjectName={currentProjectName}
+                projects={projects}
+              />
+            )}
             {job.tags && job.tags.length > 0 && (
               <div className="flex gap-1 mt-2">
                 {job.tags.map((t: string) => <span key={t} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{t}</span>)}
@@ -554,7 +567,12 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
         />
 
         {/* Subcontractors — renders nothing when no invitations exist */}
-        <SubcontractorStatus contractorJobId={id} companyId={profile!.company_id} />
+        <SubcontractorStatus
+          contractorJobId={id}
+          companyId={profile!.company_id}
+          profileId={user!.id}
+          subCostCategoryId={costCategories.find(c => c.name === 'Subcontractors')?.id ?? null}
+        />
 
         {/* Timesheets */}
         <Card>

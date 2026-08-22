@@ -100,11 +100,46 @@ export async function POST(request: Request) {
 
   const jobNumber = `JOB-${String((count ?? 0) + 1).padStart(4, '0')}`
 
+  // jobs.customer_id is NOT NULL (001_initial_schema.sql) — the sub's own
+  // accounting treats whoever hired them as their customer, so resolve or
+  // create a customer record for the contractor's company in the sub's
+  // company. Reuse-by-name mirrors the same dedup pattern in
+  // app/(dashboard)/jobs/client.tsx's inline "new customer" path.
+  const { data: contractorCompany } = await serviceClient
+    .from('companies')
+    .select('name')
+    .eq('id', invitation.contractor_company_id)
+    .single()
+  const contractorCompanyName = contractorCompany?.name ?? 'Contractor'
+
+  const { data: existingCustomer } = await serviceClient
+    .from('customers')
+    .select('id')
+    .eq('company_id', subContractorCompanyId)
+    .ilike('name', contractorCompanyName)
+    .limit(1)
+    .maybeSingle()
+
+  let customerId = existingCustomer?.id ?? null
+  if (!customerId) {
+    const { data: createdCustomer, error: custError } = await serviceClient
+      .from('customers')
+      .insert({ company_id: subContractorCompanyId, name: contractorCompanyName })
+      .select('id')
+      .single()
+    if (custError || !createdCustomer) {
+      console.error('[invitations/accept] customer insert error:', custError?.message)
+      return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
+    }
+    customerId = createdCustomer.id
+  }
+
   // Create a new job in the subcontractor's company
   const { data: newJob, error: jobError } = await serviceClient
     .from('jobs')
     .insert({
       company_id: subContractorCompanyId,
+      customer_id: customerId,
       title: invitation.title,
       description: invitation.description ?? null,
       status: 'unscheduled',
@@ -118,12 +153,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create job' }, { status: 500 })
   }
 
-  // Insert job_links
+  // Insert job_links. contractor_company_id/subcontractor_company_id are
+  // NOT NULL on this table (021_job_invitations.sql) — omitting them here
+  // meant every insert silently failed the constraint and was swallowed by
+  // the console.error below, so job_links has never actually populated.
   const { error: linkError } = await serviceClient
     .from('job_links')
     .insert({
+      invitation_id: invitation.id,
       contractor_job_id: invitation.job_id,
       subcontractor_job_id: newJob.id,
+      contractor_company_id: invitation.contractor_company_id,
+      subcontractor_company_id: subContractorCompanyId,
     })
 
   if (linkError) {

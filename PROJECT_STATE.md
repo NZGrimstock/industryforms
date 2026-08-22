@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-21. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-22. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
@@ -42,12 +42,15 @@ signing, build process, database) that the dated session logs can contradict.
   industryforms-admin) calls these to sync real companies into its own
   `subscribers` table (daily cron) and to grant/clear comps from a new
   "Comp period" panel on the subscriber detail sheet.
-  **Also unverified**: the admin console's own local `.env.local` has no
-  `SUPABASE_SERVICE_ROLE_KEY` filled in (pre-existing, not caused by this
-  work), so the sync cron's actual database upsert was never exercised
-  locally — only that it authenticates correctly and reaches the real
-  handler. The comp-write and company-list endpoints on the tradiee side
-  *were* fully verified live (real dev server, real Postgres).
+  **Click-through now done (2026-08-22)**: created a throwaway company via
+  the tradiee-app admin API directly (the same calls the admin console's
+  sync cron and comp panel make), confirmed it lists, granted a comp via
+  `POST /api/admin/companies/[id]/comp`, confirmed both `effectivePlanKey()`
+  (TS) and `company_effective_plan()` (SQL) resolve it to the comped plan,
+  confirmed the clear path and the past-date validation reject, all against
+  real local Postgres. The admin console's own DB upsert still wasn't
+  exercised (its local `.env.local` still has no service-role key) — only
+  the API contract it depends on, which is now proven correct end to end.
 
 - **Staff-role users see silently-understated financial figures on
   `/customers/[id]` and `/jobs`** (found 2026-08-21, during an 8-angle
@@ -359,6 +362,81 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-22 (Claude) — Job↔project attach, full-screen plan modal, subcontractor bill-through bridge (+ 4 real bugs found live-testing it)
+
+**Job ↔ project attachment**, both directions, both verified live: project
+page has a **New job** button (deep-links to `/jobs?newJob=1&projectId=...`,
+threading `initialProjectId` through `NewJobButton`'s four write sites in
+`jobs/client.tsx`); job page has a new `JobProjectSelector`
+(`components/jobs/job-project-selector.tsx`, mirrors `JobSiteSelector`) to
+attach/detach/change project on an existing job, clearing the stage when the
+project changes. Gated behind the `projects` add-on.
+
+**Plans → full-screen modal**: clicking a plan now opens in a `Dialog` sized
+96vw×92vh instead of the old inline-in-card view (`jobs/[id]/plans.tsx`);
+canvas max display width bumped 900→1400px for more precise point-clicking.
+Confirmed via computed layout in a real browser session, not just tsc.
+
+**Disconnected-functionality audit** (background agent, full migration
+sweep): two real dead paths found, not yet fixed — `bookable_packages` has 9
+RLS-writable columns (`deposit_amount`, `auto_confirm`, `creates_invoice`,
+`recurring_interval_months`, `public_slug`, ...) with no edit UI ever
+setting them, meaning `reminders/route.ts`'s auto-invoice-on-completion and
+recurring-service-reminder logic can never fire; `automation_events` is
+written from 4 places but no admin page ever reads it back.
+
+**Subcontractor bill-through billing bridge** (user-scoped this explicitly
+to bill-through only, not direct-to-client — that's a separate future
+feature needing its own design, see below). Once a linked sub's job hits
+`completed` and the invitation has an `agreed_price`, a new **Add to job
+cost** button (`components/jobs/add-sub-cost-button.tsx`, gated by
+`subCostReadyToBill()` in `lib/job-financials.ts`) pulls it onto the
+contractor's job as a normal `job_materials` line (Subcontractors cost
+category), which then flows into the contractor's client invoice like any
+other cost. `job_links.contractor_material_id` (new column,
+`20260822100000_subcontractor_cost_bridge.sql`) tracks it so the button
+flips to an "Added" badge and never double-inserts.
+
+Live end-to-end testing (two real companies, real invite → accept → complete
+→ bill flow through the actual UI, not mocked) surfaced that **this entire
+feature area had never worked in production** — four separate root causes,
+all now fixed:
+
+1. `job_links` insert (invitations/accept/route.ts) never set
+   `contractor_company_id`/`subcontractor_company_id`, both NOT NULL —
+   every insert silently violated the constraint and was swallowed by a
+   bare `console.error`, so the two-way job-link table has apparently never
+   had a row in it.
+2. `invitations/send/route.ts`'s "is this email already on IndustryForms"
+   lookup used the contractor's own RLS-scoped session client — "select
+   profiles in own company" RLS means it could never see a match in a
+   different company, so every invite looked like a non-platform invite
+   regardless of the real answer.
+3. The subcontractor's auto-created job (on accept) never set
+   `customer_id`, which is NOT NULL — every on-platform accept 500'd.
+   Fixed by resolving/creating a customer record for the contractor's
+   company in the sub's own company (the sub's accounting treats whoever
+   hired them as their customer) — same dedup-by-name pattern already used
+   in `jobs/client.tsx`'s inline new-customer flow.
+4. `SubcontractorStatus.tsx`'s job-links query embeds
+   `jobs!subcontractor_job_id(..., companies(name))` — read from the
+   contractor's own RLS-scoped session, which can't see the sub's job or
+   company row (different company), so the live-status card silently
+   dropped every linked row. Fixed by switching that one query to the
+   service client with company_id re-applied by hand (same pattern as
+   `settings/page.tsx`'s referral-credits cross-company name lookup).
+
+New check: `node scripts/check-sub-cost-bridge.mjs` (from `tradiee-app/`).
+Migration applied to local Postgres; **`supabase db push --linked` to
+production still owed** — deliberate human action per repo convention.
+
+**Not built this session** (explicit scope decision, asked via
+AskUserQuestion): direct-to-client subcontractor billing (a reno subbie
+invoicing the homeowner directly). The sub's IndustryForms account has no
+relationship to the actual client today — needs either the contractor
+sharing client contact details cross-company or routing through the
+contractor's own invoicing. Real design work, not scoped/built yet.
 
 ## Session 2026-08-21 (Claude) — Mobile native build, Tap to Pay HIG fix, reality-check on the 08-20 diff
 

@@ -15,7 +15,7 @@ import { actualsJobCeiling, jobInvoicingBucket, approvedVariationTotal } from '@
 
 const SORTABLE = ['job_number', 'title', 'status', 'created_at']
 
-export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string; customerId?: string; sort?: string; dir?: string }> }) {
+export default async function JobsPage({ searchParams }: { searchParams: Promise<{ status?: string; view?: string; q?: string; tab?: string; newJob?: string; title?: string; description?: string; customerId?: string; projectId?: string; sort?: string; dir?: string }> }) {
   const sp = await searchParams
   const tab = (sp.tab ?? 'jobs') as 'jobs' | 'recurring' | 'templates' | 'reminders'
   const view = (sp.view ?? 'list') as 'list' | 'board' | 'map'
@@ -202,7 +202,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
                 </Link>
               ))}
             </div>
-            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} />
+            <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialTitle={sp.title ?? ''} initialDescription={sp.description ?? ''} initialCustomerId={sp.customerId ?? ''} initialProjectId={sp.projectId ?? ''} />
           </div>
         </div>
 
@@ -217,7 +217,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
         {view === 'list' && (
           !jobs?.length ? (
             <EmptyState icon={Briefcase} title="No jobs" description="Create a job to start tracking work" action={
-              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} />
+              <NewJobButton companyId={profile!.company_id} customers={customers ?? []} teamMembers={teamMembers} defaultJobAssigneeId={companySettings?.default_job_assignee_id ?? null} nextJobNumber={nextJobNumber} priceItems={priceItems} standardMarkupEnabled={!!companySettings?.standard_markup_enabled} standardMarkupPct={Number(companySettings?.standard_markup_pct ?? 80)} initialOpen={sp.newJob === '1'} initialCustomerId={sp.customerId ?? ''} initialProjectId={sp.projectId ?? ''} />
             } />
           ) : (
             <JobsListTable
