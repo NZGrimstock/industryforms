@@ -10,13 +10,20 @@ import { SaveTemplateButton } from './save-template'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import Link from 'next/link'
 import { effectivePlanKey } from '@/lib/billing'
+import { logoDataUri } from '@/lib/pdf-logo'
+import type { QuotePdfData } from '@/components/pdf/quote-pdf'
+import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, companies!company_id(name, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
-  const billingCompany = profile?.companies as unknown as { subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null; comp_plan: string | null; comp_until: string | null } | null
+  const { data: profile } = await supabase.from('profiles').select('company_id, full_name, role, timezone, companies!company_id(name, email, phone, gst_number, logo_url, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const co = profile?.companies as unknown as {
+    name: string; email: string | null; phone: string | null; gst_number: string | null; logo_url: string | null; default_gst_rate: number
+    subscription_plan: string | null; subscription_status: string | null; trial_ends_at: string | null; billing_exempt: boolean | null; comp_plan: string | null; comp_until: string | null
+  } | null
+  const billingCompany = co
 
   const [{ data: quote }, nextJobNumber, { data: quoteList }] = await Promise.all([
     supabase
@@ -42,6 +49,35 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   const totalCost = allLines.reduce((sum: number, l: { quantity: number; unit_cost: number | null }) => sum + Number(l.quantity) * Number(l.unit_cost ?? 0), 0)
   const grossProfit = Number(quote.subtotal) - totalCost
   const margin = Number(quote.subtotal) > 0 ? (grossProfit / Number(quote.subtotal)) * 100 : 0
+
+  type PdfSection = { sort_order: number; quote_line_items: { id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number; sort_order: number }[] }
+  const pdfLines = (sections as PdfSection[]).flatMap(sec => [...(sec.quote_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order))
+  const printData: QuotePdfData = {
+    quote: {
+      quote_number: quote.quote_number,
+      is_estimate: quote.is_estimate,
+      created_at: quote.created_at,
+      expires_at: quote.expires_at,
+      subtotal: quote.subtotal,
+      discount_amount: quote.discount_amount,
+      gst_amount: quote.gst_amount,
+      total: quote.total,
+      reference: quote.reference,
+      customer_message: quote.customer_message,
+      terms: quote.terms,
+      customers: quote.customers,
+      lines: pdfLines,
+    },
+    company: {
+      name: co?.name ?? '',
+      email: co?.email ?? null,
+      phone: co?.phone ?? null,
+      gst_number: co?.gst_number ?? null,
+      logo_url: await logoDataUri(co?.logo_url),
+      isFreePlan: effectivePlanKey(billingCompany) === 'free',
+    },
+    timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
+  }
 
   return (
     <>
@@ -84,7 +120,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
           <div className="flex flex-wrap items-center gap-2">
             <PrevNextNav prevHref={prevQuoteHref} nextHref={nextQuoteHref} />
             <SaveTemplateButton quoteId={quote.id} defaultName={quote.title} />
-            <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} isFreePlan={effectivePlanKey(billingCompany) === 'free'} />
+            <QuoteActions quote={quote} companyId={profile!.company_id} nextJobNumber={nextJobNumber} isFreePlan={effectivePlanKey(billingCompany) === 'free'} printData={printData} />
           </div>
         </div>
 

@@ -10,6 +10,8 @@ import { Dialog } from '@/components/ui/dialog'
 import { CheckCircle, XCircle, Trash2, Mail, Pencil, MessageSquare, Briefcase, Loader2, ShoppingCart } from 'lucide-react'
 import { quoteLabel } from '@/lib/utils'
 import Link from 'next/link'
+import { PrintQuote } from '@/components/pdf/print-quote'
+import type { QuotePdfData } from '@/components/pdf/quote-pdf'
 
 interface Props {
   quote: {
@@ -25,9 +27,10 @@ interface Props {
   companyId: string
   nextJobNumber: string
   isFreePlan: boolean
+  printData: QuotePdfData
 }
 
-export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan }: Props) {
+export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan, printData }: Props) {
   const label = quoteLabel(quote.is_estimate)
   const supabase = createClient()
   const router = useRouter()
@@ -171,6 +174,7 @@ export function QuoteActions({ quote, companyId, nextJobNumber, isFreePlan }: Pr
           </Button>
         )
       )}
+      <PrintQuote data={printData} />
       {canDelete && (
         <Button variant="ghost" size="sm" loading={loading === 'delete'} onClick={deleteQuote}>
           <Trash2 className="h-4 w-4 text-red-400" />
