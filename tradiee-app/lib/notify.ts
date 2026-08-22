@@ -15,7 +15,12 @@ export type NotificationResult = { channel: 'email' | 'sms'; status: string; err
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseClient = any
 
-async function logEvent(service: SupabaseClient, row: {
+// Exported so callers that can't route through notify()/notifyPreferred()
+// (quote-followup/invoice-dunning in reminders/route.ts want to keep their
+// own sendSms() relatedType/relatedId — notify()'s internal call only ever
+// tags SMS billing metadata with a bookingId) can still log the same
+// automation_events trail by hand.
+export async function logEvent(service: SupabaseClient, row: {
   companyId: string; customerId?: string | null; bookingId?: string | null
   eventType: string; channel: 'email' | 'sms'; status: string; error?: string | null
 }) {

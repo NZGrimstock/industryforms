@@ -381,6 +381,7 @@ export function reminderEmailHtml({
   viewUrl,
   logoUrl,
   isEstimate = false,
+  customMessage,
 }: {
   type: 'quote_followup' | 'invoice_overdue' | 'invoice_due_soon'
   companyName: string
@@ -391,6 +392,8 @@ export function reminderEmailHtml({
   viewUrl: string
   logoUrl?: string | null
   isEstimate?: boolean
+  /** Company-authored override for the body line, from company_reminder_settings — same trust boundary as a quote's "Message to customer", not third-party content, so no escaping. */
+  customMessage?: string | null
 }) {
   const isQuote = type === 'quote_followup'
   const quoteWord = isEstimate ? 'estimate' : 'quote'
@@ -400,11 +403,11 @@ export function reminderEmailHtml({
     : type === 'invoice_due_soon'
       ? `Invoice ${documentNumber} is due ${days === 0 ? 'today' : 'soon'}`
       : `Invoice ${documentNumber} is overdue`
-  const body = isQuote
+  const body = customMessage?.trim() || (isQuote
     ? `We wanted to follow up on ${quoteWord} ${documentNumber} we sent you recently. Please let us know if you have any questions or would like to proceed.`
     : type === 'invoice_due_soon'
       ? `Invoice ${documentNumber} for ${amountDue} is due ${days === 0 ? 'today' : `in ${days} day${days !== 1 ? 's' : ''}`}. You can pay online any time using the link below.`
-      : `Invoice ${documentNumber} for ${amountDue} is now ${days} day${days !== 1 ? 's' : ''} overdue. Please arrange payment at your earliest convenience.`
+      : `Invoice ${documentNumber} for ${amountDue} is now ${days} day${days !== 1 ? 's' : ''} overdue. Please arrange payment at your earliest convenience.`)
 
   return {
     subject,

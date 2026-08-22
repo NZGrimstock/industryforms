@@ -3,11 +3,12 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail, reminderEmailHtml, invoiceEmailHtml, brandedEmailHtml } from '@/lib/email'
 import { isSmsBillingDisabledError, retryFailedSmsMeterEvents, sendSms, smsConfigured, toE164 } from '@/lib/sms'
 import { nextDocNumber } from '@/lib/numbering'
-import { notify } from '@/lib/notify'
+import { notify, logEvent } from '@/lib/notify'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
 import { logCommunication } from '@/lib/comms'
 import { DEFAULT_TIMEZONE, addInterval, formatDateTime } from '@/lib/datetime'
 import { buildCustomerStatements, type StatementInvoice } from '@/lib/statement'
+import { shouldSendInvoiceReminder } from '@/lib/reminder-settings'
 import { formatCurrency } from '@/lib/utils'
 
 // The job loops over many records sending email/SMS — give it headroom past the
@@ -49,18 +50,35 @@ async function runReminders() {
   }
 
   // ── Quote follow-ups ─────────────────────────────────────────────────────
-  // Sent quotes not viewed/accepted in 3 days, follow_up_at <= now
+  // Sent quotes not viewed/accepted, follow_up_at <= now. The initial delay
+  // (default 3 days) is set by a DB trigger on quotes (006_reminders_followup.sql,
+  // reads company_reminder_settings itself); the repeat interval and on/off
+  // switch below are read here since they apply to every subsequent reminder,
+  // not just the first. No settings row = defaults, which is the common case —
+  // this table is opt-in-to-customize, not seeded at signup.
   const { data: quotesToRemind } = await service
     .from('quotes')
     .select('id, company_id, customer_id, quote_number, title, public_token, subtotal, expires_at, is_estimate, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
     .eq('status', 'sent')
     .lte('follow_up_at', new Date().toISOString())
     .is('viewed_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+
+  const quoteCompanyIds = [...new Set((quotesToRemind ?? []).map(q => q.company_id))]
+  const { data: quoteSettingsRows } = quoteCompanyIds.length
+    ? await service.from('company_reminder_settings').select('company_id, quote_followup_enabled, quote_followup_repeat_days, quote_followup_message').in('company_id', quoteCompanyIds)
+    : { data: [] }
+  const quoteSettingsByCompany = new Map((quoteSettingsRows ?? []).map(r => [r.company_id, r]))
 
   for (const quote of quotesToRemind ?? []) {
     const customer = quote.customers as unknown as { name: string; email: string | null; phone: string | null } | null
     const company = quote.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null; logo_url: string | null } | null
     if (!customer || !company) continue
+    const qs = quoteSettingsByCompany.get(quote.company_id)
+    if (qs?.quote_followup_enabled === false) continue
+    const repeatDays = qs?.quote_followup_repeat_days ?? 7
+    const customMessage = qs?.quote_followup_message ?? null
+
     const viewUrl = `${appUrl}/q/${quote.public_token}`
     const docWord = quote.is_estimate ? 'Estimate' : 'Quote'
     let delivered = false
@@ -69,72 +87,116 @@ async function runReminders() {
       const { subject, html } = reminderEmailHtml({
         type: 'quote_followup', companyName: company.name, customerName: customer.name,
         documentNumber: quote.quote_number, amountDue: `$${Number(quote.subtotal).toFixed(2)}`, viewUrl, logoUrl: company.logo_url,
-        isEstimate: !!quote.is_estimate,
+        isEstimate: !!quote.is_estimate, customMessage,
       })
       const r = await sendEmail({ to: customer.email, subject, html, replyTo: company.email ?? undefined })
+      await logEvent(service, { companyId: quote.company_id, customerId: quote.customer_id, eventType: 'quote_followup', channel: 'email', status: r.error ? 'failed' : 'sent', error: r.error })
       if (r.error) errors.push(`${docWord} ${quote.quote_number} email: ${r.error}`)
-      else { delivered = true; sent.push(`${docWord} ${quote.quote_number} email`) }
+      else {
+        delivered = true; sent.push(`${docWord} ${quote.quote_number} email`)
+        await logCommunication(service, { companyId: quote.company_id, customerId: quote.customer_id, channel: 'email', subject, summary: `Follow-up sent to ${customer.email}`, relatedType: 'quote', relatedId: quote.id })
+      }
     }
     if (customer.phone) {
+      const dark = !smsConfigured()
       const r = await sendSms({
         to: customer.phone, country: (company.country as 'NZ' | 'AU') ?? 'NZ',
-        body: `Hi ${customer.name.split(' ')[0]}, just following up on ${docWord.toLowerCase()} ${quote.quote_number} from ${company.name}: ${viewUrl}`,
+        body: customMessage?.trim() || `Hi ${customer.name.split(' ')[0]}, just following up on ${docWord.toLowerCase()} ${quote.quote_number} from ${company.name}: ${viewUrl}`,
         companyId: quote.company_id,
         relatedType: 'quote_followup',
         relatedId: quote.id,
       })
-      if (r.error && r.error !== 'SMS service not configured' && !isSmsBillingDisabledError(r.error)) errors.push(`${docWord} ${quote.quote_number} sms: ${r.error}`)
-      else if (!r.error) { delivered = true; sent.push(`${docWord} ${quote.quote_number} sms`) }
+      const billingOff = !dark && r.error ? isSmsBillingDisabledError(r.error) : false
+      await logEvent(service, {
+        companyId: quote.company_id, customerId: quote.customer_id, eventType: 'quote_followup', channel: 'sms',
+        status: dark ? 'skipped_sms_dark' : billingOff ? 'skipped_sms_billing_off' : r.error ? 'failed' : 'sent',
+        error: dark || billingOff ? null : r.error,
+      })
+      if (r.error && !dark && !billingOff) errors.push(`${docWord} ${quote.quote_number} sms: ${r.error}`)
+      else if (!r.error) {
+        delivered = true; sent.push(`${docWord} ${quote.quote_number} sms`)
+        await logCommunication(service, { companyId: quote.company_id, customerId: quote.customer_id, channel: 'sms', subject: `${docWord} follow-up`, summary: 'Follow-up SMS sent', relatedType: 'quote', relatedId: quote.id })
+      }
     }
     if (delivered) {
-      await service.from('quotes').update({ follow_up_at: new Date(Date.now() + 7 * 86400000).toISOString() }).eq('id', quote.id)
+      await service.from('quotes').update({ follow_up_at: new Date(Date.now() + repeatDays * 86400000).toISOString() }).eq('id', quote.id)
     }
   }
 
   // ── Payment reminders (dunning sequence) ──────────────────────────────────
-  // Throttled to ~weekly per invoice: a "due soon" nudge from ~4 days before the
-  // due date, then escalating "overdue" reminders until paid.
-  const windowEnd = new Date(Date.now() + 4 * 86400000).toISOString()
-  const sixDaysAgo = new Date(Date.now() - 6 * 86400000).toISOString()
+  // Query window is loose (widest any company can configure — due_soon_days
+  // maxes at 14, repeat at 30) so the precise per-company due_soon/repeat
+  // settings can be applied exactly inside the loop, same reasoning as the
+  // quote-followup section above.
+  const windowEnd = new Date(Date.now() + 14 * 86400000).toISOString()
+  const oneDayAgo = new Date(Date.now() - 1 * 86400000).toISOString()
   const { data: dueInvoices } = await service
     .from('invoices')
     .select('id, company_id, customer_id, invoice_number, total, amount_paid, public_token, due_date, last_reminder_at, customers(name, email, phone), companies(name, email, phone, country, logo_url)')
     .in('status', ['sent', 'partially_paid', 'overdue'])
     .not('due_date', 'is', null)
     .lte('due_date', windowEnd)
-    .or(`last_reminder_at.is.null,last_reminder_at.lt.${sixDaysAgo}`)
+    .or(`last_reminder_at.is.null,last_reminder_at.lt.${oneDayAgo}`)
+
+  const invoiceCompanyIds = [...new Set((dueInvoices ?? []).map(i => i.company_id))]
+  const { data: invoiceSettingsRows } = invoiceCompanyIds.length
+    ? await service.from('company_reminder_settings').select('company_id, invoice_reminder_enabled, invoice_due_soon_days, invoice_reminder_repeat_days, invoice_due_soon_message, invoice_overdue_message').in('company_id', invoiceCompanyIds)
+    : { data: [] }
+  const invoiceSettingsByCompany = new Map((invoiceSettingsRows ?? []).map(r => [r.company_id, r]))
 
   for (const invoice of dueInvoices ?? []) {
     const customer = invoice.customers as unknown as { name: string; email: string | null; phone: string | null } | null
     const company = invoice.companies as unknown as { name: string; email: string | null; phone: string | null; country: string | null; logo_url: string | null } | null
     if (!customer || !company) continue
+    const is = invoiceSettingsByCompany.get(invoice.company_id)
+    if (is?.invoice_reminder_enabled === false) continue
+    const dueSoonDays = is?.invoice_due_soon_days ?? 4
+    const repeatDays = is?.invoice_reminder_repeat_days ?? 6
+
     const daysFromDue = Math.floor((Date.now() - new Date(invoice.due_date as string).getTime()) / 86400000)
     const overdue = daysFromDue > 0
+    if (!shouldSendInvoiceReminder({ daysFromDue, dueSoonDays, lastReminderAt: invoice.last_reminder_at, repeatDays })) continue
     const amountDue = Number(invoice.total) - Number(invoice.amount_paid)
     if (amountDue <= 0.01) continue
     const viewUrl = `${appUrl}/i/${invoice.public_token}`
     const dueLabel = overdue ? `${daysFromDue} day${daysFromDue !== 1 ? 's' : ''} overdue` : daysFromDue === 0 ? 'due today' : `due in ${-daysFromDue} day${-daysFromDue !== 1 ? 's' : ''}`
+    const customMessage = overdue ? (is?.invoice_overdue_message ?? null) : (is?.invoice_due_soon_message ?? null)
     let delivered = false
 
     if (customer.email) {
       const { subject, html } = reminderEmailHtml({
         type: overdue ? 'invoice_overdue' : 'invoice_due_soon', companyName: company.name, customerName: customer.name,
         documentNumber: invoice.invoice_number, amountDue: `$${amountDue.toFixed(2)}`, daysOverdue: overdue ? daysFromDue : -daysFromDue, viewUrl, logoUrl: company.logo_url,
+        customMessage,
       })
       const r = await sendEmail({ to: customer.email, subject, html, replyTo: company.email ?? undefined })
+      await logEvent(service, { companyId: invoice.company_id, customerId: invoice.customer_id, eventType: overdue ? 'invoice_overdue' : 'invoice_due_soon', channel: 'email', status: r.error ? 'failed' : 'sent', error: r.error })
       if (r.error) errors.push(`Invoice ${invoice.invoice_number} email: ${r.error}`)
-      else { delivered = true; sent.push(`Invoice ${invoice.invoice_number} email (${dueLabel})`) }
+      else {
+        delivered = true; sent.push(`Invoice ${invoice.invoice_number} email (${dueLabel})`)
+        await logCommunication(service, { companyId: invoice.company_id, customerId: invoice.customer_id, channel: 'email', subject, summary: `Reminder sent to ${customer.email} (${dueLabel})`, relatedType: 'invoice', relatedId: invoice.id })
+      }
     }
     if (customer.phone) {
+      const dark = !smsConfigured()
       const r = await sendSms({
         to: customer.phone, country: (company.country as 'NZ' | 'AU') ?? 'NZ',
-        body: `Hi ${customer.name.split(' ')[0]}, invoice ${invoice.invoice_number} from ${company.name} ($${amountDue.toFixed(2)}) is ${dueLabel}. View & pay: ${viewUrl}`,
+        body: customMessage?.trim() || `Hi ${customer.name.split(' ')[0]}, invoice ${invoice.invoice_number} from ${company.name} ($${amountDue.toFixed(2)}) is ${dueLabel}. View & pay: ${viewUrl}`,
         companyId: invoice.company_id,
         relatedType: 'invoice_reminder',
         relatedId: invoice.id,
       })
-      if (r.error && r.error !== 'SMS service not configured' && !isSmsBillingDisabledError(r.error)) errors.push(`Invoice ${invoice.invoice_number} sms: ${r.error}`)
-      else if (!r.error) { delivered = true; sent.push(`Invoice ${invoice.invoice_number} sms (${dueLabel})`) }
+      const billingOff = !dark && r.error ? isSmsBillingDisabledError(r.error) : false
+      await logEvent(service, {
+        companyId: invoice.company_id, customerId: invoice.customer_id, eventType: overdue ? 'invoice_overdue' : 'invoice_due_soon', channel: 'sms',
+        status: dark ? 'skipped_sms_dark' : billingOff ? 'skipped_sms_billing_off' : r.error ? 'failed' : 'sent',
+        error: dark || billingOff ? null : r.error,
+      })
+      if (r.error && !dark && !billingOff) errors.push(`Invoice ${invoice.invoice_number} sms: ${r.error}`)
+      else if (!r.error) {
+        delivered = true; sent.push(`Invoice ${invoice.invoice_number} sms (${dueLabel})`)
+        await logCommunication(service, { companyId: invoice.company_id, customerId: invoice.customer_id, channel: 'sms', subject: `Invoice reminder`, summary: `Reminder SMS sent (${dueLabel})`, relatedType: 'invoice', relatedId: invoice.id })
+      }
     }
     if (delivered || overdue) {
       await service.from('invoices').update({

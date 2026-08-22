@@ -23,25 +23,45 @@ import { MfaSection } from '@/components/settings/mfa-section'
 import { GetPaidCard } from '@/components/settings/get-paid-card'
 import { TIMEZONES } from '@/lib/datetime'
 
+type ReminderSettings = {
+  quote_followup_enabled: boolean
+  quote_followup_delay_days: number
+  quote_followup_repeat_days: number
+  quote_followup_message: string | null
+  invoice_reminder_enabled: boolean
+  invoice_due_soon_days: number
+  invoice_reminder_repeat_days: number
+  invoice_due_soon_message: string | null
+  invoice_overdue_message: string | null
+} | null
+
+const DEFAULT_REMINDER_SETTINGS: NonNullable<ReminderSettings> = {
+  quote_followup_enabled: true, quote_followup_delay_days: 3, quote_followup_repeat_days: 7, quote_followup_message: null,
+  invoice_reminder_enabled: true, invoice_due_soon_days: 4, invoice_reminder_repeat_days: 6, invoice_due_soon_message: null, invoice_overdue_message: null,
+}
+
 interface Props {
   profile: Profile & { companies: Company }
   company: Company
   team: Profile[]
   googleConnected: boolean
   referredFriends: { companyName: string; monthsEarned: number }[]
+  reminderSettings: ReminderSettings
 }
 
-export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected, referredFriends }: Props) {
+export function SettingsClient({ profile, company, team: initialTeam, googleConnected: initialGoogleConnected, referredFriends, reminderSettings: initialReminderSettings }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
   const mfaRequired = searchParams.get('mfa_required') === '1'
   const requestedTab = searchParams.get('tab')
-  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'referrals', 'developer', 'help'].includes(requestedTab)
-    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help'
+  const initialTab = requestedTab && ['business', 'workflow', 'team', 'profile', 'integrations', 'subscription', 'referrals', 'developer', 'help', 'reminders'].includes(requestedTab)
+    ? requestedTab as 'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help' | 'reminders'
     : 'business'
   const { toast } = useToast()
-  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help'>(mfaRequired ? 'profile' : initialTab)
+  const [tab, setTab] = useState<'business' | 'workflow' | 'team' | 'profile' | 'integrations' | 'subscription' | 'referrals' | 'developer' | 'help' | 'reminders'>(mfaRequired ? 'profile' : initialTab)
+  const [reminderForm, setReminderForm] = useState<NonNullable<ReminderSettings>>(initialReminderSettings ?? DEFAULT_REMINDER_SETTINGS)
+  const [reminderSaving, setReminderSaving] = useState(false)
   const [testMode, setTestMode] = useState<boolean>(!!(company as Company & { test_mode?: boolean }).test_mode)
   const [testToggling, setTestToggling] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -229,6 +249,14 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
     else toast('Default stages saved')
   }
 
+  async function saveReminderSettings() {
+    setReminderSaving(true)
+    const { error } = await supabase.from('company_reminder_settings').upsert({ company_id: company.id, ...reminderForm }, { onConflict: 'company_id' })
+    setReminderSaving(false)
+    if (error) toast(error.message, 'error')
+    else toast('Reminder settings saved')
+  }
+
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -388,6 +416,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
         {([
           { key: 'business',     label: 'Business' },
           { key: 'workflow',     label: 'Workflow' },
+          { key: 'reminders',    label: 'Reminders' },
           { key: 'team',         label: 'Team' },
           { key: 'profile',      label: 'My profile' },
           { key: 'integrations', label: 'Integrations' },
@@ -404,6 +433,7 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
       <p className="text-xs text-gray-500 mb-6">
         {tab === 'business'     && 'Your business name, logo, branding and document defaults.'}
         {tab === 'workflow'     && 'Customise the lists and rates that drive jobs, quotes and invoices.'}
+        {tab === 'reminders'    && 'When automated quote follow-ups and invoice payment reminders go out, and what they say.'}
         {tab === 'team'         && 'Invite people, set their rate, and control what they can see.'}
         {tab === 'profile'      && 'Your personal details, signature and trade qualifications.'}
         {tab === 'integrations' && 'Connect external services — accounting, calendar and data import.'}
@@ -1040,6 +1070,89 @@ export function SettingsClient({ profile, company, team: initialTeam, googleConn
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {tab === 'reminders' && (
+        <div className="space-y-4 max-w-2xl">
+          <Card>
+            <CardHeader><CardTitle>Quote follow-ups</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={reminderForm.quote_followup_enabled} onChange={e => setReminderForm(f => ({ ...f, quote_followup_enabled: e.target.checked }))} />
+                Automatically follow up on sent quotes that haven&apos;t been viewed or accepted
+              </label>
+              {reminderForm.quote_followup_enabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>First follow-up (days after sending)</Label>
+                      <Input type="number" min={1} max={30} value={reminderForm.quote_followup_delay_days} onChange={e => setReminderForm(f => ({ ...f, quote_followup_delay_days: parseInt(e.target.value) || 1 }))} />
+                    </div>
+                    <div>
+                      <Label>Repeat every (days)</Label>
+                      <Input type="number" min={1} max={30} value={reminderForm.quote_followup_repeat_days} onChange={e => setReminderForm(f => ({ ...f, quote_followup_repeat_days: parseInt(e.target.value) || 1 }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Message (used for both email and SMS)</Label>
+                    <Textarea
+                      value={reminderForm.quote_followup_message ?? ''}
+                      onChange={e => setReminderForm(f => ({ ...f, quote_followup_message: e.target.value }))}
+                      rows={2}
+                      placeholder="We wanted to follow up on the quote we sent you recently. Please let us know if you have any questions or would like to proceed."
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Leave blank to use the default wording above. The quote link is always included.</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Invoice payment reminders</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={reminderForm.invoice_reminder_enabled} onChange={e => setReminderForm(f => ({ ...f, invoice_reminder_enabled: e.target.checked }))} />
+                Automatically remind customers about unpaid invoices, before and after the due date
+              </label>
+              {reminderForm.invoice_reminder_enabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Start reminding (days before due date)</Label>
+                      <Input type="number" min={0} max={14} value={reminderForm.invoice_due_soon_days} onChange={e => setReminderForm(f => ({ ...f, invoice_due_soon_days: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <Label>Repeat every (days)</Label>
+                      <Input type="number" min={1} max={30} value={reminderForm.invoice_reminder_repeat_days} onChange={e => setReminderForm(f => ({ ...f, invoice_reminder_repeat_days: parseInt(e.target.value) || 1 }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Before due date message</Label>
+                    <Textarea
+                      value={reminderForm.invoice_due_soon_message ?? ''}
+                      onChange={e => setReminderForm(f => ({ ...f, invoice_due_soon_message: e.target.value }))}
+                      rows={2}
+                      placeholder="Invoice [number] for [amount] is due soon. You can pay online any time using the link below."
+                    />
+                  </div>
+                  <div>
+                    <Label>Overdue message</Label>
+                    <Textarea
+                      value={reminderForm.invoice_overdue_message ?? ''}
+                      onChange={e => setReminderForm(f => ({ ...f, invoice_overdue_message: e.target.value }))}
+                      rows={2}
+                      placeholder="Invoice [number] for [amount] is now overdue. Please arrange payment at your earliest convenience."
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Leave either blank to use the default wording above. The invoice link is always included.</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Button onClick={saveReminderSettings} loading={reminderSaving}>Save reminder settings</Button>
         </div>
       )}
 

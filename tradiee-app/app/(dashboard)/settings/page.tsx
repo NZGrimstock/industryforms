@@ -17,6 +17,11 @@ export default async function SettingsPage() {
     .select('referred_company_id, month_number, companies!referred_company_id(name)')
     .eq('company_id', profile!.company_id)
     .order('month_number')
+  const { data: reminderSettings } = await supabase
+    .from('company_reminder_settings')
+    .select('*')
+    .eq('company_id', profile!.company_id)
+    .maybeSingle()
 
   const company = (profile as unknown as { companies: import('@/lib/types').Company })?.companies
   const typedProfile = profile as unknown as import('@/lib/types').Profile & { companies: import('@/lib/types').Company }
@@ -39,6 +44,7 @@ export default async function SettingsPage() {
         team={team ?? []}
         googleConnected={googleConnected}
         referredFriends={[...referredFriends.values()]}
+        reminderSettings={reminderSettings ?? null}
       />
     </>
   )
