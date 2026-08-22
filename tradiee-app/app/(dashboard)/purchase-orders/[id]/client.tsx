@@ -7,10 +7,11 @@ import { useToast } from '@/components/ui/toast'
 import { Send, PackageCheck, XCircle, Trash2, Mail, FileMinus } from 'lucide-react'
 
 interface Props {
-  po: { id: string; status: string; supplier_email: string | null; supplier_phone: string | null; job_id: string | null }
+  po: { id: string; po_number: string; status: string; supplier_email: string | null; supplier_phone: string | null; job_id: string | null }
+  supplierName: string
 }
 
-export function PurchaseOrderActions({ po }: Props) {
+export function PurchaseOrderActions({ po, supplierName }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
@@ -19,8 +20,20 @@ export function PurchaseOrderActions({ po }: Props) {
   async function setStatus(status: string, extra: Record<string, unknown> = {}, msg = 'Updated') {
     setLoading(status)
     const { error } = await supabase.from('purchase_orders').update({ status, ...extra }).eq('id', po.id)
-    if (error) toast(error.message, 'error')
-    else { toast(msg); router.refresh() }
+    if (error) { toast(error.message, 'error'); setLoading(''); return }
+    // Materials arriving is exactly what the job's Messages thread is for
+    // ("Between you and the workers on this job") — the crew on site should
+    // know supplies have turned up without having to check Purchase Orders.
+    if (status === 'received' && po.job_id) {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('job_notes').insert({
+        job_id: po.job_id,
+        author_id: user?.id ?? null,
+        kind: 'message',
+        body: `📦 Materials received: ${po.po_number} from ${supplierName}`,
+      })
+    }
+    toast(msg); router.refresh()
     setLoading('')
   }
 

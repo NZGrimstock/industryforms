@@ -363,6 +363,80 @@ Optional next steps flagged during recent sessions; none are in-progress:
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
 
+## Session 2026-08-22, pt.2 (Claude) — Production push, disconnected-feature fixes, full-workflow QA sweep
+
+Continuation of the same-day session below. Three pieces:
+
+**Pushed to production**: the job↔project/plans-modal/subcontractor-bridge
+work from pt.1 (commit `5070a06`) — pushed to `main`, Vercel auto-deployed
+(`industryforms-h4lilrice-...`, confirmed `Ready`), and
+`20260822100000_subcontractor_cost_bridge.sql` applied to production
+Postgres via `supabase db push --linked`.
+
+**Fixed both disconnected features the pt.1 audit found**:
+- `bookable_packages`: added a package edit panel (buffers, deposit
+  amount/percent, auto-confirm, creates-job, creates-invoice, re-book
+  interval) to `bookings/client.tsx` — these fields were previously
+  DB-writable but had no UI, so every package silently ran with defaults
+  regardless of what the business wanted. Also dropped `public_slug` and
+  `category` (`20260822110000_bookable_packages_cleanup.sql`) — genuinely
+  zero consumers anywhere, confirmed by grep; the public booking route uses
+  `packageId`, never a slug.
+- `automation_events`: added an "Activity" tab to the Bookings page showing
+  the last 100 events (booking confirmations, reminders, win-back, review
+  requests) with channel/status/error — previously logged but never
+  displayed anywhere.
+
+**Full end-to-end workflow QA sweep**, live against a real signed-up test
+company (not fabricated via REST — went through the actual signup form to
+get real seeded defaults): quote → accept-to-job → project attach →
+materials (fill-from-quote and manual add) → job note → purchase order
+→ supplier → price list item → mark sent/received → invoice (from quote
+and from actuals) → two-part payment to fully paid → statements (AR
+aging) → website (hero/about/services, published) → booking package
+(edited via the new UI) → public site booking widget (real slot hold →
+customer/job auto-created → confirmed) → job completed → job auto-locked
+once fully invoiced. All of it worked. Two real things found and fixed
+along the way:
+
+1. **Customer creation blocked on email/phone/billing address** even
+   though all three are nullable columns — `components/forms/customer-form.tsx`
+   hard-required them client-side for no documented reason, and
+   billing_address's AddressAutocomplete depends on an external geocoding
+   service that could legitimately be down. Relaxed to name-only required,
+   matching the schema. Real friction hit live during testing, not
+   theoretical.
+2. **Marking a linked PO "received" gave no signal to the job's crew** —
+   `purchase-orders/[id]/client.tsx`'s `setStatus('received', ...)` just
+   flipped a status column. Now also posts a job message ("📦 Materials
+   received: PO-XXXX from Supplier") to the job's Messages thread when the
+   PO is linked to a job — the crew finds out without checking Purchase
+   Orders. This is the "notify receipt of goods for job" step the user
+   explicitly asked to be tested; it didn't exist before this session.
+
+**Not verified live**: photo/plan-image upload and supplier-invoice-PDF
+import all need a real OS file picker, which this session's browser
+automation tooling (Claude_Browser MCP) cannot drive — no dedicated
+file-upload action, and `<input type=file>.files` can't be set from page
+JS for security reasons. Code-reviewed instead of live-tested. If this
+matters, it needs a session with file-upload-capable browser tooling.
+
+**Also found, not fixed** (flagged, not actioned — genuine separate
+follow-ups, not blockers): a full-repo `eslint` sweep surfaced 106
+pre-existing warnings (mostly `react-hooks/purity` / `set-state-in-effect`
+patterns) spread across ~15 files this session never touched — e.g.
+`components/layout/header.tsx:23` (`Date.now()` in render),
+`components/layout/global-search.tsx` (setState-in-effect ×2),
+`components/settings/mfa-section.tsx` (use-before-declare). None are new;
+all predate this session. A "Book a visit" website section (time-of-day
+preference form) creates an `enquiries` row, not a `bookings` row —
+confirmed this is a deliberate two-tier design (lightweight lead capture
+vs. the full slot-based `bookable_packages` widget at
+`/site/[slug]/book/[packageId]`), not a bug, but worth knowing they're not
+the same thing if a company enables deposit/auto-confirm on a package
+expecting the on-page section to honor it too — it won't, only the direct
+package link does.
+
 ## Session 2026-08-22 (Claude) — Job↔project attach, full-screen plan modal, subcontractor bill-through bridge (+ 4 real bugs found live-testing it)
 
 **Job ↔ project attachment**, both directions, both verified live: project

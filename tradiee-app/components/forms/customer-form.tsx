@@ -57,8 +57,15 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
   }
 
   async function doSave() {
-    if (!form.email.trim() || !form.phone.trim() || !form.billing_address.trim()) {
-      toast('Email, phone, and billing address are required', 'error')
+    // Only a name is actually needed to start a customer record — email,
+    // phone, and billing address are all nullable columns, and forcing them
+    // up front blocks a quick "just get the job started" flow (and makes
+    // billing_address's AddressAutocomplete, which depends on an external
+    // geocoding service, a hard blocker if that service is ever down).
+    // They're still collected here because most customers do want billing
+    // done properly, just not required.
+    if (!form.name.trim()) {
+      toast('Enter the customer’s name', 'error')
       setLoading(false)
       return
     }
@@ -178,12 +185,12 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>Email <span className="text-red-400">*</span></Label>
-            <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} required />
+            <Label>Email</Label>
+            <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} />
           </div>
           <div>
-            <Label>Phone <span className="text-red-400">*</span></Label>
-            <Input value={form.phone} onChange={e => set('phone', e.target.value)} required />
+            <Label>Phone</Label>
+            <Input value={form.phone} onChange={e => set('phone', e.target.value)} />
           </div>
         </div>
         {pricingGroups.length > 0 && (
@@ -200,8 +207,8 @@ export function CustomerForm({ companyId, customer, pricingGroups = [], onSucces
           </div>
         )}
         <div>
-          <Label>Billing address <span className="text-red-400">*</span></Label>
-          <AddressAutocomplete value={form.billing_address} onChange={v => set('billing_address', v)} placeholder="Start typing an address…" required />
+          <Label>Billing address</Label>
+          <AddressAutocomplete value={form.billing_address} onChange={v => set('billing_address', v)} placeholder="Start typing an address…" />
           {form.billing_address.trim() && (
             <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
               <input type="checkbox" checked={addAsJobSite} onChange={e => setAddAsJobSite(e.target.checked)} className="rounded" />

@@ -2,13 +2,21 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { hoursUntil } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Trash2, Package, Clock, Ban, CalendarCheck } from 'lucide-react'
+import { Plus, Trash2, Package, Clock, Ban, CalendarCheck, Pencil, Mail, MessageSquare } from 'lucide-react'
 
 type BookablePackage = {
   id: string; name: string; description: string | null; duration_minutes: number
   buffer_before_minutes: number; buffer_after_minutes: number; price: number
-  requires_deposit: boolean; is_active: boolean; kit_id: string | null; price_list_item_id: string | null
+  deposit_amount: number | null; deposit_percent: number | null; requires_deposit: boolean
+  auto_confirm: boolean; creates_job: boolean; creates_invoice: boolean; recurring_interval_months: number | null
+  is_active: boolean; kit_id: string | null; price_list_item_id: string | null
+}
+type PackageEditForm = {
+  buffer_before_minutes: string; buffer_after_minutes: string
+  requires_deposit: boolean; deposit_amount: string; deposit_percent: string
+  auto_confirm: boolean; creates_job: boolean; creates_invoice: boolean; recurring_interval_months: string
 }
 type BookingSettings = { timezone: string; min_notice_hours: number; max_days_ahead: number; slot_interval_minutes: number } | null
 type AvailabilityRule = { id: string; day_of_week: number; starts_at: string; ends_at: string; profile_id: string | null }
@@ -19,6 +27,10 @@ type Booking = {
   deposit_required: number; deposit_paid: number; deposit_refunded: number; stripe_payment_intent_id: string | null
   bookable_packages: { name: string } | null
 }
+type AutomationEvent = {
+  id: string; event_type: string; channel: string; status: string; error: string | null
+  sent_at: string | null; created_at: string; customers: { name: string } | null
+}
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const inputCls = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
@@ -26,7 +38,7 @@ const REFUND_WINDOW_HOURS = 24
 
 export function BookingsClient({
   companyId, entitled, packages: initialPackages, settings: initialSettings, rules: initialRules,
-  blackouts: initialBlackouts, kits, priceItems, bookings: initialBookings, websiteSlug,
+  blackouts: initialBlackouts, kits, priceItems, bookings: initialBookings, websiteSlug, automationEvents,
 }: {
   companyId: string
   entitled: boolean
@@ -38,11 +50,12 @@ export function BookingsClient({
   priceItems: { id: string; name: string }[]
   bookings: Booking[]
   websiteSlug: string | null
+  automationEvents: AutomationEvent[]
 }) {
   const supabase = createClient()
   const router = useRouter()
   const { toast } = useToast()
-  const [tab, setTab] = useState<'requests' | 'packages' | 'hours' | 'blackouts'>('requests')
+  const [tab, setTab] = useState<'requests' | 'packages' | 'hours' | 'blackouts' | 'activity'>('requests')
   const [bookings, setBookings] = useState(initialBookings)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [packages, setPackages] = useState(initialPackages)
@@ -51,6 +64,8 @@ export function BookingsClient({
   const [settings, setSettings] = useState<BookingSettings>(initialSettings ?? { timezone: 'Pacific/Auckland', min_notice_hours: 12, max_days_ahead: 45, slot_interval_minutes: 30 })
   const [showNewPackage, setShowNewPackage] = useState(false)
   const [newPkg, setNewPkg] = useState({ name: '', duration_minutes: '60', price: '0', kit_id: '', price_list_item_id: '' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<PackageEditForm | null>(null)
   const [showNewBlackout, setShowNewBlackout] = useState(false)
   const [newBlackout, setNewBlackout] = useState({ starts_at: '', ends_at: '', reason: '' })
   const [saving, setSaving] = useState(false)
@@ -104,6 +119,44 @@ export function BookingsClient({
     const { error } = await supabase.from('bookable_packages').update({ is_active: !pkg.is_active }).eq('id', pkg.id)
     if (error) { toast(error.message, 'error'); return }
     setPackages(p => p.map(x => x.id === pkg.id ? { ...x, is_active: !x.is_active } : x))
+  }
+
+  function startEditPackage(pkg: BookablePackage) {
+    setEditingId(pkg.id)
+    setEditForm({
+      buffer_before_minutes: String(pkg.buffer_before_minutes),
+      buffer_after_minutes: String(pkg.buffer_after_minutes),
+      requires_deposit: pkg.requires_deposit,
+      deposit_amount: pkg.deposit_amount != null ? String(pkg.deposit_amount) : '',
+      deposit_percent: pkg.deposit_percent != null ? String(pkg.deposit_percent) : '',
+      auto_confirm: pkg.auto_confirm,
+      creates_job: pkg.creates_job,
+      creates_invoice: pkg.creates_invoice,
+      recurring_interval_months: pkg.recurring_interval_months != null ? String(pkg.recurring_interval_months) : '',
+    })
+  }
+
+  async function saveEditPackage(id: string) {
+    if (!editForm) return
+    const patch = {
+      buffer_before_minutes: parseInt(editForm.buffer_before_minutes) || 0,
+      buffer_after_minutes: parseInt(editForm.buffer_after_minutes) || 0,
+      requires_deposit: editForm.requires_deposit,
+      deposit_amount: editForm.deposit_amount.trim() ? parseFloat(editForm.deposit_amount) : null,
+      deposit_percent: editForm.deposit_percent.trim() ? parseFloat(editForm.deposit_percent) : null,
+      auto_confirm: editForm.auto_confirm,
+      creates_job: editForm.creates_job,
+      creates_invoice: editForm.creates_invoice,
+      recurring_interval_months: editForm.recurring_interval_months.trim() ? parseInt(editForm.recurring_interval_months) : null,
+    }
+    setSaving(true)
+    const { error } = await supabase.from('bookable_packages').update(patch).eq('id', id)
+    setSaving(false)
+    if (error) { toast(error.message, 'error'); return }
+    setPackages(p => p.map(x => x.id === id ? { ...x, ...patch } : x))
+    setEditingId(null)
+    setEditForm(null)
+    toast('Package updated')
   }
 
   async function deletePackage(id: string) {
@@ -192,7 +245,7 @@ export function BookingsClient({
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
-        {(['requests', 'packages', 'hours', 'blackouts'] as const).map(t => (
+        {(['requests', 'packages', 'hours', 'blackouts', 'activity'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize ${tab === t ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             {t}
           </button>
@@ -209,7 +262,7 @@ export function BookingsClient({
           )}
           {bookings.map(b => {
             const refundable = Number(b.deposit_paid) - Number(b.deposit_refunded)
-            const hoursBeforeStart = (new Date(b.starts_at).getTime() - Date.now()) / 3600000
+            const hoursBeforeStart = hoursUntil(b.starts_at)
             const canRefund = refundable > 0 && ['cancelled', 'no_show'].includes(b.status) && b.status !== 'no_show' && hoursBeforeStart >= REFUND_WINDOW_HOURS
             return (
               <div key={b.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
@@ -269,6 +322,13 @@ export function BookingsClient({
                     {!pkg.is_active && <span className="text-[10px] font-semibold uppercase text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">Inactive</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">{pkg.duration_minutes} min · ${Number(pkg.price).toFixed(2)}</p>
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {pkg.requires_deposit && <span className="text-[10px] font-medium text-amber-700 bg-amber-50 rounded-full px-2 py-0.5">Deposit required</span>}
+                    {pkg.auto_confirm && <span className="text-[10px] font-medium text-green-700 bg-green-50 rounded-full px-2 py-0.5">Auto-confirm</span>}
+                    {pkg.creates_job && <span className="text-[10px] font-medium text-sky-700 bg-sky-50 rounded-full px-2 py-0.5">Creates job</span>}
+                    {pkg.creates_invoice && <span className="text-[10px] font-medium text-sky-700 bg-sky-50 rounded-full px-2 py-0.5">Auto-invoices on completion</span>}
+                    {pkg.recurring_interval_months && <span className="text-[10px] font-medium text-purple-700 bg-purple-50 rounded-full px-2 py-0.5">Re-book every {pkg.recurring_interval_months}mo</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   {websiteSlug && pkg.is_active && (
@@ -286,12 +346,69 @@ export function BookingsClient({
                       >{embedId === pkg.id ? 'Hide embed' : 'Embed'}</button>
                     </>
                   )}
+                  <button onClick={() => editingId === pkg.id ? (setEditingId(null), setEditForm(null)) : startEditPackage(pkg)} className="text-xs font-medium text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
+                    <Pencil className="h-3 w-3" /> {editingId === pkg.id ? 'Close' : 'Edit'}
+                  </button>
                   <button onClick={() => togglePackageActive(pkg)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
                     {pkg.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button onClick={() => deletePackage(pkg.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
+
+              {editingId === pkg.id && editForm && (
+                <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Buffer before (min)</label>
+                      <input type="number" value={editForm.buffer_before_minutes} onChange={e => setEditForm(f => f && ({ ...f, buffer_before_minutes: e.target.value }))} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Buffer after (min)</label>
+                      <input type="number" value={editForm.buffer_after_minutes} onChange={e => setEditForm(f => f && ({ ...f, buffer_after_minutes: e.target.value }))} className={inputCls} />
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={editForm.requires_deposit} onChange={e => setEditForm(f => f && ({ ...f, requires_deposit: e.target.checked }))} />
+                    Requires a deposit to confirm
+                  </label>
+                  {editForm.requires_deposit && (
+                    <div className="grid grid-cols-2 gap-3 pl-6">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Fixed amount ($)</label>
+                        <input type="number" step="0.01" value={editForm.deposit_amount} onChange={e => setEditForm(f => f && ({ ...f, deposit_amount: e.target.value }))} placeholder="Optional" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Or % of price</label>
+                        <input type="number" step="1" value={editForm.deposit_percent} onChange={e => setEditForm(f => f && ({ ...f, deposit_percent: e.target.value }))} placeholder="Optional" className={inputCls} />
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={editForm.auto_confirm} onChange={e => setEditForm(f => f && ({ ...f, auto_confirm: e.target.checked }))} />
+                    Auto-confirm bookings (skip manual approval, unless a deposit is required)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={editForm.creates_job} onChange={e => setEditForm(f => f && ({ ...f, creates_job: e.target.checked }))} />
+                    Create a job automatically when confirmed
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={editForm.creates_invoice} onChange={e => setEditForm(f => f && ({ ...f, creates_invoice: e.target.checked }))} />
+                    Auto-draft an invoice once the job is completed
+                  </label>
+                  <div className="max-w-[12rem]">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Re-book reminder every (months)</label>
+                    <input type="number" value={editForm.recurring_interval_months} onChange={e => setEditForm(f => f && ({ ...f, recurring_interval_months: e.target.value }))} placeholder="Optional, e.g. 6" className={inputCls} />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={() => saveEditPackage(pkg.id)} disabled={saving} className="rounded-lg bg-[var(--accent,#f97316)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save</button>
+                    <button onClick={() => { setEditingId(null); setEditForm(null) }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600">Cancel</button>
+                  </div>
+                </div>
+              )}
 
               {embedId === pkg.id && websiteSlug && (
                 <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3 space-y-2">
@@ -439,6 +556,36 @@ export function BookingsClient({
               <Plus className="h-4 w-4" /> Add blackout period
             </button>
           )}
+        </div>
+      )}
+
+      {tab === 'activity' && (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400">What&apos;s actually gone out — booking confirmations, reminders, win-back messages, review requests. Most recent 100.</p>
+          {automationEvents.length === 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
+              Nothing sent yet.
+            </div>
+          )}
+          {automationEvents.map(ev => {
+            const statusStyle = ev.status === 'sent' ? 'bg-green-100 text-green-700'
+              : ev.status === 'failed' ? 'bg-red-100 text-red-700'
+              : ev.status.startsWith('skipped') ? 'bg-gray-100 text-gray-500'
+              : 'bg-amber-100 text-amber-700'
+            return (
+              <div key={ev.id} className="rounded-xl border border-gray-200 bg-white p-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  {ev.channel === 'sms' ? <MessageSquare className="h-4 w-4 text-gray-400 shrink-0" /> : <Mail className="h-4 w-4 text-gray-400 shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-900 truncate">{ev.event_type.replace(/_/g, ' ')}{ev.customers?.name && ` — ${ev.customers.name}`}</p>
+                    <p className="text-xs text-gray-400">{new Date(ev.created_at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                    {ev.error && <p className="text-xs text-red-500 mt-0.5 truncate" title={ev.error}>{ev.error}</p>}
+                  </div>
+                </div>
+                <span className={`text-[10px] font-semibold uppercase rounded-full px-2 py-0.5 shrink-0 ${statusStyle}`}>{ev.status.replace(/_/g, ' ')}</span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

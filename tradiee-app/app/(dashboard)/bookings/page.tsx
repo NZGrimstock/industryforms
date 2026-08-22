@@ -19,7 +19,7 @@ export default async function BookingsSettingsPage() {
   const company = profile?.companies as unknown as { addons: Record<string, { active?: boolean }> | null; billing_exempt: boolean | null } | null
   const entitled = hasAddon(isSuperAdmin, company, 'bookings_website')
 
-  const [packagesRes, settingsRes, rulesRes, blackoutsRes, kitsRes, priceItemsRes, bookingsRes, websiteRes] = await Promise.all([
+  const [packagesRes, settingsRes, rulesRes, blackoutsRes, kitsRes, priceItemsRes, bookingsRes, websiteRes, automationEventsRes] = await Promise.all([
     supabase.from('bookable_packages').select('*').eq('company_id', profile!.company_id).order('sort_order'),
     supabase.from('booking_settings').select('*').eq('company_id', profile!.company_id).maybeSingle(),
     supabase.from('booking_availability_rules').select('*').eq('company_id', profile!.company_id).order('day_of_week'),
@@ -29,6 +29,8 @@ export default async function BookingsSettingsPage() {
     supabase.from('bookings').select('id, status, customer_name, customer_email, customer_phone, site_address, notes, starts_at, ends_at, deposit_required, deposit_paid, deposit_refunded, stripe_payment_intent_id, bookable_packages(name)')
       .eq('company_id', profile!.company_id).neq('status', 'slot_held').order('starts_at', { ascending: false }).limit(100),
     supabase.from('company_websites').select('slug').eq('company_id', profile!.company_id).maybeSingle(),
+    supabase.from('automation_events').select('id, event_type, channel, status, error, sent_at, created_at, customers(name)')
+      .eq('company_id', profile!.company_id).order('created_at', { ascending: false }).limit(100),
   ])
 
   return (
@@ -45,6 +47,7 @@ export default async function BookingsSettingsPage() {
         priceItems={priceItemsRes.data ?? []}
         bookings={(bookingsRes.data ?? []) as never}
         websiteSlug={websiteRes.data?.slug ?? null}
+        automationEvents={(automationEventsRes.data ?? []) as never}
       />
     </>
   )

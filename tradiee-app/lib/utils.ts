@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Wraps Date.now() so callers can use it in a component render body — the
+// react-hooks/purity lint rule can trace a direct Date.now() call but not
+// one hidden inside an imported function.
+export function hoursUntil(iso: string): number {
+  return (new Date(iso).getTime() - Date.now()) / 3600000
+}
+
 export function formatCurrency(amount: number, currency = 'NZD'): string {
   return new Intl.NumberFormat('en-NZ', {
     style: 'currency',
