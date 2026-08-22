@@ -1,4 +1,8 @@
-'use client'
+// Server-safe: rendered via renderToBuffer() in app/api/invoices/[id]/pdf/route.ts
+// AND client-side (react-pdf's own renderer, not React DOM) via print-invoice.tsx's
+// pdf(<InvoicePdf/>) — same trap as statement-pdf.tsx guards against: a 'use client'
+// directive here makes Next.js hand the server route a client-reference proxy
+// instead of the real component, crashing renderToBuffer() with a null props read.
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
 

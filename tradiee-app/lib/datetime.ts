@@ -25,7 +25,10 @@ export function formatTime(date: Date | string | number, timeZone: string, optio
 }
 
 export function formatDateTime(date: Date | string | number, timeZone: string, options?: Intl.DateTimeFormatOptions) {
-  return new Date(date).toLocaleString('en-NZ', { timeZone, hour: '2-digit', minute: '2-digit', ...options })
+  // hour/minute can't be combined with dateStyle/timeStyle (Intl throws) — only
+  // apply the hour/minute default when the caller isn't already using style shorthand.
+  const defaults = options?.dateStyle || options?.timeStyle ? {} : { hour: '2-digit' as const, minute: '2-digit' as const }
+  return new Date(date).toLocaleString('en-NZ', { timeZone, ...defaults, ...options })
 }
 
 // Rolls a YYYY-MM-DD date forward by a recurrence interval. Shared by
