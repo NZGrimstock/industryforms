@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendEmail, reminderEmailHtml, invoiceEmailHtml, brandedEmailHtml } from '@/lib/email'
+import { sendEmail, reminderEmailHtml, invoiceEmailHtml, brandedEmailHtml, welcomeDripEmailHtml } from '@/lib/email'
+import { eligibleWelcomeDripStages } from '@/lib/welcome-drip'
 import { isSmsBillingDisabledError, retryFailedSmsMeterEvents, sendSms, smsConfigured, toE164 } from '@/lib/sms'
 import { nextDocNumber } from '@/lib/numbering'
 import { notify, logEvent } from '@/lib/notify'
@@ -47,6 +48,52 @@ async function runReminders() {
     errors.push(`Expired booking holds cleanup: ${reapHoldsError.message}`)
   } else if (reapedHolds?.length) {
     sent.push(`Expired booking holds cleaned ${reapedHolds.length}`)
+  }
+
+  // ── Trial welcome-email drip (day 7/14/21 + day-before-trial-end) ─────────
+  // Day 0 fires synchronously from app/api/auth/signup/route.ts, not here.
+  // At most one drip email per company per run — see eligibleWelcomeDripStages()
+  // for why sending the first not-yet-logged stage (not just the latest
+  // eligible one) matters.
+  const { data: trialingCompanies } = await service
+    .from('companies')
+    .select('id, name, created_at, trial_ends_at')
+    .eq('subscription_status', 'trialing')
+    .not('trial_ends_at', 'is', null)
+
+  if (trialingCompanies?.length) {
+    const trialingIds = trialingCompanies.map(c => c.id)
+    const { data: sentDripEvents } = await service
+      .from('automation_events')
+      .select('company_id, event_type')
+      .eq('status', 'sent')
+      .in('company_id', trialingIds)
+      .in('event_type', ['welcome_day7', 'welcome_day14', 'welcome_day21', 'welcome_trial_ending'])
+    const sentByCompany = new Map<string, Set<string>>()
+    for (const e of sentDripEvents ?? []) {
+      if (!sentByCompany.has(e.company_id)) sentByCompany.set(e.company_id, new Set())
+      sentByCompany.get(e.company_id)!.add(e.event_type)
+    }
+
+    for (const co of trialingCompanies) {
+      const daysSinceSignup = Math.floor((Date.now() - new Date(co.created_at).getTime()) / 86400000)
+      const daysUntilTrialEnd = Math.ceil((new Date(co.trial_ends_at as string).getTime() - Date.now()) / 86400000)
+      const eligible = eligibleWelcomeDripStages({ daysSinceSignup, daysUntilTrialEnd })
+      const alreadySent = sentByCompany.get(co.id) ?? new Set()
+      const stage = eligible.find(s => !alreadySent.has(`welcome_${s}`))
+      if (!stage) continue
+
+      // companies.email isn't reliably set (see app/api/auth/invite/route.ts's
+      // note on the same gap) — the owner's own profile email is the real address.
+      const { data: owner } = await service.from('profiles').select('email, full_name').eq('company_id', co.id).eq('role', 'owner').not('email', 'is', null).limit(1).maybeSingle()
+      if (!owner?.email) continue
+
+      const { subject, html } = welcomeDripEmailHtml({ stage, recipientName: (owner.full_name ?? '').split(' ')[0] || 'there', appUrl, daysLeft: daysUntilTrialEnd })
+      const r = await sendEmail({ to: owner.email, subject, html })
+      await logEvent(service, { companyId: co.id, eventType: `welcome_${stage}`, channel: 'email', status: r.error ? 'failed' : 'sent', error: r.error })
+      if (r.error) errors.push(`Welcome drip ${stage} for ${co.name}: ${r.error}`)
+      else sent.push(`Welcome drip ${stage} for ${co.name}`)
+    }
   }
 
   // ── Quote follow-ups ─────────────────────────────────────────────────────

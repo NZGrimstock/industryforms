@@ -433,6 +433,130 @@ export function reminderEmailHtml({
   }
 }
 
+// Trial onboarding drip — sent FROM IndustryForms to the trial account owner
+// (not customer-facing, so it uses IndustryForms' own branding like
+// tapToPayLaunchEmailHtml below, not emailBrandHeader/brandedEmailHtml which
+// are for the trade company's own customer-facing documents). One send per
+// stage, driven by app/api/reminders/route.ts + lib/welcome-drip.ts.
+const FEEDBACK_MAILTO = "mailto:support@industryforms.app?subject=IndustryForms%20feedback&body=Tell%20us%20what%20you%20love%2C%20what%27s%20confusing%2C%20or%20what%20you%27d%20like%20to%20see%3A%0A%0A"
+
+function welcomeDripFooter() {
+  return `<p style="margin:0 0 6px;font-size:12px;color:#9ca3af">Powered by IndustryForms</p>
+      <p style="margin:0;font-size:12px;color:#9ca3af">Got feedback? <a href="${FEEDBACK_MAILTO}" style="color:#9ca3af;text-decoration:underline">Reply and tell us</a> — even one line helps.</p>`
+}
+
+function welcomeDripShell(appUrl: string, bodyHtml: string) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="max-width:560px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    <div style="background:#ffffff;padding:24px 32px;border-bottom:1px solid #e5e7eb">
+      <img src="${appUrl}/Logo.png" alt="IndustryForms" style="height:36px;max-width:200px;display:block" />
+    </div>
+    <div style="padding:32px">${bodyHtml}</div>
+    <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb">${welcomeDripFooter()}</div>
+  </div>
+</body>
+</html>`
+}
+
+function dripButton(href: string, label: string) {
+  return `<a href="${href}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px">${label}</a>`
+}
+
+export type WelcomeDripStage = 'day0' | 'day7' | 'day14' | 'day21' | 'trial_ending'
+
+export function welcomeDripEmailHtml({
+  stage, recipientName, appUrl, daysLeft,
+}: { stage: WelcomeDripStage; recipientName: string; appUrl: string; daysLeft?: number }) {
+  const greeting = `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${recipientName},</p>`
+  const helpLink = `${appUrl}/settings?tab=help`
+  const dashUrl = `${appUrl}/dashboard`
+  const subUrl = `${appUrl}/settings?tab=subscription`
+
+  if (stage === 'day0') {
+    return {
+      subject: 'Welcome to IndustryForms — here\'s where to start',
+      html: welcomeDripShell(appUrl, `
+        ${greeting}
+        <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">Your 28-day free trial has started</h1>
+        <p style="margin:0 0 20px;color:#6b7280;line-height:1.5">No credit card needed, and nothing to configure to get going. Here's the fastest path to a working setup:</p>
+        <ul style="margin:0 0 24px;padding:0 0 0 20px;color:#374151;line-height:1.9">
+          <li>Add your company logo and GST number (Settings)</li>
+          <li>Add your first customer</li>
+          <li>Create a quote or a job</li>
+          <li>Send an invoice</li>
+          <li>Invite a staff member, if you're not working solo</li>
+        </ul>
+        <div style="text-align:center;margin:0 0 20px">${dripButton(dashUrl, 'Open your dashboard →')}</div>
+        <p style="margin:0;color:#6b7280;line-height:1.5">Stuck on anything? <a href="${helpLink}" style="color:#f97316">Browse the setup guides</a> — or just reply to this email.</p>
+      `),
+    }
+  }
+
+  if (stage === 'day7') {
+    return {
+      subject: 'A week in — 3 things worth trying',
+      html: welcomeDripShell(appUrl, `
+        ${greeting}
+        <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">A few things people miss in week one</h1>
+        <p style="margin:0 0 20px;color:#6b7280;line-height:1.5">You've had a week to poke around — here are three features that save the most time once you find them:</p>
+        <ul style="margin:0 0 24px;padding:0 0 0 20px;color:#374151;line-height:1.9">
+          <li><strong>AI-drafted quotes</strong> — grounded in your actual price list, not invented numbers</li>
+          <li><strong>Offline mobile access</strong> — keep tracking time, notes and photos with no signal on site</li>
+          <li><strong>Online booking &amp; deposits</strong> — customers can book and pay a deposit from a link, no account needed</li>
+        </ul>
+        <div style="text-align:center;margin:0">${dripButton(dashUrl, 'Try it now →')}</div>
+      `),
+    }
+  }
+
+  if (stage === 'day14') {
+    return {
+      subject: 'Two weeks in — the advanced stuff',
+      html: welcomeDripShell(appUrl, `
+        ${greeting}
+        <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">Once the basics feel routine, try these</h1>
+        <p style="margin:0 0 20px;color:#6b7280;line-height:1.5">These take a couple of minutes to set up in Settings, then run themselves:</p>
+        <ul style="margin:0 0 24px;padding:0 0 0 20px;color:#374151;line-height:1.9">
+          <li><strong>Automated quote &amp; invoice reminders</strong> — configurable timing and wording, so you stop manually chasing</li>
+          <li><strong>Xero sync</strong> — invoices and payments flow straight through</li>
+          <li><strong>Bulk invoicing &amp; purchase orders</strong> — for when one-at-a-time stops scaling</li>
+          <li><strong>Timesheets &amp; the vehicle logbook</strong> — for accurate job costing and mileage claims</li>
+        </ul>
+        <div style="text-align:center;margin:0">${dripButton(`${appUrl}/settings`, 'Open Settings →')}</div>
+      `),
+    }
+  }
+
+  if (stage === 'day21') {
+    return {
+      subject: 'One week left on your trial — need a hand?',
+      html: welcomeDripShell(appUrl, `
+        ${greeting}
+        <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">You've got 7 days left on your trial</h1>
+        <p style="margin:0 0 20px;color:#6b7280;line-height:1.5">No pressure — just flagging it so it doesn't catch you out. If anything's unclear, or you're not sure IndustryForms fits how your business runs, reply to this email and we'll help directly, no ticket queue.</p>
+        <div style="text-align:center;margin:0 0 20px">${dripButton(dashUrl, 'Keep exploring →')}</div>
+        <p style="margin:0;color:#6b7280;line-height:1.5">Ready already? You can <a href="${subUrl}" style="color:#f97316">subscribe from Settings</a> any time before the trial ends.</p>
+      `),
+    }
+  }
+
+  // trial_ending
+  const endsLabel = daysLeft !== undefined && daysLeft <= 0 ? 'today' : 'tomorrow'
+  return {
+    subject: `Your trial ends ${endsLabel} — keep everything you've set up`,
+    html: welcomeDripShell(appUrl, `
+      ${greeting}
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">Your free trial ends ${endsLabel}</h1>
+      <p style="margin:0 0 20px;color:#6b7280;line-height:1.5">Nothing gets deleted — your account drops to our limited free plan (no job photos, a 50-item price list cap, and a few features switched off). Subscribe now to keep full access to everything you've already set up.</p>
+      <div style="text-align:center;margin:0 0 20px">${dripButton(subUrl, 'Subscribe now →')}</div>
+      <p style="margin:0;color:#6b7280;line-height:1.5">Questions about which plan fits? Just reply to this email.</p>
+    `),
+  }
+}
+
 // Tap to Pay on iPhone launch announcement — sent FROM IndustryForms to its own
 // merchant users (Apple App Review requirement 6.1: launch email on day one).
 //

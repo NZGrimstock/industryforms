@@ -4,6 +4,8 @@ import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from '@/lib/password'
 import { DEFAULT_JOB_STATUSES } from '@/lib/job-statuses'
 import { DEFAULT_COST_CATEGORIES } from '@/lib/cost-categories'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
+import { sendEmail, welcomeDripEmailHtml } from '@/lib/email'
+import { logEvent } from '@/lib/notify'
 
 // Tells the business admin console (admin.industryforms.co.nz) about a new trial signup
 // so sales/support can see and follow up with them well before day 28, when Stripe would
@@ -183,6 +185,17 @@ export async function POST(request: Request) {
         console.error('[signup] admin console notify failed (non-fatal):', err)
       )
     )
+
+    // Day-0 welcome email — day 7/14/21/trial-ending are handled by the daily
+    // cron (app/api/reminders/route.ts + lib/welcome-drip.ts); this one has no
+    // elapsed-time condition, it just needs to go out now, without blocking
+    // the signup response.
+    after(async () => {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      const { subject, html } = welcomeDripEmailHtml({ stage: 'day0', recipientName: fullName.split(' ')[0], appUrl })
+      const r = await sendEmail({ to: email, subject, html })
+      await logEvent(supabase, { companyId: company.id, eventType: 'welcome_day0', channel: 'email', status: r.error ? 'failed' : 'sent', error: r.error }).catch(() => null)
+    })
 
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
