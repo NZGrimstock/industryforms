@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Wrench } from 'lucide-react'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 export default async function CustomerPortalPage({
   params,
@@ -28,7 +29,7 @@ export default async function CustomerPortalPage({
   const [companyRes, customerRes, jobsRes, invoicesRes] = await Promise.all([
     supabase
       .from('companies')
-      .select('name, email, phone, logo_url')
+      .select('name, email, phone, logo_url, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until')
       .eq('id', company_id)
       .single(),
     supabase
@@ -58,6 +59,13 @@ export default async function CustomerPortalPage({
 
   if (!company || !customer) {
     return <ExpiredPage />
+  }
+  // The link was valid when sent, but the company may have since dropped to
+  // the free plan (customer portal is a paid-plan feature — see
+  // /api/portal/login and /api/portal/send-link, which stop issuing new
+  // links, but an already-delivered link/email is out of our control).
+  if (effectivePlanKey(company as unknown as BillingCompany) === 'free') {
+    return <NotAvailablePage companyName={company.name} companyEmail={company.email} companyPhone={company.phone} />
   }
 
   return (
@@ -198,6 +206,33 @@ function ExpiredPage() {
           <p className="mt-4 text-gray-500 text-sm">
             If your email is not recognised, contact your tradie and ask them to send you a portal link.
           </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NotAvailablePage({ companyName, companyEmail, companyPhone }: { companyName: string; companyEmail: string | null; companyPhone: string | null }) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+      <div className="max-w-md w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="bg-orange-500 px-8 py-6">
+          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center mb-3">
+            <Wrench className="h-5 w-5 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Portal not available</h1>
+        </div>
+        <div className="px-8 py-6">
+          <p className="text-gray-600 mb-4">
+            The online portal isn&apos;t switched on for {companyName} right now. Please contact them directly for your jobs and invoices.
+          </p>
+          {(companyEmail || companyPhone) && (
+            <p className="text-sm text-gray-500">
+              {companyEmail && <span>{companyEmail}</span>}
+              {companyEmail && companyPhone && <span> · </span>}
+              {companyPhone && <span>{companyPhone}</span>}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -4,17 +4,19 @@ import { z } from 'zod'
 import { sendEmail } from '@/lib/email'
 import { portalEmailHtml } from '@/lib/customer-portal'
 import { createServiceClient } from '@/lib/supabase/server'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 const bodySchema = z.object({
   email: z.string().trim().email().max(320).transform(email => email.toLowerCase()),
 })
 
+type PortalCompany = BillingCompany & { name: string; email: string | null; phone: string | null; logo_url: string | null }
 type PortalCustomer = {
   id: string
   name: string
   email: string | null
   company_id: string
-  companies: { name: string; email: string | null; phone: string | null; logo_url: string | null } | { name: string; email: string | null; phone: string | null; logo_url: string | null }[] | null
+  companies: PortalCompany | PortalCompany[] | null
 }
 
 const GENERIC_RESPONSE = {
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   const { data: customers, error } = await service
     .from('customers')
-    .select('id, name, email, company_id, companies(name, email, phone, logo_url)')
+    .select('id, name, email, company_id, companies(name, email, phone, logo_url, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)')
     .ilike('email', email)
     .limit(10)
 
@@ -91,6 +93,10 @@ export async function POST(req: NextRequest) {
 
     const company = Array.isArray(customer.companies) ? customer.companies[0] : customer.companies
     if (!company) continue
+    // Customer portal is a paid-plan feature — silently skip rather than
+    // erroring, same as every other "no matching customer" path here, so this
+    // endpoint never reveals which companies exist or what plan they're on.
+    if (effectivePlanKey(company) === 'free') continue
 
     const { data: recentToken } = await service
       .from('customer_portal_tokens')

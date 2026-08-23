@@ -66,6 +66,7 @@ interface Props {
   billingRates?: { id: string; name: string; rate: number }[]
   taxRates?: { id: string; name: string; rate: number }[]
   pricesIncludeTax?: boolean
+  isFreePlan?: boolean
   templateData?: {
     title?: string
     terms?: string
@@ -264,7 +265,7 @@ function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: 
   )
 }
 
-export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, templateData, editQuote }: Props) {
+export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, isFreePlan = false, templateData, editQuote }: Props) {
   const rateOf = (l: { tax_rate: number | null }) => l.tax_rate ?? gstRate
   const netOf = (qty: number, price: number, dType: DiscountType, dVal: number, rate: number) => lineNet(qty, price, dType, dVal, rate, pricesIncludeTax)
   // Tax options for the per-line picker — fall back to a standard GST + GST-free pair.
@@ -626,10 +627,12 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
               </button>
               <Input value={s.title} onChange={e => updateSection(s.id, 'title', e.target.value)} className="h-7 text-sm font-medium border-0 shadow-none p-0 focus:ring-0" />
               <div className="flex items-center gap-3 ml-auto shrink-0">
-                <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                  <input type="checkbox" checked={s.is_optional} onChange={e => updateSection(s.id, 'is_optional', e.target.checked)} className="rounded" />
-                  Optional
-                </label>
+                {!isFreePlan && (
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                    <input type="checkbox" checked={s.is_optional} onChange={e => updateSection(s.id, 'is_optional', e.target.checked)} className="rounded" />
+                    Optional
+                  </label>
+                )}
                 {sections.length > 1 && (
                   <button onClick={() => removeSection(s.id)} className="text-gray-300 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
                 )}

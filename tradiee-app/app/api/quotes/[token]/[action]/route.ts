@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { nextDocNumber } from '@/lib/numbering'
 import { putObject, publicUrl, PUBLIC_BUCKET } from '@/lib/r2'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string; action: string }> }) {
   const { token, action } = await params
@@ -10,12 +11,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const supabase = createServiceClient()
   const { data: quote } = await supabase
     .from('quotes')
-    .select('id, status, title, company_id, customer_id, customer_message')
+    .select('id, status, title, company_id, customer_id, customer_message, companies!company_id(subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)')
     .eq('public_token', token)
     .single()
 
   if (!quote) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!['draft', 'sent'].includes(quote.status)) return NextResponse.json({ error: 'Quote already responded to' }, { status: 409 })
+  // Online accept/decline is a paid-plan feature — a free-plan company's
+  // customers confirm by phone/email instead. The public page (app/q/[token])
+  // already hides the accept/sign UI for these, but the endpoint itself has
+  // to enforce it too since it's reachable by anyone with the token.
+  if (effectivePlanKey(quote.companies as unknown as BillingCompany) === 'free') {
+    return NextResponse.json({ error: 'Online acceptance is not available for this company right now. Please contact them directly.' }, { status: 403 })
+  }
 
   // Accepting requires a drawn signature + name. This endpoint is public
   // (token-only), so the image is validated strictly before it's stored:

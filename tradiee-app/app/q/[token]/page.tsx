@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { formatCurrency, formatDate, quoteLabel } from '@/lib/utils'
 import { PublicQuoteActions } from './client'
 import { Wrench } from 'lucide-react'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 export default async function PublicQuotePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -11,7 +12,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
   // Fetch via service role — customer has no auth.uid(), so we bypass RLS here
   const { data: quote } = await supabase
     .from('quotes')
-    .select('*, customers(name, email, phone), customer_sites(label, address), companies(name, email, phone, logo_url, gst_number, quote_footer), quote_sections(*, quote_line_items(*))')
+    .select('*, customers(name, email, phone), customer_sites(label, address), companies(name, email, phone, logo_url, gst_number, quote_footer, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until), quote_sections(*, quote_line_items(*))')
     .eq('public_token', token)
     .single()
 
@@ -23,6 +24,7 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
   }
 
   const company = quote.companies as { name: string; email: string | null; phone: string | null; logo_url: string | null; gst_number: string | null; quote_footer: string | null }
+  const isFreePlan = effectivePlanKey(quote.companies as unknown as BillingCompany) === 'free'
   const customer = quote.customers as { name: string; email: string | null }
   const sections = [...(quote.quote_sections ?? [])].sort((a: {sort_order: number}, b: {sort_order: number}) => a.sort_order - b.sort_order)
   const canRespond = ['sent', 'draft'].includes(quote.status)
@@ -121,7 +123,17 @@ export default async function PublicQuotePage({ params }: { params: Promise<{ to
         )}
 
         {/* Actions */}
-        {canRespond && <PublicQuoteActions quoteId={quote.id} token={token} status={quote.status} isEstimate={!!quote.is_estimate} />}
+        {canRespond && !isFreePlan && <PublicQuoteActions quoteId={quote.id} token={token} status={quote.status} isEstimate={!!quote.is_estimate} />}
+        {canRespond && isFreePlan && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
+            <p className="text-sm text-gray-600">Ready to proceed? Get in touch to confirm this {quoteLabel(quote.is_estimate).toLowerCase()}.</p>
+            <p className="mt-2 text-sm text-gray-500">
+              {company.email && <span>{company.email}</span>}
+              {company.email && company.phone && <span> · </span>}
+              {company.phone && <span>{company.phone}</span>}
+            </p>
+          </div>
+        )}
 
         {quote.status === 'accepted' && (
           <div className="text-center py-6 text-green-600 font-semibold">✓ This {quoteLabel(quote.is_estimate).toLowerCase()} has been accepted. We&apos;ll be in touch shortly.</div>

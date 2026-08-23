@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import { portalEmailHtml } from '@/lib/customer-portal'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 const bodySchema = z.object({ customerId: z.string().uuid(), companyId: z.string().uuid() })
 
@@ -44,12 +45,15 @@ export async function POST(req: NextRequest) {
   // Fetch company
   const { data: company } = await service
     .from('companies')
-    .select('name, email, phone, logo_url')
+    .select('name, email, phone, logo_url, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until')
     .eq('id', companyId)
     .single()
 
   if (!company) {
     return NextResponse.json({ error: 'Company not found' }, { status: 404 })
+  }
+  if (effectivePlanKey(company as unknown as BillingCompany) === 'free') {
+    return NextResponse.json({ error: 'The customer portal requires a paid plan.' }, { status: 403 })
   }
 
   const { data: tokenRow, error: insertError } = await service

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
 import { Wrench, ArrowLeft } from 'lucide-react'
 import { DEFAULT_TIMEZONE, formatDate as formatDateTz, formatTime } from '@/lib/datetime'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 export default async function PortalJobDetailPage({
   params,
@@ -29,11 +30,15 @@ export default async function PortalJobDetailPage({
   // Fetch company for header
   const { data: company } = await supabase
     .from('companies')
-    .select('name, email, phone, logo_url')
+    .select('name, email, phone, logo_url, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until')
     .eq('id', company_id)
     .single()
 
   if (!company) notFound()
+  // Same paid-plan gate as the portal's own landing page — a deep link into
+  // a specific job shouldn't be a bypass route once the company has dropped
+  // to free.
+  if (effectivePlanKey(company as unknown as BillingCompany) === 'free') notFound()
 
   // Fetch job — must belong to the portal's customer
   const { data: job } = await supabase

@@ -2,12 +2,14 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { QuoteBuilder } from '@/components/forms/quote-builder'
 import { nextDocNumber } from '@/lib/numbering'
+import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
 export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customerId?: string; templateId?: string }> }) {
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, prices_include_tax)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, prices_include_tax, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const isFreePlan = effectivePlanKey(profile?.companies as unknown as BillingCompany) === 'free'
 
   const [customersRes, priceItemsRes, kitsRes, companyRes, ratesRes, taxRatesRes, templateRes, nextNumber] = await Promise.all([
     supabase.from('customers').select('id, name, pricing_group_id, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
@@ -41,6 +43,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         billingRates={(ratesRes.data ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         taxRates={(taxRatesData ?? []).map(r => ({ id: r.id, name: r.name, rate: Number(r.rate) }))}
         pricesIncludeTax={!!(profile?.companies as { prices_include_tax?: boolean } | null)?.prices_include_tax}
+        isFreePlan={isFreePlan}
         templateData={templateData}
       />
     </>
