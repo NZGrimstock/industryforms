@@ -1,6 +1,6 @@
 # IndustryForms — Project State (handoff)
 
-Last updated: 2026-08-22. Catch-up doc for a fresh session. Read this first.
+Last updated: 2026-08-24. Catch-up doc for a fresh session. Read this first.
 Start with **Current app/release state** below — it has the live facts (store,
 signing, build process, database) that the dated session logs can contradict.
 
@@ -362,6 +362,23 @@ Optional next steps flagged during recent sessions; none are in-progress:
   `node scripts/check-sync-rules.mjs` after editing `sync-rules.yaml` — it
   asserts every query is user-scoped, role-gated where required, and that
   every referenced table is actually in the publication.
+
+## Session 2026-08-24 (Claude) — Tap to Pay status correction
+
+**Tap to Pay is live on Android in production**, not "built but not switched
+on" as this doc previously implied (and as the marketing site briefly said
+until corrected the same session). Confirmed directly by the user. iOS remains
+unreleased — built, entitlement-granted, but ships with the iOS App Store
+submission. `lib/plans.ts`/gating already treats it as a Solo+ feature
+(`hasPaidPlan()` in mobile), so no code change was needed here, only doc/copy
+corrections: this file's "Mobile (Expo)" summary (was "scaffolding only") and
+`features.html`'s Tap to Pay row + honesty note on the marketing site.
+
+**Lesson for future sessions**: this doc is the first thing read, and it was
+stale on a customer-facing fact for long enough to nearly ship wrong copy to
+the live marketing site. When a shipped-feature status is inferred from old
+session logs rather than confirmed against the running product, flag it as
+inferred rather than stating it as current fact.
 
 ## Session 2026-08-22, pt.2 (Claude) — Production push, disconnected-feature fixes, full-workflow QA sweep
 
@@ -4027,7 +4044,11 @@ screens use **PowerSync** `useQuery`; photos via presigned R2.
 - **Timesheets**: auto GPS travel logbook → allocate trips (Personal/Ignore/Work→job).
   Auto-track with **trading hours schedule** (configurable per day + hour window).
 - **Sign-off modal**: "Customer Signature" label + photo prompt if no photos yet.
-- **Tap to Pay** (scaffolding only — see Sprint 3/4 above).
+- **Tap to Pay** — **live on Android** for subscribers with Stripe Connect payouts
+  set up. iOS is built and entitlement-approved but not released — ships with
+  the iOS App Store submission, not before (see 2026-08-24 entry near the top
+  of this doc). Do not describe it as "scaffolding only" — that was true as of
+  Sprint 3/4 but is stale.
 
 ## Migrations (supabase/migrations/) — 001-046 applied to cloud; 20260707 local migrations pending deploy verification
 001–021 base schema. **022** PowerSync. **023** billing_exempt. **024**
