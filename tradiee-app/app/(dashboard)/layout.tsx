@@ -16,6 +16,7 @@ import { WelcomeTutorial } from '@/components/ui/welcome-tutorial'
 import { HelpPanel } from '@/components/help/help-panel'
 import { TermsGate } from '@/components/legal/terms-gate'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
+import { FreePlanCarryoverGate } from '@/components/billing/free-plan-carryover-gate'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -68,6 +69,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <WelcomeTutorial initiallyOpen={!profile?.welcome_tutorial_seen_at} />
               <HelpPanel />
               {needsTerms && <TermsGate />}
+              {!needsTerms && isFreePlan && !isStaff && profile?.company_id && <FreePlanCarryoverGate companyId={profile.company_id} />}
             </DashboardShell>
           </div>
           <MobileNav isStaff={isStaff} unreadMessages={unreadMessages} />
