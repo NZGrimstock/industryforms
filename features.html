@@ -3,24 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Features — Industry Forms</title>
-<meta name="description" content="Every Industry Forms feature: bookings, AI quotes, offline field work, GPS logbook, invoicing, Xero sync, inventory, gross-profit reporting, forms & compliance, and more.">
+<title>Features: every part of the job, one app | Industry Forms</title>
+<meta name="description" content="The full Industry Forms feature list: quoting and AI drafts, plan takeoff, offline mobile, PS1–PS4 compliance forms, GPS logbook, purchase orders and supplier bills, invoicing, Xero sync, statements and job profitability.">
 <link rel="canonical" href="https://www.industryforms.app/features.html">
 <link rel="icon" href="/Logo/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/Logo/favicon.png">
 <meta name="theme-color" content="#E8722A">
-<meta property="og:title" content="Features — Industry Forms">
-<meta property="og:description" content="Every Industry Forms feature, in one place — from AI quotes to Xero sync.">
+<meta property="og:title" content="Features: every part of the job, one app | Industry Forms">
+<meta property="og:description" content="Quoting, plan takeoff, offline field work, compliance forms, purchase orders, invoicing and Xero sync. The complete Industry Forms feature list.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.industryforms.app/features.html">
 <meta property="og:image" content="https://www.industryforms.app/Logo/Logo.png">
 <meta property="og:site_name" content="Industry Forms">
 <meta property="og:locale" content="en_NZ">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="features.css">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="ea31af5f-3a95-477b-8039-89d049815535"></script>
 <link rel="preload" as="font" type="font/woff2" href="fonts/figtree.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="fonts/sora.woff2" crossorigin>
-<link rel="stylesheet" href="fonts.css">
 <script src="js/lucide.min.js"></script>
 <script type="application/ld+json">
 {
@@ -31,6 +33,36 @@
       "itemListElement": [
         { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://www.industryforms.app/" },
         { "@type": "ListItem", "position": 2, "name": "Features", "item": "https://www.industryforms.app/features.html" }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Do I need every feature turned on to start?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Most people start with customers, quotes, jobs and invoices, and leave the rest switched off until they need it. Nothing has to be configured before you can send your first quote." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Industry Forms work without internet?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The mobile app is offline-first. Notes, photos, time, signatures and travel are captured on the device and sync automatically when signal comes back." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it sync with Xero?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Connect your Xero organisation once and invoices flow across automatically, so you are not re-keying anything and your accountant sees the same numbers you do." }
+        },
+        {
+          "@type": "Question",
+          "name": "Which mobile apps are available?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The Android app is live on Google Play. The iOS app is still in development and is not on the App Store yet. The full web app runs in any mobile browser in the meantime." }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I get my data out?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes, at any time, including if you leave. There is no export fee and no lock-in period." }
+        }
       ]
     }
   ]
@@ -43,14 +75,11 @@
   .nav-blur { backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); background: rgba(246,242,236,0.82); }
   .btn-brand { position: relative; overflow: hidden; transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s ease; }
   .btn-brand:hover { transform: translateY(-2px); box-shadow: 0 10px 36px -6px rgba(232,114,42,0.45); }
-  .card-lift { transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s ease; }
-  .card-lift:hover { transform: translateY(-5px); box-shadow: 0 24px 64px -16px rgba(0,0,0,0.13); }
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: #F6F2EC; }
   ::-webkit-scrollbar-thumb { background: #C8C0B4; border-radius: 10px; }
   .sr-only-focusable { position: absolute; left: -9999px; top: 0; z-index: 100; background: #E8722A; color: #fff; padding: 0.75rem 1.25rem; border-radius: 0 0 0.5rem 0; font-weight: 600; font-size: 0.875rem; }
   .sr-only-focusable:focus { left: 0; }
-  section[id] { scroll-margin-top: 100px; }
 </style>
 </head>
 <body>
@@ -63,7 +92,7 @@
       <img src="Logo/Logo.png" alt="Industry Forms" width="2726" height="1177" class="h-[72px] w-auto transition-transform duration-300 group-hover:scale-105">
     </a>
     <div class="hidden md:flex items-center gap-8">
-      <a href="index.html#features" class="text-sm font-medium text-ink/55 hover:text-ink transition-colors duration-150">Features</a>
+      <a href="features.html" aria-current="page" class="text-sm font-medium text-ink transition-colors duration-150">Features</a>
       <a href="index.html#how-it-works" class="text-sm font-medium text-ink/55 hover:text-ink transition-colors duration-150">How It Works</a>
       <a href="index.html#pricing" class="text-sm font-medium text-ink/55 hover:text-ink transition-colors duration-150">Pricing</a>
       <a href="index.html#faq" class="text-sm font-medium text-ink/55 hover:text-ink transition-colors duration-150">FAQ</a>
@@ -78,7 +107,7 @@
   </div>
   <div id="mobileMenu" class="hidden md:hidden border-t border-black/[0.05] bg-paper/96 backdrop-blur-2xl">
     <div class="px-6 py-5 flex flex-col gap-1">
-      <a href="index.html#features" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">Features</a>
+      <a href="features.html" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">Features</a>
       <a href="index.html#how-it-works" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">How It Works</a>
       <a href="index.html#pricing" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">Pricing</a>
       <a href="index.html#faq" class="text-sm font-medium text-ink/70 py-2.5 px-3 rounded-lg hover:bg-black/[0.04]">FAQ</a>
@@ -88,102 +117,656 @@
   </div>
 </nav>
 
-<header class="pt-36 pb-16 px-6 max-w-3xl mx-auto text-center">
-  <nav aria-label="Breadcrumb" class="mb-5 text-xs text-ink/40">
-    <a href="index.html" class="hover:text-ink transition-colors">Home</a> / <span class="text-ink/60">Features</span>
-  </nav>
-  <h1 class="font-display font-bold text-4xl md:text-5xl leading-[1.05] tracking-tight text-ink mb-5">Everything Industry Forms does.</h1>
-  <p class="text-lg text-ink/50 leading-relaxed">The homepage keeps it to four outcomes. Here's the full detail, for when you want it.</p>
-</header>
+<div class="fx">
 
-<main id="main" class="max-w-6xl mx-auto px-6 pb-28">
+  <!-- ==================== HERO ==================== -->
+  <header class="fx-hero">
+    <div class="fx-shell">
+      <nav aria-label="Breadcrumb" class="text-xs text-ink/40 mb-6">
+        <a href="index.html" class="hover:text-ink transition-colors">Home</a> <span class="text-ink/25">/</span> <span class="text-ink/60">Features</span>
+      </nav>
+      <div class="fx-hero__grid">
+        <div>
+          <p class="fx-eyebrow">The complete list</p>
+          <h1 class="fx-display fx-h1">Every part of the<br>job, in one app.</h1>
+          <p class="fx-lede">From the first enquiry to the money landing in your account, and the paperwork the council asks for along the way.</p>
+        </div>
+        <dl class="fx-facts">
+          <div class="fx-fact">
+            <dt>Built for</dt>
+            <dd>NZ &amp; AU trades</dd>
+          </div>
+          <div class="fx-fact">
+            <dt>Works offline</dt>
+            <dd>Yes, by default</dd>
+          </div>
+          <div class="fx-fact">
+            <dt>Accounting</dt>
+            <dd>Xero sync</dd>
+          </div>
+          <div class="fx-fact">
+            <dt>Free plan</dt>
+            <dd>No time limit</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </header>
 
-  <section id="bookings-quotes" class="grid md:grid-cols-3 gap-5 mb-5">
-    <div class="md:col-span-2 card-lift bg-white/75 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-black/[0.05] shadow-glass">
-      <span class="text-[10px] font-bold tracking-widest uppercase px-3.5 py-1.5 rounded-full bg-orange-500/10 text-orange-700">Bookings & Quotes</span>
-      <h2 class="font-display font-bold text-xl md:text-2xl text-ink mt-6 mb-3">Turn web leads into priced, scheduled work</h2>
-      <p class="text-sm text-ink/50 leading-relaxed max-w-md mb-7">Capture enquiries through your booking website, draft quote line items from your real price list with AI, take online acceptance, and follow up automatically.</p>
-      <ul class="grid sm:grid-cols-2 gap-3 text-sm text-ink/65">
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Custom booking websites with lead source tracking</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>AI quote drafts from your real price list</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Online quote acceptance and deposits, no customer account needed</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Automatic SMS follow-up on unaccepted quotes</li>
-      </ul>
+  <!-- ==================== JUMP NAV ==================== -->
+  <div class="fx-jump">
+    <div class="fx-shell">
+      <nav class="fx-jump__inner" aria-label="Feature sections">
+        <a href="#win">Win the work</a>
+        <a href="#price">Price it right</a>
+        <a href="#run">Run the job</a>
+        <a href="#materials">Materials &amp; suppliers</a>
+        <a href="#paid">Get paid</a>
+        <a href="#numbers">Know your numbers</a>
+        <a href="#integrations">Integrations</a>
+        <a href="#plans">What's on each plan</a>
+      </nav>
     </div>
-    <div class="card-lift bg-ink rounded-3xl p-8 border border-white/[0.05] shadow-ink text-white flex flex-col justify-center">
-      <i data-lucide="mouse-pointer-click" class="w-6 h-6 text-brand mb-4"></i>
-      <h3 class="font-display font-bold text-lg mb-2">Lead tracking</h3>
-      <p class="text-sm text-white/45 leading-relaxed">Know exactly where every enquiry came from before you decide where to spend on ads.</p>
-    </div>
-  </section>
+  </div>
 
-  <section id="field-work" class="grid md:grid-cols-3 gap-5 mb-5">
-    <div class="card-lift bg-teal/10 rounded-3xl p-8 border border-black/[0.05] flex flex-col justify-center">
-      <i data-lucide="car" class="w-6 h-6 text-teal mb-4"></i>
-      <h3 class="font-display font-bold text-lg text-ink mb-2">GPS logbook</h3>
-      <p class="text-sm text-ink/50 leading-relaxed">Automatic, IRD-friendly mileage tracking — no more rebuilding it from memory.</p>
-    </div>
-    <div class="md:col-span-2 card-lift bg-white/75 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-black/[0.05] shadow-glass">
-      <span class="text-[10px] font-bold tracking-widest uppercase px-3.5 py-1.5 rounded-full bg-teal/10 text-teal">Field Work</span>
-      <h2 class="font-display font-bold text-xl md:text-2xl text-ink mt-6 mb-3">Offline mobile work that still syncs cleanly</h2>
-      <p class="text-sm text-ink/50 leading-relaxed max-w-md mb-7">Crews can log notes, photos, time, signatures, and travel while on-site — everything queues on the device and syncs the moment signal returns.</p>
-      <ul class="grid sm:grid-cols-2 gap-3 text-sm text-ink/65">
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-teal flex-shrink-0 mt-0.5"></i>Multiple visits per job, no duplicated data</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-teal flex-shrink-0 mt-0.5"></i>Custom job statuses matching your crew's workflow</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-teal flex-shrink-0 mt-0.5"></i>Forms, signatures, and evidence photos required before a job can close</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-teal flex-shrink-0 mt-0.5"></i>Job map showing every crew and site at a glance</li>
-      </ul>
-    </div>
-  </section>
+  <main id="main">
 
-  <section id="invoicing" class="grid md:grid-cols-3 gap-5 mb-5">
-    <div class="md:col-span-2 card-lift bg-white/75 backdrop-blur-sm rounded-3xl p-8 md:p-10 border border-black/[0.05] shadow-glass">
-      <span class="text-[10px] font-bold tracking-widest uppercase px-3.5 py-1.5 rounded-full bg-grape/10 text-grape">Invoicing & Cash Flow</span>
-      <h2 class="font-display font-bold text-xl md:text-2xl text-ink mt-6 mb-3">Invoice from the driveway</h2>
-      <p class="text-sm text-ink/50 leading-relaxed max-w-md mb-7">Pull timesheets and materials straight into invoices, take Stripe payments, send straight to Xero, and use progress invoices for larger projects.</p>
-      <ul class="grid sm:grid-cols-2 gap-3 text-sm text-ink/65">
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Job time and materials become the invoice automatically</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Stripe payments online, deposits and full invoices</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Xero sync — invoices sent across, no re-keying</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Progress invoicing for staged projects</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Automatic SMS chasing on overdue invoices</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-grape flex-shrink-0 mt-0.5"></i>Review requests sent right after payment</li>
-      </ul>
+    <div class="fx-shell">
+      <div class="fx-legend">
+        <span><span class="fx-chip fx-chip--free">Free plan</span> included even on the free tier</span>
+        <span><span class="fx-chip fx-chip--paid">Solo &amp; up</span> any paid plan</span>
+        <span><span class="fx-chip fx-chip--addon">Add-on</span> optional extra</span>
+        <span><span class="fx-chip fx-chip--soon">In progress</span> being built now</span>
+      </div>
     </div>
-    <div class="card-lift bg-ink rounded-3xl p-8 border border-white/[0.05] shadow-ink text-white flex flex-col justify-center">
-      <i data-lucide="receipt" class="w-6 h-6 text-grape-light mb-4"></i>
-      <h3 class="font-display font-bold text-lg mb-2">True inventory</h3>
-      <p class="text-sm text-white/45 leading-relaxed">Real stock levels, purchase orders, and supplier bills — not guesswork on what's left in the van.</p>
-    </div>
-  </section>
 
-  <section id="business-health" class="grid md:grid-cols-3 gap-5 mb-5">
-    <div class="card-lift bg-white/75 backdrop-blur-sm rounded-3xl p-8 border border-black/[0.05] shadow-glass flex flex-col justify-center">
-      <i data-lucide="calendar" class="w-6 h-6 text-brand mb-4"></i>
-      <h3 class="font-display font-bold text-lg text-ink mb-2">Google Calendar sync</h3>
-      <p class="text-sm text-ink/50 leading-relaxed">Two-way sync keeps personal and business schedules aligned.</p>
-    </div>
-    <div class="md:col-span-2 card-lift bg-ink rounded-3xl p-8 md:p-10 border border-white/[0.05] shadow-ink text-white">
-      <span class="text-[10px] font-bold tracking-widest uppercase px-3.5 py-1.5 rounded-full bg-brand/20 text-brand">Business Health</span>
-      <h2 class="font-display font-bold text-xl md:text-2xl mt-6 mb-3">Wake up to what needs doing next</h2>
-      <p class="text-sm text-white/45 leading-relaxed max-w-md mb-7">A unified inbox keeps SMS and web enquiries together. Daily AI to-dos highlight stale jobs, overdue invoices, and quote follow-ups, while gross-profit reporting replaces guesswork.</p>
-      <ul class="grid sm:grid-cols-2 gap-3 text-sm text-white/60">
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Daily AI to-do list for stale jobs and follow-ups</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Gross-profit reporting per job</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Role-based staff access — owners keep financial control</li>
-        <li class="flex items-start gap-2"><i data-lucide="check" class="w-4 h-4 text-brand flex-shrink-0 mt-0.5"></i>Unified inbox for SMS and web enquiries</li>
-      </ul>
-    </div>
-  </section>
+    <!-- ==================== 01 — WIN THE WORK ==================== -->
+    <section id="win" class="fx-stage" data-accent="brand">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Win the work</h2>
+            <p class="fx-stage__blurb">Catch every enquiry, quote it fast, and stop losing jobs to a quote that went quiet.</p>
+          </div>
 
-  <section class="text-center mt-16">
-    <a href="https://app.industryforms.app/signup" class="btn-brand bg-brand text-white font-semibold px-8 py-4 rounded-full text-sm inline-flex items-center gap-2 shadow-brand">
-      Start Free — 28 Days <i data-lucide="arrow-right" class="w-4 h-4"></i>
-    </a>
-    <p class="text-xs text-ink/40 mt-3">No credit card · 28 days free · Cancel anytime</p>
-  </section>
+          <div>
+            <article class="fx-spot">
+              <div class="fx-spot__top">
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <h3 class="fx-display fx-h3">One inbox for texts, web leads and booking requests</h3>
+              <p>Enquiries from your website, SMS replies from customers, and online booking requests all land in the same feed instead of three different places on your phone. Every lead is stamped with where it came from, so you know which advertising is actually paying for itself before you spend more on it.</p>
+            </article>
 
-</main>
+            <div class="fx-rows">
+              <div class="fx-row">
+                <h4 class="fx-row__name">Quotes and estimates</h4>
+                <p class="fx-row__desc">Two separate document types, because a rough estimate and a fixed-price quote are not the same promise. Both convert to a job in one click.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">AI-drafted quotes</h4>
+                <p class="fx-row__desc">Describe the job in plain words and get draft line items priced from <em>your</em> price list, not invented numbers. You review and adjust before anything is sent.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Optional extras on quotes</h4>
+                <p class="fx-row__desc">Group a quote into sections and mark some optional, so the customer can add the extras themselves instead of you re-quoting.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Online accept and sign</h4>
+                <p class="fx-row__desc">Customers open a link, sign on their phone and accept. No account, no app, no printing. The job is created automatically on acceptance.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Automatic follow-ups</h4>
+                <p class="fx-row__desc">Unopened quotes get chased by email and SMS on a schedule you set, including the wording. Stops as soon as the customer opens it or the quote expires.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Profit shown while you quote</h4>
+                <p class="fx-row__desc">Gross profit and margin update live as you build the quote, so you find out you have under-priced it before you send it, not after the job is done.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Quote templates and kits</h4>
+                <p class="fx-row__desc">Save a whole quote as a template, or bundle the parts you always fit together into a kit and drop it in as one line.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Booking website</h4>
+                <p class="fx-row__desc">A hosted site with real availability, so customers book a slot that actually exists in your calendar and can pay a deposit up front. Custom domain supported.</p>
+                <span class="fx-chip fx-chip--addon">Add-on $19/mo</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Duplicate lead detection</h4>
+                <p class="fx-row__desc">Flags when the same person enquires twice through different channels, so you are not quoting the same job against yourself.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 02 — PRICE IT RIGHT ==================== -->
+    <section id="price" class="fx-stage" data-accent="grape">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Price it right</h2>
+            <p class="fx-stage__blurb">Measure, cost and stage bigger work without exporting to a spreadsheet.</p>
+          </div>
+
+          <div>
+            <article class="fx-spot">
+              <div class="fx-spot__top">
+                <span class="fx-chip fx-chip--paid">Included on Pro</span>
+                <span class="fx-chip fx-chip--addon">Team add-on $19/mo</span>
+              </div>
+              <h3 class="fx-display fx-h3">Measure straight off the plan</h3>
+              <p>Upload a plan or a photo of one, set the scale off a known dimension, then measure lengths, areas and counts directly on screen. Quantities carry into the quote instead of being re-typed off a scale rule and a notepad. The measured plan stays attached to the job, so the numbers can be checked later when someone disputes them.</p>
+            </article>
+
+            <div class="fx-rows">
+              <div class="fx-row">
+                <h4 class="fx-row__name">Projects</h4>
+                <p class="fx-row__desc">Group jobs, quotes and invoices under one multi-stage project with its own budget, progress and money roll-up. For work that runs over weeks, not hours.</p>
+                <span class="fx-chip fx-chip--paid">Pro / Team add-on</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Price list</h4>
+                <p class="fx-row__desc">Your materials and labour rates with cost and sell prices, imported from a CSV if you already keep one. Drives quoting, invoicing and profit reporting.</p>
+                <span class="fx-chip fx-chip--free">Free · 50 items</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Standard markup</h4>
+                <p class="fx-row__desc">Set a markup percentage once and cost-only items price themselves, so nothing accidentally goes out at cost.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Customer group pricing</h4>
+                <p class="fx-row__desc">Different rates for trade accounts, property managers or repeat clients, applied automatically when you quote them.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Discounts and tax handling</h4>
+                <p class="fx-row__desc">Discounts per line or across the whole document, configurable tax rates, and GST-inclusive entry if that is how you think about prices.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Job costing</h4>
+                <p class="fx-row__desc">Actual labour hours and materials land against the job as they happen, so the profit figure is the real one, not the quoted one.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 03 — RUN THE JOB (dark) ==================== -->
+    <div class="fx-dark">
+      <section id="run" class="fx-stage" data-accent="teal">
+        <div class="fx-shell">
+          <div class="fx-stage__grid">
+            <div class="fx-stage__rail">
+              <span class="fx-stage__accent"></span>
+              <h2 class="fx-stage__name">Run the job</h2>
+              <p class="fx-stage__blurb">Scheduling, crews, evidence and compliance, including in the places with no reception.</p>
+            </div>
+
+            <div>
+              <article class="fx-spot">
+                <div class="fx-spot__top">
+                  <span class="fx-chip fx-chip--paid">All plans</span>
+                </div>
+                <h3 class="fx-display fx-h3">No signal is not an outage</h3>
+                <p>The mobile app keeps working in a basement, a new build with no fibre, or halfway up a rural driveway. Notes, photos, time, signatures and travel are written to the device and sync themselves the moment signal returns, so nobody has to remember to re-enter their day when they get back to the van.</p>
+              </article>
+
+              <div class="fx-rows">
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Scheduling and visits</h4>
+                  <p class="fx-row__desc">Multiple visits per job without duplicating the job, assigned per person, on a calendar the whole crew can see.</p>
+                  <span class="fx-chip fx-chip--free">Free plan</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Google Calendar sync</h4>
+                  <p class="fx-row__desc">Two-way, so the work you book shows up next to the dentist appointment and you stop double-booking yourself.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Job map</h4>
+                  <p class="fx-row__desc">Every active site on one map, so you can send the closest person instead of the first person who answers.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Compliance forms</h4>
+                  <p class="fx-row__desc">NZ PS1–PS4 producer statements and electrical certificates filled out on site, signed, and stored against the job, not in a glovebox.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Customer sign-off</h4>
+                  <p class="fx-row__desc">Signature captured on the phone before you leave, with a prompt for photos if the job has none. Evidence collected while you are still standing there.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Timesheets</h4>
+                  <p class="fx-row__desc">Time captured against the job as it happens, feeding both payroll figures and the invoice. No reconstructing the week on Friday afternoon.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">GPS vehicle logbook</h4>
+                  <p class="fx-row__desc">Travel tracked automatically during your trading hours, then allocated to work or personal. An IRD-friendly mileage record without the notebook.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Custom job statuses</h4>
+                  <p class="fx-row__desc">Name the stages the way your crew already says them, rather than bending the way you work to fit the software.</p>
+                  <span class="fx-chip fx-chip--free">Free plan</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Office to crew messaging</h4>
+                  <p class="fx-row__desc">A message thread attached to the job itself, so the answer to "which unit was it again?" is on the job, not lost in a group chat.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Recurring jobs and templates</h4>
+                  <p class="fx-row__desc">Maintenance rounds and repeat visits generate themselves on schedule, from a template you set up once.</p>
+                  <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+                </div>
+                <div class="fx-row">
+                  <h4 class="fx-row__name">Staff permissions</h4>
+                  <p class="fx-row__desc">Staff see the jobs they are on and their own hours. Pricing, margins and invoices stay with the owner and admins.</p>
+                  <span class="fx-chip fx-chip--paid">Team &amp; up</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ==================== 04 — MATERIALS & SUPPLIERS ==================== -->
+    <section id="materials" class="fx-stage" data-accent="ink">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Materials &amp; suppliers</h2>
+            <p class="fx-stage__blurb">Order parts, check the bill matches, and know what is actually left in the van.</p>
+          </div>
+
+          <div>
+            <article class="fx-spot">
+              <div class="fx-spot__top">
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <h3 class="fx-display fx-h3">Accepted quote to purchase orders, in two clicks</h3>
+              <p>When a quote is accepted, the materials on it can be turned straight into purchase orders, split per supplier automatically, so the timber order goes to the timber merchant and the fittings order goes to the plumbing merchant without you rewriting either list. Mark the order received and the stock count goes back up on its own.</p>
+            </article>
+
+            <div class="fx-rows">
+              <div class="fx-row">
+                <h4 class="fx-row__name">Purchase orders</h4>
+                <p class="fx-row__desc">Numbered POs emailed to the supplier, linked to the job, so what was ordered for which job is never a guess.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Supplier bills</h4>
+                <p class="fx-row__desc">Record what the supplier actually charged against the PO and the job, and track what you still owe.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Supplier invoice reading</h4>
+                <p class="fx-row__desc">Photograph a supplier invoice and have the line items pulled off it, instead of typing forty items from a merchant docket by hand.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Stock on hand</h4>
+                <p class="fx-row__desc">Real quantities that go down when you use materials on a job and back up when an order is received, with low-stock warnings before you run out on site.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Supplier records</h4>
+                <p class="fx-row__desc">Account numbers, contacts and history in one place, with quick actions to raise a new PO or bill against them.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 05 — GET PAID ==================== -->
+    <section id="paid" class="fx-stage" data-accent="brand">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Get paid</h2>
+            <p class="fx-stage__blurb">Invoice from the driveway, take the money on the spot, and let the software do the chasing.</p>
+          </div>
+
+          <div>
+            <article class="fx-spot">
+              <div class="fx-spot__top">
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <h3 class="fx-display fx-h3">The invoice builds itself from the job</h3>
+              <p>Hours logged and materials used are already against the job, so the invoice is generated from what actually happened rather than retyped from memory that evening. Send it before you have pulled off the driveway, with a payment link the customer can use immediately.</p>
+            </article>
+
+            <div class="fx-rows">
+              <div class="fx-row">
+                <h4 class="fx-row__name">Online card payments</h4>
+                <p class="fx-row__desc">Customers pay by card from the invoice link through Stripe. Payment is recorded against the invoice automatically.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Tap to Pay on Android</h4>
+                <p class="fx-row__desc">Take a contactless card, Apple Pay or Google Pay payment on site using the phone in your hand. No card reader to buy, charge or leave behind. Live on Android now; the iPhone version comes with the iOS app.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Automatic payment reminders</h4>
+                <p class="fx-row__desc">Overdue invoices chased by email and SMS on your schedule and in your wording, and it stops the moment they pay.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Progress invoicing</h4>
+                <p class="fx-row__desc">Invoice a percentage or a stage at a time on longer work, so you are not funding the job out of your own account until the end.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Recurring and bulk invoicing</h4>
+                <p class="fx-row__desc">Maintenance contracts bill themselves on schedule, and a month of finished jobs can be invoiced in one pass rather than one at a time.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Customer statements</h4>
+                <p class="fx-row__desc">Send account customers a statement of everything outstanding, with a reminder when a statement run is due.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Credit notes</h4>
+                <p class="fx-row__desc">Refund to the card or hold it as account credit against their next invoice, with the paperwork matching either way.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Xero sync</h4>
+                <p class="fx-row__desc">Invoices and payments flow into Xero automatically. You stop re-keying, and your accountant sees the same numbers you do.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Customer portal</h4>
+                <p class="fx-row__desc">Customers look up their own quotes, invoices and job history from a link instead of ringing you to ask for a copy.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Review requests</h4>
+                <p class="fx-row__desc">A review link goes out automatically once they have paid, the moment they are most likely to leave a good one.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+            </div>
+
+            <p class="fx-note">
+              <span class="fx-note__label">Straight answer</span>
+              <strong>Tap to Pay works on Android today. On iPhone it does not yet.</strong> The iOS app is still in development, so if your crew is on iPhones, take payment through the invoice link for now and Tap to Pay arrives with that release. Either way you will need payouts connected first, which is a one-off setup in Settings.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 06 — KNOW YOUR NUMBERS ==================== -->
+    <section id="numbers" class="fx-stage" data-accent="grape">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Know your numbers</h2>
+            <p class="fx-stage__blurb">Find out which work is worth doing again, and what needs chasing today.</p>
+          </div>
+
+          <div>
+            <article class="fx-spot">
+              <div class="fx-spot__top">
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <h3 class="fx-display fx-h3">A to-do list that writes itself overnight</h3>
+              <p>Each morning you get the short list that actually matters: quotes that have gone quiet, invoices past due, jobs that have not moved in a week, and enquiries nobody has answered. Anything you do not finish rolls to tomorrow; anything that resolves itself disappears on its own.</p>
+            </article>
+
+            <div class="fx-rows">
+              <div class="fx-row">
+                <h4 class="fx-row__name">Profit per job</h4>
+                <p class="fx-row__desc">What each job actually made after real labour and materials, so you find out which kind of work is quietly losing money.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Business dashboard</h4>
+                <p class="fx-row__desc">Money outstanding, jobs booked, quotes waiting and hours logged this week, on one screen you can read in ten seconds.</p>
+                <span class="fx-chip fx-chip--free">Free plan</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Reports</h4>
+                <p class="fx-row__desc">Revenue, quote conversion, and where jobs are getting stuck, without exporting anything to a spreadsheet first.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+              <div class="fx-row">
+                <h4 class="fx-row__name">Communication history</h4>
+                <p class="fx-row__desc">Every email and text sent to a customer, logged against them. Useful the day someone says they were never told.</p>
+                <span class="fx-chip fx-chip--paid">Solo &amp; up</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== INTEGRATIONS ==================== -->
+    <section id="integrations" class="fx-stage" data-accent="ink">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Works with</h2>
+            <p class="fx-stage__blurb">The tools you already pay for, rather than replacements for them.</p>
+          </div>
+          <div>
+            <div class="fx-integrations">
+              <div class="fx-int">
+                <h4>Xero</h4>
+                <p>Invoices and payments sync across automatically. Your accountant keeps working the way they already do.</p>
+              </div>
+              <div class="fx-int">
+                <h4>Stripe</h4>
+                <p>Card payments on invoices, deposits on bookings, and payouts into your own account.</p>
+              </div>
+              <div class="fx-int">
+                <h4>Google Calendar</h4>
+                <p>Two-way sync between your work schedule and the calendar on your phone.</p>
+              </div>
+              <div class="fx-int">
+                <h4>SMS</h4>
+                <p>Quote follow-ups, payment reminders and job updates by text, charged per message at 13c.</p>
+              </div>
+              <div class="fx-int">
+                <h4>Google Play</h4>
+                <p>The Android app is live on the Play Store. iOS is still in development.</p>
+              </div>
+              <div class="fx-int">
+                <h4>Your own domain</h4>
+                <p>Point a domain you already own at your Industry Forms booking site.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== PLANS ==================== -->
+    <section id="plans" class="fx-stage" data-accent="brand">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">What's on each plan</h2>
+            <p class="fx-stage__blurb">The free plan is genuinely free and has no time limit. It is capped, not crippled.</p>
+          </div>
+
+          <div>
+            <div class="fx-table-wrap">
+              <table class="fx-table">
+                <caption class="sr-only">Feature availability by plan</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">&nbsp;</th>
+                    <th scope="col">Free</th>
+                    <th scope="col">Solo</th>
+                    <th scope="col">Team</th>
+                    <th scope="col">Pro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Price</th>
+                    <td class="fx-table__price">$0</td>
+                    <td class="fx-table__price">$29/mo</td>
+                    <td class="fx-table__price">$49/mo</td>
+                    <td class="fx-table__price">$99/mo</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Team members</th>
+                    <td>1</td><td>1</td><td>Up to 10</td><td>Unlimited</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Active jobs</th>
+                    <td>3</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Customers</th>
+                    <td>10</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Price list items</th>
+                    <td>50</td><td>Unlimited</td><td>Unlimited</td><td>Unlimited</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Quotes, jobs &amp; invoicing</th>
+                    <td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Customer portal</th>
+                    <td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Job photos</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">AI quote drafting</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Xero sync</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Timesheets &amp; vehicle logbook</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Purchase orders &amp; supplier bills</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Bulk invoicing</th>
+                    <td class="fx-no">—</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td><td class="fx-yes">Yes</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Projects &amp; plan takeoff</th>
+                    <td class="fx-no">—</td><td class="fx-no">—</td><td>Add $19/mo</td><td class="fx-yes">Included</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Booking website</th>
+                    <td colspan="4">Add $19/mo on any paid plan</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">SMS messaging</th>
+                    <td colspan="4">13c per message, only what you send</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p class="fx-note">
+              <span class="fx-note__label">On the free plan</span>
+              It stays free with no time limit, and nothing you have already created is deleted or hidden if a trial lapses into it. You simply cannot add past the caps until you upgrade. Full pricing, including the founding-member discount, is on the <a href="index.html#pricing" style="color:#a8501a;text-decoration:underline">pricing section</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== FAQ ==================== -->
+    <section class="fx-stage" data-accent="ink">
+      <div class="fx-shell">
+        <div class="fx-stage__grid">
+          <div class="fx-stage__rail">
+            <span class="fx-stage__accent"></span>
+            <h2 class="fx-stage__name">Before you ask</h2>
+            <p class="fx-stage__blurb">The questions we actually get, answered without the sales gloss.</p>
+          </div>
+          <div class="fx-faq">
+            <details>
+              <summary>Do I need every feature turned on to start?</summary>
+              <p>No. Most people start with customers, quotes, jobs and invoices and leave the rest switched off until they need it. Nothing has to be configured before you can send your first quote.</p>
+            </details>
+            <details>
+              <summary>Does it work without internet?</summary>
+              <p>Yes. The mobile app is offline-first by design. Notes, photos, time, signatures and travel are captured on the device and sync themselves when signal comes back. You do not have to remember to do anything.</p>
+            </details>
+            <details>
+              <summary>Which mobile apps can I get?</summary>
+              <p>The Android app is live on Google Play. The iOS app is still in development and is not on the App Store yet. In the meantime the full web app runs in any phone browser, including on an iPhone.</p>
+            </details>
+            <details>
+              <summary>Will it work with my accountant?</summary>
+              <p>If they use Xero, yes. Connect your organisation once and invoices flow across automatically. If they use something else, you can export everything at any time.</p>
+            </details>
+            <details>
+              <summary>What happens to my data if I leave?</summary>
+              <p>You can export it at any time, including on the way out. No export fee, no contract, and cancelling takes one click rather than a phone call.</p>
+            </details>
+            <details>
+              <summary>Is this suited to a one-person business?</summary>
+              <p>Yes. Solo exists for exactly that, and the free plan covers a very small operation indefinitely. You are not paying for seats you do not use.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== CTA ==================== -->
+    <section class="fx-cta">
+      <div class="fx-shell">
+        <h2 class="fx-display fx-h2">Try it on a real job.</h2>
+        <p class="fx-lede">28 days, everything unlocked, no credit card. If it does not fit how you work, walk away and take your data with you.</p>
+        <a href="https://app.industryforms.app/signup" class="fx-btn">
+          Start free — 28 days <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+        <p class="fx-fineprint">No credit card · Cancel in one click · Free plan available afterwards</p>
+      </div>
+    </section>
+
+  </main>
+</div>
 
 <footer class="relative z-10 bg-ink border-t border-white/[0.05] pt-16 pb-16 px-6">
   <div class="max-w-7xl mx-auto">
@@ -197,7 +780,7 @@
       <div>
         <p class="text-[10px] font-bold tracking-widest uppercase text-white/25 mb-5">Product</p>
         <ul class="space-y-3">
-          <li><a href="index.html#features" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Features</a></li>
+          <li><a href="features.html" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Features</a></li>
           <li><a href="index.html#pricing" class="text-sm text-white/45 hover:text-white transition-colors duration-150">Pricing</a></li>
         </ul>
       </div>
@@ -249,7 +832,10 @@
   try {
     const mobileBtn = document.getElementById('mobileMenuBtn');
     const mobileMenu = document.getElementById('mobileMenu');
-    mobileBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+    mobileBtn.addEventListener('click', () => {
+      const open = mobileMenu.classList.toggle('hidden');
+      mobileBtn.setAttribute('aria-expanded', String(!open));
+    });
     mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mobileMenu.classList.add('hidden')));
   } catch (e) { console.error(e); }
 </script>

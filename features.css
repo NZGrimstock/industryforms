@@ -1,0 +1,415 @@
+/* ============================================================================
+   features.css — design system for the Features page.
+
+   Why a bespoke stylesheet instead of more Tailwind utilities: styles.css is a
+   *purged* Tailwind v3 build (~300 selectors) that is committed as an artifact,
+   and the repo root deliberately has no build step. Any utility class not
+   already in that file silently does nothing, which rules out the layout this
+   page needs. Everything here is scoped under .fx so it cannot collide with the
+   shared nav/footer markup, which still uses the compiled Tailwind classes.
+
+   Tokens mirror the values already compiled into styles.css so the page stays
+   visually identical to the rest of the site:
+     brand  rgb(232 114 42)   ink   rgb(28 28 46)
+     teal   rgb(13 148 136)   grape rgb(124 58 237)
+   ========================================================================== */
+
+.fx {
+  --ink: #1c1c2e;
+  --ink-2: #3a3a52;
+  --paper: #f6f2ec;
+  --paper-2: #efe9e0;
+  --brand: #e8722a;
+  --teal: #0d9488;
+  --grape: #7c3aed;
+
+  --line: rgba(28, 28, 46, 0.1);
+  --line-soft: rgba(28, 28, 46, 0.06);
+  --muted: rgba(28, 28, 46, 0.56);
+  --muted-2: rgba(28, 28, 46, 0.4);
+
+  --rail: 13rem; /* width of the sticky stage rail on desktop */
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --maxw: 74rem;
+
+  color: var(--ink);
+  font-family: Figtree, system-ui, sans-serif;
+}
+
+/* Reset a few things the shared stylesheet does not cover for this page. */
+.fx *,
+.fx *::before,
+.fx *::after { box-sizing: border-box; }
+
+.fx-shell {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* --- Typography ---------------------------------------------------------- */
+
+.fx-display {
+  font-family: Sora, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.032em;
+  line-height: 1.04;
+  margin: 0;
+}
+
+.fx-h1 { font-size: clamp(2.5rem, 6.2vw, 4.25rem); }
+.fx-h2 { font-size: clamp(1.75rem, 3.4vw, 2.6rem); letter-spacing: -0.028em; }
+.fx-h3 { font-size: clamp(1.15rem, 1.9vw, 1.45rem); letter-spacing: -0.02em; }
+
+.fx-lede {
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0;
+}
+
+.fx-eyebrow {
+  font-family: Sora, system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin: 0;
+}
+
+/* --- Hero ---------------------------------------------------------------- */
+
+.fx-hero {
+  padding-block: clamp(7rem, 12vw, 10.5rem) clamp(2.5rem, 5vw, 4rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.fx-hero__grid {
+  display: grid;
+  gap: clamp(1.75rem, 4vw, 3.5rem);
+}
+
+@media (min-width: 62rem) {
+  .fx-hero__grid { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: end; }
+}
+
+.fx-hero h1 { margin-block: 1.25rem 0; }
+.fx-hero .fx-lede { margin-top: 1.5rem; max-width: 34ch; }
+
+/* Small at-a-glance stat block. Deliberately counts *capabilities*, which are
+   verifiable from the product, rather than customers or ratings — this site has
+   a documented history of fabricated social proof and must not repeat it. */
+.fx-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  overflow: hidden;
+}
+
+.fx-fact { background: var(--paper); padding: 1.125rem 1.25rem; }
+.fx-fact dt { font-size: 0.75rem; color: var(--muted-2); margin: 0 0 0.35rem; }
+.fx-fact dd {
+  font-family: Sora, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+/* --- Sticky section jump nav --------------------------------------------- */
+
+.fx-jump {
+  position: sticky;
+  top: 6rem;
+  z-index: 30;
+  background: rgba(246, 242, 236, 0.86);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid var(--line);
+}
+
+.fx-jump__inner {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 0.6rem;
+}
+.fx-jump__inner::-webkit-scrollbar { display: none; }
+
+.fx-jump a {
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.fx-jump a:hover { color: var(--ink); background: rgba(28, 28, 46, 0.05); }
+
+/* --- Stage ---------------------------------------------------------------- */
+
+.fx-stage {
+  border-bottom: 1px solid var(--line);
+  padding-block: clamp(3rem, 7vw, 5.5rem);
+  scroll-margin-top: 9rem;
+}
+
+.fx-stage__grid { display: grid; gap: clamp(1.5rem, 3vw, 2.5rem); }
+
+/* Grid items default to min-width:auto, so they refuse to shrink below their
+   content's intrinsic width. The plans table sets min-width:44rem, which on a
+   single-column mobile grid forced the whole page wider than the viewport and
+   stopped .fx-table-wrap's overflow-x from ever engaging. The desktop track
+   uses minmax(0, 1fr) for the same reason; this covers the mobile case. */
+.fx-stage__grid > * { min-width: 0; }
+
+@media (min-width: 64rem) {
+  .fx-stage__grid { grid-template-columns: var(--rail) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4.5rem); }
+  .fx-stage__rail { position: sticky; top: 10.5rem; align-self: start; }
+}
+
+.fx-stage__name {
+  font-family: Sora, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+}
+
+.fx-stage__blurb { font-size: 0.875rem; line-height: 1.6; color: var(--muted); margin: 0; }
+
+.fx-stage__accent { display: block; width: 2.25rem; height: 3px; border-radius: 2px; margin-bottom: 1.25rem; }
+.fx-stage[data-accent="brand"] .fx-stage__accent { background: var(--brand); }
+.fx-stage[data-accent="teal"]  .fx-stage__accent { background: var(--teal); }
+.fx-stage[data-accent="grape"] .fx-stage__accent { background: var(--grape); }
+.fx-stage[data-accent="ink"]   .fx-stage__accent { background: var(--ink); }
+
+/* --- Spotlight (the flagship capability in a stage) ---------------------- */
+
+.fx-spot {
+  border: 1px solid var(--line);
+  border-radius: 1.125rem;
+  padding: clamp(1.35rem, 3vw, 2rem);
+  background: #fff;
+  margin-bottom: 2rem;
+}
+
+.fx-spot__top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; }
+.fx-spot h3 { margin: 0 0 0.6rem; }
+.fx-spot p { margin: 0; color: var(--muted); line-height: 1.62; font-size: 0.9375rem; max-width: 58ch; }
+
+/* --- Feature rows -------------------------------------------------------- */
+
+.fx-rows { border-top: 1px solid var(--line); }
+
+.fx-row {
+  display: grid;
+  gap: 0.3rem 1.5rem;
+  padding-block: 1.05rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+@media (min-width: 48rem) {
+  .fx-row { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto; align-items: baseline; gap: 1.75rem; }
+}
+
+.fx-row__name {
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.fx-row__desc { font-size: 0.9375rem; line-height: 1.58; color: var(--muted); margin: 0; }
+
+/* --- Plan availability chips --------------------------------------------- */
+
+.fx-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: Sora, system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.24rem 0.5rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.fx-chip--free  { background: rgba(13, 148, 136, 0.1);  color: #0b6b63; border-color: rgba(13, 148, 136, 0.22); }
+.fx-chip--paid  { background: rgba(28, 28, 46, 0.055);  color: var(--ink-2); border-color: rgba(28, 28, 46, 0.12); }
+.fx-chip--addon { background: rgba(232, 114, 42, 0.1);  color: #a8501a; border-color: rgba(232, 114, 42, 0.24); }
+.fx-chip--soon  { background: rgba(124, 58, 237, 0.09); color: #5b2bb0; border-color: rgba(124, 58, 237, 0.22); }
+
+/* Legend under the jump nav. */
+.fx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  align-items: center;
+  padding-block: 1.5rem 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.fx-legend > span { display: inline-flex; align-items: center; gap: 0.45rem; }
+
+/* --- Dark band ------------------------------------------------------------ */
+
+.fx-dark {
+  background: var(--ink);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.fx-dark .fx-stage__name,
+.fx-dark .fx-row__name { color: #fff; }
+.fx-dark .fx-stage__blurb,
+.fx-dark .fx-row__desc,
+.fx-dark .fx-spot p { color: rgba(255, 255, 255, 0.58); }
+.fx-dark .fx-rows { border-top-color: rgba(255, 255, 255, 0.12); }
+.fx-dark .fx-row { border-bottom-color: rgba(255, 255, 255, 0.075); }
+.fx-dark .fx-spot { background: rgba(255, 255, 255, 0.035); border-color: rgba(255, 255, 255, 0.1); }
+.fx-dark .fx-stage { border-bottom-color: rgba(255, 255, 255, 0.07); }
+.fx-dark .fx-chip--paid { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.78); border-color: rgba(255, 255, 255, 0.16); }
+
+/* --- Integrations --------------------------------------------------------- */
+
+.fx-integrations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  overflow: hidden;
+  margin-top: 1.75rem;
+}
+
+.fx-int { background: #fff; padding: 1.35rem 1.4rem; }
+.fx-int h4 { font-family: Sora, system-ui, sans-serif; font-size: 0.9375rem; font-weight: 700; margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+.fx-int p { margin: 0; font-size: 0.875rem; line-height: 1.55; color: var(--muted); }
+
+/* --- Plan comparison table ------------------------------------------------ */
+
+.fx-table-wrap { overflow-x: auto; max-width: 100%; margin-top: 1.75rem; border: 1px solid var(--line); border-radius: 1rem; background: #fff; }
+
+.fx-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 44rem; }
+
+.fx-table th,
+.fx-table td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--line-soft); }
+
+.fx-table thead th {
+  font-family: Sora, system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  border-bottom-color: var(--line);
+  white-space: nowrap;
+}
+
+.fx-table tbody th { font-weight: 600; color: var(--ink); }
+.fx-table td { color: var(--muted); text-align: center; }
+.fx-table td:first-of-type,
+.fx-table th:first-child { text-align: left; }
+.fx-table tr:last-child th,
+.fx-table tr:last-child td { border-bottom: none; }
+
+.fx-yes { color: var(--teal); font-weight: 700; }
+.fx-no { color: rgba(28, 28, 46, 0.25); }
+
+.fx-table__price { font-family: Sora, system-ui, sans-serif; font-weight: 700; color: var(--ink); }
+
+/* --- Callout / honesty note -----------------------------------------------
+   Set as a labelled aside rather than a tinted box with a coloured side bar:
+   the side-bar callout is a stock pattern and reads as filler. A small caps
+   label over a hairline rule keeps it in the page's editorial voice. */
+
+.fx-note {
+  margin-top: 1.75rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+  line-height: 1.62;
+  color: var(--muted);
+  max-width: 68ch;
+}
+.fx-note strong { color: var(--ink); font-weight: 650; }
+
+.fx-note__label {
+  display: block;
+  font-family: Sora, system-ui, sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  margin-bottom: 0.45rem;
+}
+
+/* --- FAQ ------------------------------------------------------------------ */
+
+.fx-faq { border-top: 1px solid var(--line); margin-top: 1.75rem; }
+
+.fx-faq details { border-bottom: 1px solid var(--line-soft); }
+.fx-faq summary {
+  cursor: pointer;
+  list-style: none;
+  padding-block: 1.1rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.fx-faq summary::-webkit-details-marker { display: none; }
+.fx-faq summary::after {
+  content: "+";
+  font-family: Sora, system-ui, sans-serif;
+  font-size: 1.15rem;
+  color: var(--muted-2);
+  flex: none;
+  line-height: 1;
+}
+.fx-faq details[open] summary::after { content: "\2212"; }
+.fx-faq p { margin: 0 0 1.15rem; color: var(--muted); line-height: 1.62; font-size: 0.9375rem; max-width: 70ch; }
+
+/* --- Closing CTA ---------------------------------------------------------- */
+
+.fx-cta { padding-block: clamp(3.5rem, 8vw, 6rem); text-align: center; }
+.fx-cta p { margin: 1rem auto 0; max-width: 46ch; }
+
+.fx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--brand);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 0.9375rem;
+  padding: 0.9rem 1.75rem;
+  border-radius: 999px;
+  margin-top: 1.75rem;
+  box-shadow: 0 8px 32px -6px rgba(232, 114, 42, 0.35);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+.fx-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px -6px rgba(232, 114, 42, 0.45); }
+
+.fx-fineprint { font-size: 0.75rem; color: var(--muted-2); margin-top: 0.9rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .fx-btn:hover { transform: none; }
+}

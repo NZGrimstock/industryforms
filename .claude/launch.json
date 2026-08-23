@@ -11,8 +11,8 @@
     },
     {
       "name": "marketing-site",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8088"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve-site.mjs", "8088"],
       "port": 8088
     }
   ]
