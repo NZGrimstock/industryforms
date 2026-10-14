@@ -6,6 +6,7 @@ import { DEFAULT_COST_CATEGORIES } from '@/lib/cost-categories'
 import { CURRENT_TERMS_VERSION } from '@/lib/legal'
 import { sendEmail, welcomeDripEmailHtml } from '@/lib/email'
 import { logEvent } from '@/lib/notify'
+import { signupTextError, BURST_WINDOW_MINUTES, BURST_MAX_SIGNUPS } from '@/lib/signup-guard'
 
 // Tells the business admin console (admin.industryforms.co.nz) about a new trial signup
 // so sales/support can see and follow up with them well before day 28, when Stripe would
@@ -48,7 +49,14 @@ function emailDomain(addr: string | null | undefined): string | null {
 
 export async function POST(request: Request) {
   try {
-    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms, referralCode } = await request.json()
+    const { fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms, referralCode, website } = await request.json()
+
+    // Honeypot: the web form has a hidden "website" field people never see or fill.
+    // Bots fill every field. (The mobile app doesn't send it at all, which is fine.)
+    if (typeof website === 'string' && website.trim() !== '') {
+      console.warn('[signup] honeypot tripped')
+      return NextResponse.json({ error: 'Signup failed' }, { status: 400 })
+    }
 
     if (!fullName || !email || !password || !companyName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -65,7 +73,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: PASSWORD_POLICY_MESSAGE }, { status: 400 })
     }
 
+    // Names go straight into the welcome email ("Hi {name},") — see lib/signup-guard.ts
+    // for the 2026-09-30 attack that used that to mail a link to ~155k inboxes.
+    const textError = signupTextError(String(fullName), String(companyName))
+    if (textError) return NextResponse.json({ error: textError }, { status: 400 })
+
     const supabase = createServiceClient()
+
+    // Burst limit across all signups: real trials arrive a few a day, the bot ran
+    // at several per second. Over the limit we refuse rather than send more email.
+    const since = new Date(Date.now() - BURST_WINDOW_MINUTES * 60_000).toISOString()
+    const { count: recentSignups } = await supabase.from('companies').select('id', { count: 'exact', head: true }).gte('created_at', since)
+    if ((recentSignups ?? 0) >= BURST_MAX_SIGNUPS) {
+      console.warn(`[signup] burst limit hit: ${recentSignups} companies in ${BURST_WINDOW_MINUTES} min`)
+      return NextResponse.json({ error: 'We’re getting a lot of signups right now — please try again in a few minutes.' }, { status: 429 })
+    }
 
     async function rollbackSignup(userId: string, companyId?: string) {
       if (companyId) await supabase.from('companies').delete().eq('id', companyId)

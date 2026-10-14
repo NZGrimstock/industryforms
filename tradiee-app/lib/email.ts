@@ -1,4 +1,5 @@
 import { DEFAULT_TIMEZONE, formatDate } from '@/lib/datetime'
+import { escapeHtml } from '@/lib/signup-guard'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const FROM_EMAIL = process.env.EMAIL_FROM ?? 'noreply@tradehub.app'
@@ -470,7 +471,7 @@ export type WelcomeDripStage = 'day0' | 'day7' | 'day14' | 'day21' | 'trial_endi
 export function welcomeDripEmailHtml({
   stage, recipientName, appUrl, daysLeft,
 }: { stage: WelcomeDripStage; recipientName: string; appUrl: string; daysLeft?: number }) {
-  const greeting = `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${recipientName},</p>`
+  const greeting = `<p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${escapeHtml(recipientName)},</p>`
   const helpLink = `${appUrl}/settings?tab=help`
   const dashUrl = `${appUrl}/dashboard`
   const subUrl = `${appUrl}/settings?tab=subscription`
@@ -578,7 +579,7 @@ export function tapToPayLaunchEmailHtml({ recipientName, appUrl }: { recipientNa
       <img src="${appUrl}/Logo.png" alt="IndustryForms" style="height:40px;max-width:220px;display:block" />
     </div>
     <div style="padding:32px">
-      <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${recipientName},</p>
+      <p style="margin:0 0 16px;font-size:16px;color:#374151">Hi ${escapeHtml(recipientName)},</p>
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827">Tap to Pay on iPhone is now available in IndustryForms.</h1>
       <img src="${heroUrl}" alt="A customer holding a contactless card to a merchant's iPhone to pay." width="320" style="display:block;margin:8px auto 24px;width:320px;max-width:100%;height:auto" />
       <p style="margin:0 0 24px;color:#6b7280;line-height:1.5">You can accept all types of contactless payments right on your iPhone — from physical debit and credit cards to Apple Pay and other digital wallets. No extra terminals or hardware needed.</p>

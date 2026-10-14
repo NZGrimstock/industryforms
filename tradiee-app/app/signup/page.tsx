@@ -20,6 +20,8 @@ export default function SignupPage() {
   const [tradeType, setTradeType] = useState('')
   const [country, setCountry] = useState('NZ')
   const [agreed, setAgreed] = useState(false)
+  // Honeypot — hidden from people, bots fill it. See lib/signup-guard.ts.
+  const [website, setWebsite] = useState('')
   const [referralCode, setReferralCode] = useState('')
 
   // Prefill from the marketing site's hero email capture form (?email=), or
@@ -78,7 +80,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms: agreed, referralCode: referralCode.trim() || undefined }),
+        body: JSON.stringify({ fullName, email, password, companyName, companyAddress, tradeType, country, phone, acceptedTerms: agreed, referralCode: referralCode.trim() || undefined, website }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Signup failed')
@@ -164,6 +166,10 @@ export default function SignupPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Referral code <span className="font-normal text-gray-400">(optional)</span></label>
               <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 value={referralCode} onChange={e => setReferralCode(e.target.value)} placeholder="Got a code from a friend?" />
+            </div>
+
+            <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+              <label>Website <input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label>
             </div>
 
             <label className="flex items-start gap-2 text-sm text-gray-600">
