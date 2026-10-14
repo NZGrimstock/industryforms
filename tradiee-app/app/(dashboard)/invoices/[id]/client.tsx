@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
+import { lineNet, type DiscountType } from '@/lib/pricing'
+import { recomputeInvoiceTotals } from '@/lib/invoice-totals'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Send, DollarSign, Trash2, Mail, RefreshCw, MessageSquare, Tag, Briefcase, Search, CheckCircle2, Printer, FileText, Undo2 } from 'lucide-react'
 import { Dropdown, DropdownItem } from '@/components/ui/dropdown'
@@ -79,9 +80,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
   // Also pushes the new totals into the shared line context so the table footer
   // updates immediately instead of waiting for the server round trip.
   async function recompute(discType: DiscountType, discVal: number) {
-    const { data: lines } = await supabase.from('invoice_line_items').select('line_total, tax_rate').eq('invoice_id', invoice.id)
-    const taxed = computeTaxedTotals((lines ?? []).map(l => ({ net: Number(l.line_total), taxRate: l.tax_rate != null ? Number(l.tax_rate) : gstRate })), discType, discVal)
-    await supabase.from('invoices').update({ subtotal: taxed.subtotal, discount_amount: taxed.discount, gst_amount: taxed.gst, total: taxed.total }).eq('id', invoice.id)
+    const taxed = await recomputeInvoiceTotals(supabase, invoice.id, gstRate, discType, discVal)
     applyTotals({ subtotal: taxed.subtotal, discount_amount: taxed.discount, gst_amount: taxed.gst, total: taxed.total, discount_type: discType, discount_value: discVal })
   }
   const [paymentForm, setPaymentForm] = useState({ amount: (invoice.total - invoice.amount_paid).toString(), method: 'bank_transfer', notes: '' })
@@ -125,7 +124,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       tax_rate: parseFloat(lineForm.tax_rate),
       line_total: lineTotal,
       sort_order: 99,
-    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order').single()
+    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order, type, tax_rate').single()
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     if (inserted) addLines([inserted as InvoiceLine])
     if (item) await consumeStock([{ item_id: item.id, quantity: qty }])
@@ -178,7 +177,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       tax_rate: gstRate,
       line_total: lineNet(1, Number(kitSell.toFixed(2)), null, 0, gstRate, pricesIncludeTax),
       sort_order: 99,
-    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order').single()
+    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order, type, tax_rate').single()
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     if (inserted) addLines([inserted as InvoiceLine])
     await consumeStock(components.map(ki => ({ item_id: ki.price_list_items!.id, quantity: Number(ki.quantity) })))
@@ -217,7 +216,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
           sort_order: 99 + i,
         }
       })
-    ).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order')
+    ).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order, type, tax_rate')
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     if (insertedKitLines) addLines(insertedKitLines as InvoiceLine[])
     await consumeStock(components.map(c => ({ item_id: c.price_list_items!.id, quantity: Number(c.quantity) })))
@@ -244,7 +243,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
       tax_rate: gstRate,
       line_total: lineNet(1, price, null, 0, gstRate, pricesIncludeTax),
       sort_order: 99,
-    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order').single()
+    }).select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order, type, tax_rate').single()
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     if (inserted) addLines([inserted as InvoiceLine])
     await recompute(invoice.discount_type, invoice.discount_value)
@@ -281,7 +280,7 @@ export function InvoiceDetailClient({ invoice, companyId, gstRate, pricesInclude
     })
     if (rows.length === 0) { toast('No job materials to import', 'error'); setLoading(false); return }
     const { data: insertedJobLines, error } = await supabase.from('invoice_line_items').insert(rows)
-      .select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order')
+      .select('id, description, quantity, unit, unit_price, discount_type, discount_value, line_total, sort_order, type, tax_rate')
     if (error) { toast(error.message, 'error'); setLoading(false); return }
     if (insertedJobLines) addLines(insertedJobLines as InvoiceLine[])
     await recompute(invoice.discount_type, invoice.discount_value)

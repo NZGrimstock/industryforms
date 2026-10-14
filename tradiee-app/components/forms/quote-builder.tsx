@@ -5,15 +5,22 @@ import { createClient } from '@/lib/supabase/client'
 import { PriceListItem, Kit, Customer, CustomerSite, QuoteSection, QuoteLineItem } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { formatCurrency, quoteLabel } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, quoteLabel } from '@/lib/utils'
 import { lineNet, computeTaxedTotals, type DiscountType } from '@/lib/pricing'
 import { priceForCustomerGroup } from '@/lib/customer-pricing'
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronRight, Package, Clock } from 'lucide-react'
+import { Plus, Trash2, Package, Clock, Eye, Pencil } from 'lucide-react'
+import {
+  DocumentWorkspace, Paper, PaperHeader, PaperFields, PaperColumns, PaperBlock, PaperLines, PaperLinesHead,
+  PaperSectionHeading, PaperEditRow, PaperTotals, PaperSignatures, PaperFootnote, PaperLegend,
+  InternalRail, RailCard, RailRow, PAPER_INPUT, PAPER_LINE_GRID, PAPER_GHOST_BUTTON, type PaperCompany,
+} from '@/components/documents/paper'
+
+// Number inputs on the paper: no spinner arrows, right-aligned like print.
+const PAPER_NUM = cn(PAPER_INPUT, 'text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')
+const RAIL_INPUT = 'w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/30'
+const RAIL_LABEL = 'mb-1 block text-xs font-semibold text-gray-600'
 
 type DraftSection = Omit<QuoteSection, 'id'> & { id: string; lines: DraftLine[] }
 type DraftLine = Omit<QuoteLineItem, 'id' | 'section_id' | 'quote_id' | 'created_at'> & { id: string }
@@ -73,6 +80,10 @@ interface Props {
     sections: Array<{ title: string; is_optional?: boolean; lines: Array<{ description?: string; quantity?: number; unit?: string; unit_cost?: number; unit_price?: number; type?: string; discount_type?: string | null; discount_value?: number | null; tax_rate?: number | null }> }>
   }
   editQuote?: EditQuoteData
+  /** Header of the paper — the same company block the printed quote shows. */
+  company: PaperCompany
+  /** When the quote row was created (editing); new quotes show today. */
+  createdAt?: string | null
 }
 
 let idSeq = 0
@@ -101,6 +112,8 @@ function LineDescriptionInput({
   onTextChange,
   onPick,
   onEnter,
+  onFocusLine,
+  readOnly,
 }: {
   value: string
   placeholder: string
@@ -108,6 +121,8 @@ function LineDescriptionInput({
   onTextChange: (value: string) => void
   onPick: (item: PriceListItem) => void
   onEnter: () => void
+  onFocusLine?: () => void
+  readOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -132,16 +147,18 @@ function LineDescriptionInput({
 
   return (
     <div ref={ref} className="relative flex-1">
-      <Input
+      <input
         value={value}
-        onFocus={() => setOpen(true)}
+        readOnly={readOnly}
+        aria-label="Description"
+        onFocus={() => { if (!readOnly) setOpen(true); onFocusLine?.() }}
         onChange={e => { onTextChange(e.target.value); setOpen(true) }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onEnter() } }}
-        className="h-7 text-sm"
+        className={PAPER_INPUT}
         placeholder={placeholder}
       />
-      {open && matches.length > 0 && (
-        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+      {open && !readOnly && matches.length > 0 && (
+        <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white font-sans shadow-lg">
           {matches.map(item => (
             <button
               key={item.id}
@@ -163,12 +180,13 @@ function LineDescriptionInput({
 }
 
 // Customer typeahead combobox with inline "new customer" (same as the jobs form).
-function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: {
+function CustomerCombobox({ customers, value, onChange, companyId, onCreated, inputClassName }: {
   customers: (Customer & { customer_sites: CustomerSite[] })[]
   value: string
   onChange: (id: string) => void
   companyId: string
   onCreated: (c: Customer & { customer_sites: CustomerSite[] }) => void
+  inputClassName?: string
 }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -216,14 +234,15 @@ function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: 
   return (
     <div ref={ref} className="relative">
       <input
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+        aria-label="Customer"
+        className={inputClassName ?? 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400'}
         placeholder="Start typing customer name…"
         value={open ? query : (selected?.name ?? '')}
         onFocus={() => { setOpen(true); setQuery('') }}
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
       />
       {open && !creating && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto font-sans">
           <button
             type="button"
             className="w-full text-left px-3 py-2 text-sm font-medium text-[var(--accent,#f97316)] hover:bg-orange-50 border-b border-gray-100 flex items-center gap-1.5"
@@ -251,7 +270,7 @@ function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: 
         </div>
       )}
       {open && creating && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg p-3 space-y-2 font-sans">
           <Input autoFocus placeholder="Customer name *" value={newCust.name} onChange={e => setNewCust(c => ({ ...c, name: e.target.value }))} />
           <Input placeholder="Phone" value={newCust.phone} onChange={e => setNewCust(c => ({ ...c, phone: e.target.value }))} />
           <Input placeholder="Email" value={newCust.email} onChange={e => setNewCust(c => ({ ...c, email: e.target.value }))} />
@@ -265,7 +284,7 @@ function CustomerCombobox({ customers, value, onChange, companyId, onCreated }: 
   )
 }
 
-export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, isFreePlan = false, templateData, editQuote }: Props) {
+export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, customers, priceItems, kits, defaultCustomerId, defaultTerms, billingRates = [], taxRates = [], pricesIncludeTax = false, isFreePlan = false, templateData, editQuote, company, createdAt }: Props) {
   const rateOf = (l: { tax_rate: number | null }) => l.tax_rate ?? gstRate
   const netOf = (qty: number, price: number, dType: DiscountType, dVal: number, rate: number) => lineNet(qty, price, dType, dVal, rate, pricesIncludeTax)
   // Tax options for the per-line picker — fall back to a standard GST + GST-free pair.
@@ -278,7 +297,10 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   const [customerList, setCustomerList] = useState(customers)
   const [addItemOpen, setAddItemOpen] = useState<{ sectionId: string; mode: 'items' | 'kits' } | null>(null)
   const [priceSearch, setPriceSearch] = useState('')
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['main']))
+  // Line whose hidden details (cost, discount, tax…) show in the side rail.
+  const [selected, setSelected] = useState<{ sectionId: string; lineId: string } | null>(null)
+  // "Customer view": the paper exactly as it prints — no edit controls.
+  const [preview, setPreview] = useState(false)
   // Tracks the quote row once it exists in the DB — whether it arrived via
   // editQuote (editing) or was created by the very first autosave (new quote).
   // Once set, further saves (autosave or explicit) update it instead of
@@ -381,7 +403,7 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   function focusNextLineControl(e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, sectionId: string) {
     if (e.key !== 'Enter') return
     e.preventDefault()
-    const row = e.currentTarget.closest('tr')
+    const row = e.currentTarget.closest('[data-line-row]')
     const controls = Array.from(row?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select') ?? [])
       .filter(control => !control.disabled && control.type !== 'checkbox')
     const index = controls.indexOf(e.currentTarget)
@@ -396,12 +418,12 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
 
   function removeLine(sectionId: string, lineId: string) {
     setSections(ss => ss.map(s => s.id !== sectionId ? s : { ...s, lines: s.lines.filter(l => l.id !== lineId) }))
+    setSelected(sel => (sel?.lineId === lineId ? null : sel))
   }
 
   function addSection() {
     const s = emptySection()
     setSections(ss => [...ss, s])
-    setExpandedSections(e => new Set([...e, s.id]))
   }
 
   function updateSection(id: string, k: keyof DraftSection, v: unknown) {
@@ -411,15 +433,6 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
   function removeSection(id: string) {
     if (sections.length === 1) return
     setSections(ss => ss.filter(s => s.id !== id))
-  }
-
-  function toggleSection(id: string) {
-    setExpandedSections(e => {
-      const n = new Set(e)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
   }
 
   function priceListLine(item: PriceListItem, quantity = 1): DraftLine {
@@ -560,263 +573,427 @@ export function QuoteBuilder({ companyId, profileId, quoteNumber, gstRate, custo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, sections, docDiscountType, docDiscountValue])
 
+
+  // ── Paper view ─────────────────────────────────────────────────────────────
+  const docWord = quoteLabel(isEstimate)
+  const ro = preview
+  const selectedSection = selected ? sections.find(s => s.id === selected.sectionId) : undefined
+  const selectedLine = selectedSection?.lines.find(l => l.id === selected?.lineId)
+  // Same gross-profit basis as the quote detail page: sell subtotal minus the
+  // cost of every line.
+  const totalCost = sections.flatMap(s => s.lines).reduce((sum, l) => sum + Number(l.quantity) * Number(l.unit_cost ?? 0), 0)
+  const grossProfit = subtotal - totalCost
+  const margin = subtotal > 0 ? (grossProfit / subtotal) * 100 : 0
+  const preTax = subtotal - docDiscountAmount
+  // Lines are numbered straight through all sections, like the printed quote.
+  const lineNumbers = new Map<string, number>()
+  sections.flatMap(s => s.lines).forEach((l, i) => lineNumbers.set(l.id, i + 1))
+  const selectedNo = selectedLine ? lineNumbers.get(selectedLine.id) ?? 0 : 0
+
+  function selectLine(sectionId: string, lineId: string) {
+    if (!ro) setSelected({ sectionId, lineId })
+  }
+
+  const totalsRows = [
+    { label: 'Total before discount', value: formatCurrency(subtotal) },
+    ...(docDiscountAmount > 0
+      ? [{ label: 'Total discount', value: `-${formatCurrency(docDiscountAmount)}` }, { label: 'Total before tax', value: formatCurrency(preTax) }]
+      : []),
+    { label: 'Total tax', value: formatCurrency(gstAmount) },
+  ]
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6 min-h-screen">
-      <div className="flex-1 space-y-4">
-        {/* Meta */}
-        <Card>
-          <CardHeader className="flex items-center justify-between gap-3">
-            <span className="font-semibold text-sm text-gray-900">{quoteLabel(isEstimate)} details</span>
-            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-              <input type="checkbox" checked={isEstimate} onChange={e => setIsEstimate(e.target.checked)} className="rounded" />
-              This is an estimate, not a fixed quote
-            </label>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Customer <span className="text-red-400">*</span></Label>
-              <CustomerCombobox
-                customers={customerList}
-                value={meta.customerId}
-                onChange={id => { updateMeta('customerId', id); updateMeta('siteId', '') }}
-                companyId={companyId}
-                onCreated={c => { setCustomerList(prev => [...prev, c]); updateMeta('customerId', c.id); updateMeta('siteId', '') }}
-              />
-            </div>
-            <div>
-              <Label>Job site</Label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-orange-400"
-                value={meta.siteId}
-                onChange={e => updateMeta('siteId', e.target.value)}
-                disabled={!selectedCustomer}
-              >
-                <option value="">{selectedCustomer ? 'No specific site' : 'Select a customer first'}</option>
-                {(selectedCustomer?.customer_sites ?? []).map(s => (
-                  <option key={s.id} value={s.id}>{s.label ? `${s.label} — ${s.address}` : s.address}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>Title <span className="text-red-400">*</span></Label>
-              <Input value={meta.title} onChange={e => updateMeta('title', e.target.value)} placeholder="e.g. Electrical work at 12 Main St" />
-            </div>
-            <div>
-              <Label>Reference</Label>
-              <Input value={meta.reference} onChange={e => updateMeta('reference', e.target.value)} placeholder="Customer PO / your ref" />
-            </div>
-            <div>
-              <Label>Expires</Label>
-              <div className="flex gap-1.5 items-center">
-                <Input type="date" value={meta.expires_at} onChange={e => updateMeta('expires_at', e.target.value)} className="flex-1" />
-                <button onClick={() => setExpiry(7)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-[var(--accent,#f97316)]/10 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">7d</button>
-                <button onClick={() => setExpiry(30)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-[var(--accent,#f97316)]/10 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">30d</button>
-                <button onClick={() => setExpiry(90)} className="px-2 py-1.5 text-xs font-medium bg-gray-100 hover:bg-[var(--accent,#f97316)]/10 hover:text-[var(--accent,#f97316)] rounded-lg whitespace-nowrap transition-colors">90d</button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="p-4 sm:p-6">
+      <div className="mx-auto max-w-[1240px]">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-600">
+            {editQuote ? 'Editing' : 'New'} {docWord.toLowerCase()} <b className="font-semibold text-gray-900">{quoteNumber}</b>
+          </span>
+          <span className="text-xs text-gray-500" aria-live="polite">
+            {autosaveStatus === 'saving' ? 'Saving draft…' : autosaveStatus === 'saved' ? 'Draft auto-saved' : ''}
+          </span>
+          <span className="flex-1" />
+          <Button variant={preview ? 'secondary' : 'outline'} size="sm" onClick={() => { setPreview(p => !p); setSelected(null) }}>
+            {preview ? <><Pencil className="h-4 w-4" /> Back to editing</> : <><Eye className="h-4 w-4" /> Customer view</>}
+          </Button>
+          <Button variant="outline" size="sm" loading={saving} onClick={() => save('draft')}>Save draft</Button>
+          <Button size="sm" loading={saving} onClick={() => save('sent')}>Save &amp; send</Button>
+        </div>
+        <PaperLegend />
 
-        {/* Sections */}
-        {sections.map(s => (
-          <Card key={s.id}>
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-              <GripVertical className="h-4 w-4 text-gray-300 shrink-0" />
-              <button onClick={() => toggleSection(s.id)} className="mr-1">
-                {expandedSections.has(s.id) ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-              </button>
-              <Input value={s.title} onChange={e => updateSection(s.id, 'title', e.target.value)} className="h-7 text-sm font-medium border-0 shadow-none p-0 focus:ring-0" />
-              <div className="flex items-center gap-3 ml-auto shrink-0">
-                {!isFreePlan && (
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                    <input type="checkbox" checked={s.is_optional} onChange={e => updateSection(s.id, 'is_optional', e.target.checked)} className="rounded" />
-                    Optional
-                  </label>
-                )}
-                {sections.length > 1 && (
-                  <button onClick={() => removeSection(s.id)} className="text-gray-300 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
-                )}
-              </div>
-            </div>
+        <DocumentWorkspace>
+          <Paper label={`${docWord} document`}>
+            <PaperHeader company={company} docLabel={docWord} docNumber={quoteNumber} />
 
-            {expandedSections.has(s.id) && (
-              <div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 text-xs text-gray-400 border-b border-gray-100">
-                      <th className="text-left px-4 py-2 font-medium">Description</th>
-                      <th className="text-right px-3 py-2 font-medium w-24">Qty</th>
-                      <th className="text-left px-3 py-2 font-medium w-16">Unit</th>
-                      <th className="text-right px-3 py-2 font-medium w-28">Unit price</th>
-                      <th className="text-right px-3 py-2 font-medium w-28">Discount</th>
-                      <th className="text-left px-3 py-2 font-medium w-24">Tax</th>
-                      <th className="text-right px-3 py-2 font-medium w-28">Total</th>
-                      <th className="w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.lines.map(l => (
-                      <tr key={l.id} data-line-id={l.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${l.type === 'labour' ? 'bg-blue-50/30' : ''}`}>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            {l.type === 'labour' && <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
-                            {l.type === 'labour' ? (
-                              <Input value={l.description} onChange={e => updateLine(s.id, l.id, 'description', e.target.value)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm" placeholder="Labour description..." />
-                            ) : (
-                              <LineDescriptionInput
-                                value={l.description}
-                                placeholder="Description..."
-                                priceItems={priceItems}
-                                onTextChange={value => updateLine(s.id, l.id, 'description', value)}
-                                onPick={item => updateLineFromPriceList(s.id, l.id, item)}
-                                onEnter={() => {
-                                  const row = document.querySelector(`tr[data-line-id="${l.id}"]`)
-                                  const first = row?.querySelectorAll<HTMLInputElement>('input')[1]
-                                  first?.focus()
-                                }}
-                              />
-                            )}
-                            {l.type === 'labour' && billingRates.length > 0 && (
-                              <select
-                                className="h-7 text-xs border border-gray-200 rounded px-1 text-gray-500 shrink-0"
-                                value=""
-                                onChange={e => { const r = billingRates.find(b => b.id === e.target.value); if (r) updateLine(s.id, l.id, 'unit_price', r.rate) }}
-                                title="Apply billing rate"
-                              >
-                                <option value="">Rate…</option>
-                                {billingRates.map(r => <option key={r.id} value={r.id}>{r.name} (${Number(r.rate).toFixed(0)})</option>)}
-                              </select>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            step="any"
+            <PaperFields
+              fields={[
+                { label: `Date of ${docWord.toLowerCase()}`, value: formatDate(createdAt ?? new Date()) },
+                { label: `${docWord} No.`, value: quoteNumber },
+                {
+                  label: 'Valid until',
+                  value: (
+                    <>
+                      <input
+                        type="date"
+                        aria-label="Valid until"
+                        readOnly={ro}
+                        value={meta.expires_at}
+                        onChange={e => updateMeta('expires_at', e.target.value)}
+                        className={cn(PAPER_INPUT, 'py-0 font-bold')}
+                      />
+                      {!ro && (
+                        <span className="mt-1 flex gap-1 font-sans text-[11px] font-medium">
+                          {[7, 30, 90].map(d => (
+                            <button key={d} type="button" onClick={() => setExpiry(d)} className="rounded bg-white px-1.5 py-0.5 text-gray-600 hover:bg-orange-50 hover:text-orange-800">{d}d</button>
+                          ))}
+                        </span>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
+
+            <PaperColumns>
+              <PaperBlock title="Client">
+                {ro ? (
+                  <div className="px-1">{selectedCustomer?.name ?? '—'}</div>
+                ) : (
+                  <CustomerCombobox
+                    customers={customerList}
+                    value={meta.customerId}
+                    onChange={id => { updateMeta('customerId', id); updateMeta('siteId', '') }}
+                    companyId={companyId}
+                    onCreated={c => { setCustomerList(prev => [...prev, c]); updateMeta('customerId', c.id); updateMeta('siteId', '') }}
+                    inputClassName={PAPER_INPUT}
+                  />
+                )}
+                {selectedCustomer?.billing_address ? <div className="whitespace-pre-wrap px-1">{selectedCustomer.billing_address}</div> : null}
+                {selectedCustomer?.email ? <div className="px-1">{selectedCustomer.email}</div> : null}
+              </PaperBlock>
+              <PaperBlock title="Reference">
+                <input
+                  aria-label="Reference"
+                  readOnly={ro}
+                  value={meta.reference}
+                  onChange={e => updateMeta('reference', e.target.value)}
+                  placeholder={ro ? '' : 'Customer PO / your ref'}
+                  className={PAPER_INPUT}
+                />
+              </PaperBlock>
+            </PaperColumns>
+
+            <input
+              aria-label={`${docWord} title`}
+              readOnly={ro}
+              value={meta.title}
+              onChange={e => updateMeta('title', e.target.value)}
+              placeholder={`${docWord} title, e.g. Electrical work at 12 Main St`}
+              className={cn(PAPER_INPUT, 'mb-3 text-base font-bold')}
+            />
+
+            <PaperLines>
+              <PaperLinesHead />
+              {sections.map(s => (
+                <div key={s.id}>
+                  <PaperSectionHeading
+                    optional={s.is_optional}
+                    controls={!ro && (
+                      <span className="flex items-center gap-3 font-sans">
+                        {!isFreePlan && (
+                          <label className="flex min-h-8 cursor-pointer items-center gap-1.5 text-xs text-gray-600">
+                            <input type="checkbox" checked={s.is_optional} onChange={e => updateSection(s.id, 'is_optional', e.target.checked)} className="rounded" />
+                            Optional
+                          </label>
+                        )}
+                        {sections.length > 1 && (
+                          <button type="button" aria-label={`Remove section ${s.title}`} onClick={() => removeSection(s.id)} className="rounded p-1 text-gray-400 hover:text-red-500">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </span>
+                    )}
+                  >
+                    <input
+                      aria-label="Section title"
+                      readOnly={ro}
+                      value={s.title}
+                      onChange={e => updateSection(s.id, 'title', e.target.value)}
+                      className={cn(PAPER_INPUT, 'font-bold')}
+                    />
+                  </PaperSectionHeading>
+
+                  {s.lines.map(l => {
+                    const isSel = !ro && selected?.lineId === l.id
+                    return (
+                      <div
+                        key={l.id}
+                        data-line-row
+                        data-line-id={l.id}
+                        className={cn(PAPER_LINE_GRID, 'border-b border-gray-100 px-2 py-0.5', isSel && 'bg-orange-50 shadow-[inset_3px_0_0_#f97316]')}
+                      >
+                        <span className="text-xs text-gray-500">{lineNumbers.get(l.id)}</span>
+                        {l.type === 'labour' ? (
+                          <input
+                            aria-label="Description"
+                            readOnly={ro}
+                            value={l.description}
+                            onFocus={() => selectLine(s.id, l.id)}
+                            onChange={e => updateLine(s.id, l.id, 'description', e.target.value)}
+                            onKeyDown={e => focusNextLineControl(e, s.id)}
+                            className={PAPER_INPUT}
+                            placeholder="Labour description…"
+                          />
+                        ) : (
+                          <LineDescriptionInput
+                            value={l.description}
+                            placeholder="Description…"
+                            priceItems={priceItems}
+                            readOnly={ro}
+                            onFocusLine={() => selectLine(s.id, l.id)}
+                            onTextChange={value => updateLine(s.id, l.id, 'description', value)}
+                            onPick={item => updateLineFromPriceList(s.id, l.id, item)}
+                            onEnter={() => {
+                              const row = document.querySelector(`[data-line-id="${l.id}"]`)
+                              row?.querySelectorAll<HTMLInputElement>('input')[1]?.focus()
+                            }}
+                          />
+                        )}
+                        <span className="flex gap-0.5">
+                          <input
+                            type="number" min="0" step="any" aria-label="Quantity" readOnly={ro}
                             value={l.quantity}
+                            onFocus={() => selectLine(s.id, l.id)}
                             onChange={e => updateLine(s.id, l.id, 'quantity', parseFloat(e.target.value) || 0)}
                             onKeyDown={e => focusNextLineControl(e, s.id)}
-                            className="h-7 text-sm text-right"
+                            className={cn(PAPER_NUM, 'w-[55%]')}
                           />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input value={l.unit} onChange={e => updateLine(s.id, l.id, 'unit', e.target.value)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm" />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input type="number" step="0.01" value={l.unit_price} onChange={e => updateLine(s.id, l.id, 'unit_price', parseFloat(e.target.value) || 0)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm text-right" />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1">
-                            <Input type="number" min="0" step="any" value={l.discount_value || ''} placeholder="0" onChange={e => updateLine(s.id, l.id, 'discount_value', parseFloat(e.target.value) || 0)} onKeyDown={e => focusNextLineControl(e, s.id)} className="h-7 text-sm text-right" />
-                            <button type="button" onClick={() => updateLine(s.id, l.id, 'discount_type', l.discount_type === 'percent' ? 'amount' : 'percent')} className="h-7 px-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded hover:bg-gray-200 shrink-0" title="Toggle $ / %">
-                              {l.discount_type === 'percent' ? '%' : '$'}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            className="h-7 text-xs border border-gray-200 rounded px-1 text-gray-600 w-full"
-                            value={String(l.tax_rate ?? gstRate)}
-                            onChange={e => updateLine(s.id, l.id, 'tax_rate', parseFloat(e.target.value))}
+                          <input
+                            aria-label="Unit" readOnly={ro}
+                            value={l.unit}
+                            onFocus={() => selectLine(s.id, l.id)}
+                            onChange={e => updateLine(s.id, l.id, 'unit', e.target.value)}
                             onKeyDown={e => focusNextLineControl(e, s.id)}
-                          >
-                            {taxOptions.map(t => <option key={t.id} value={String(t.rate)}>{t.name} ({Math.round(t.rate * 100)}%)</option>)}
-                          </select>
-                        </td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-700 text-sm whitespace-nowrap">
-                          {formatCurrency(l.line_total)}
-                        </td>
-                        <td className="px-2 py-2">
-                          <button onClick={() => removeLine(s.id, l.id)} className="text-gray-300 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="px-4 py-2 flex gap-2 flex-wrap">
-                  <Button variant="ghost" size="sm" onClick={() => addLine(s.id)}>
-                    <Plus className="h-3.5 w-3.5" /> Add line
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => addLabour(s.id)}>
-                    <Clock className="h-3.5 w-3.5" /> Add labour
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => addSundry(s.id)}>
-                    <Plus className="h-3.5 w-3.5" /> Add sundry
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'items' })}>
-                    <Package className="h-3.5 w-3.5" /> Price List Lookup
-                  </Button>
-                  {kits.length > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'kits' })}>
-                      <Package className="h-3.5 w-3.5" /> Add kit
-                    </Button>
+                            className={cn(PAPER_INPUT, 'w-[45%]')}
+                          />
+                        </span>
+                        <span className="flex items-center">
+                          <span className="text-gray-500">$</span>
+                          <input
+                            type="number" step="0.01" aria-label="Unit price" readOnly={ro}
+                            value={l.unit_price}
+                            onFocus={() => selectLine(s.id, l.id)}
+                            onChange={e => updateLine(s.id, l.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                            onKeyDown={e => focusNextLineControl(e, s.id)}
+                            className={PAPER_NUM}
+                          />
+                        </span>
+                        <span className="whitespace-nowrap pr-1 text-right">{formatCurrency(l.line_total)}</span>
+                      </div>
+                    )
+                  })}
+
+                  {!ro && (
+                    <PaperEditRow>
+                      <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => addLine(s.id)}><Plus className="h-3.5 w-3.5" /> Line</button>
+                      <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => addLabour(s.id)}><Clock className="h-3.5 w-3.5" /> Labour</button>
+                      <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => addSundry(s.id)}><Plus className="h-3.5 w-3.5" /> Sundry</button>
+                      <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'items' })}><Package className="h-3.5 w-3.5" /> Price list</button>
+                      {kits.length > 0 && (
+                        <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => setAddItemOpen({ sectionId: s.id, mode: 'kits' })}><Package className="h-3.5 w-3.5" /> Kit</button>
+                      )}
+                    </PaperEditRow>
                   )}
                 </div>
-              </div>
-            )}
-          </Card>
-        ))}
+              ))}
+              {!ro && (
+                <button
+                  type="button"
+                  onClick={addSection}
+                  className="mt-3 min-h-10 w-full rounded-md border border-dashed border-gray-300 bg-gray-50 font-sans text-[13px] text-gray-600 hover:bg-orange-50 hover:text-orange-800"
+                >
+                  + Add section
+                </button>
+              )}
+            </PaperLines>
 
-        <Button variant="outline" onClick={addSection} size="sm"><Plus className="h-4 w-4" /> Add section</Button>
+            <PaperTotals rows={totalsRows} grand={{ label: 'Total', value: formatCurrency(total) }} />
 
-        {/* Notes & terms */}
-        <Card>
-          <CardHeader className="font-semibold text-sm text-gray-900">Notes &amp; terms</CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Message to customer</Label>
-              <Textarea value={meta.customer_message} onChange={e => updateMeta('customer_message', e.target.value)} rows={3} placeholder="Shown on the quote…" />
-            </div>
-            <div>
-              <Label>Internal notes</Label>
-              <Textarea value={meta.notes} onChange={e => updateMeta('notes', e.target.value)} rows={2} placeholder="Not shown to customer" />
-            </div>
-            <div>
-              <Label>Terms &amp; conditions</Label>
-              <Textarea value={meta.terms} onChange={e => updateMeta('terms', e.target.value)} rows={4} placeholder="Payment terms, warranty, cancellation policy…" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <PaperSignatures left="Customer signature" right="Authorised signature" />
 
-      {/* Sidebar */}
-      <div className="w-full lg:w-72 space-y-4 shrink-0">
-        <Card className="sticky top-20">
-          <CardHeader className="font-semibold text-sm text-gray-900">{quoteNumber}</CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5 text-sm">
-              {pricesIncludeTax && <p className="text-xs text-gray-400 -mt-1 mb-1">Unit prices include GST</p>}
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
+            <div className="mt-7 grid grid-cols-1 gap-7 sm:grid-cols-2">
+              {(!ro || meta.customer_message) && (
+                <div>
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-[.05em] text-gray-600">Message</div>
+                  <textarea
+                    aria-label="Message to customer" readOnly={ro} rows={5}
+                    value={meta.customer_message}
+                    onChange={e => updateMeta('customer_message', e.target.value)}
+                    placeholder="Shown on the quote…"
+                    className={cn(PAPER_INPUT, 'block resize-y text-xs leading-[1.55] text-gray-700')}
+                  />
+                </div>
+              )}
               <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-600">Discount</span>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number" min="0" step="any" value={docDiscountValue || ''} placeholder="0"
-                      onChange={e => { const v = parseFloat(e.target.value) || 0; setDocDiscountValue(v); if (v > 0 && !docDiscountType) setDocDiscountType('amount') }}
-                      className="w-20 h-7 border border-gray-200 rounded-lg px-2 text-sm text-right focus:outline-none focus:border-orange-400"
-                    />
-                    <button type="button" onClick={() => setDocDiscountType(docDiscountType === 'percent' ? 'amount' : 'percent')} className="h-7 px-1.5 text-xs font-semibold text-gray-500 bg-gray-100 rounded hover:bg-gray-200" title="Toggle $ / %">
-                      {docDiscountType === 'percent' ? '%' : '$'}
-                    </button>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-[.05em] text-gray-600">Terms &amp; conditions</div>
+                <textarea
+                  aria-label="Terms and conditions" readOnly={ro} rows={5}
+                  value={meta.terms}
+                  onChange={e => updateMeta('terms', e.target.value)}
+                  placeholder={`This ${docWord.toLowerCase()} is valid until the date shown above. Prices may change after this date.`}
+                  className={cn(PAPER_INPUT, 'block resize-y text-xs leading-[1.55] text-gray-700')}
+                />
+              </div>
+            </div>
+            <PaperFootnote show={isFreePlan} />
+          </Paper>
+
+          <InternalRail label={`Internal — not on the ${docWord.toLowerCase()}`}>
+            <RailCard title={`Profit on this ${docWord.toLowerCase()}`}>
+              <div className={cn('text-[26px] font-bold', grossProfit < 0 ? 'text-red-600' : 'text-gray-900')}>{subtotal > 0 ? `${margin.toFixed(0)}%` : '—'}</div>
+              <p className="mb-2 text-[13px] text-gray-600">gross margin</p>
+              <RailRow label="Sell (ex GST)" value={formatCurrency(subtotal)} />
+              <RailRow label="Your cost" value={formatCurrency(totalCost)} />
+              <RailRow label="Gross profit" value={formatCurrency(grossProfit)} />
+              {pricesIncludeTax && <p className="mt-2 text-xs text-gray-500">Unit prices are entered including GST.</p>}
+            </RailCard>
+
+            {selectedLine && selectedSection ? (
+              <RailCard tone="accent" title={`Line ${selectedNo} — hidden details`}>
+                <div className="space-y-2.5">
+                  <div>
+                    <label htmlFor="ql-type" className={RAIL_LABEL}>Type</label>
+                    <select id="ql-type" className={RAIL_INPUT} value={selectedLine.type} onChange={e => updateLine(selectedSection.id, selectedLine.id, 'type', e.target.value)}>
+                      <option value="material">Material</option>
+                      <option value="labour">Labour</option>
+                      <option value="misc">Sundry / misc</option>
+                    </select>
+                  </div>
+                  {selectedLine.type === 'labour' && billingRates.length > 0 && (
+                    <div>
+                      <label htmlFor="ql-rate" className={RAIL_LABEL}>Billing rate</label>
+                      <select
+                        id="ql-rate" className={RAIL_INPUT} value=""
+                        onChange={e => { const r = billingRates.find(b => b.id === e.target.value); if (r) updateLine(selectedSection.id, selectedLine.id, 'unit_price', r.rate) }}
+                      >
+                        <option value="">Apply a rate…</option>
+                        {billingRates.map(r => <option key={r.id} value={r.id}>{r.name} (${Number(r.rate).toFixed(0)})</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label htmlFor="ql-cost" className={RAIL_LABEL}>Unit cost ($)</label>
+                      <input
+                        id="ql-cost" type="number" step="0.01" className={RAIL_INPUT}
+                        value={selectedLine.unit_cost ?? 0}
+                        onChange={e => updateLine(selectedSection.id, selectedLine.id, 'unit_cost', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="ql-disc" className={RAIL_LABEL}>Discount</label>
+                      <div className="flex gap-1">
+                        <input
+                          id="ql-disc" type="number" min="0" step="any" placeholder="0" className={RAIL_INPUT}
+                          value={selectedLine.discount_value || ''}
+                          onChange={e => updateLine(selectedSection.id, selectedLine.id, 'discount_value', parseFloat(e.target.value) || 0)}
+                        />
+                        <button
+                          type="button"
+                          title="Toggle $ / %"
+                          aria-label={`Discount is in ${selectedLine.discount_type === 'percent' ? 'percent' : 'dollars'} — switch`}
+                          onClick={() => updateLine(selectedSection.id, selectedLine.id, 'discount_type', selectedLine.discount_type === 'percent' ? 'amount' : 'percent')}
+                          className="min-w-9 rounded-md border border-gray-300 bg-white px-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                        >
+                          {selectedLine.discount_type === 'percent' ? '%' : '$'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="ql-tax" className={RAIL_LABEL}>Tax</label>
+                    <select
+                      id="ql-tax" className={RAIL_INPUT}
+                      value={String(selectedLine.tax_rate ?? gstRate)}
+                      onChange={e => updateLine(selectedSection.id, selectedLine.id, 'tax_rate', parseFloat(e.target.value))}
+                    >
+                      {taxOptions.map(t => <option key={t.id} value={String(t.rate)}>{t.name} ({Math.round(t.rate * 100)}%)</option>)}
+                    </select>
+                  </div>
+                  <RailRow
+                    label="Line margin"
+                    value={Number(selectedLine.line_total) > 0
+                      ? `${(((Number(selectedLine.line_total) - Number(selectedLine.quantity) * Number(selectedLine.unit_cost ?? 0)) / Number(selectedLine.line_total)) * 100).toFixed(0)}%`
+                      : '—'}
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => removeLine(selectedSection.id, selectedLine.id)}>
+                      <Trash2 className="h-4 w-4 text-red-500" /> Remove line
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>Done</Button>
                   </div>
                 </div>
-                {docDiscountAmount > 0 && <div className="flex justify-between text-green-600 text-xs mt-0.5"><span>Applied</span><span>−{formatCurrency(docDiscountAmount)}</span></div>}
+              </RailCard>
+            ) : (
+              !ro && (
+                <RailCard>
+                  <p className="text-[13px] leading-normal text-gray-600">Click a line on the {docWord.toLowerCase()} to set its cost, discount and tax. Those never print.</p>
+                </RailCard>
+              )
+            )}
+
+            <RailCard title="Job site">
+              <label htmlFor="q-site" className="sr-only">Job site</label>
+              <select
+                id="q-site"
+                className={RAIL_INPUT}
+                value={meta.siteId}
+                onChange={e => updateMeta('siteId', e.target.value)}
+                disabled={!selectedCustomer || ro}
+              >
+                <option value="">{selectedCustomer ? 'No specific site' : 'Select a customer first'}</option>
+                {(selectedCustomer?.customer_sites ?? []).map(site => (
+                  <option key={site.id} value={site.id}>{site.label ? `${site.label} — ${site.address}` : site.address}</option>
+                ))}
+              </select>
+            </RailCard>
+
+            <RailCard title="Options">
+              <label className="mb-3 flex cursor-pointer items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={isEstimate} disabled={ro} onChange={e => setIsEstimate(e.target.checked)} className="mt-0.5 rounded" />
+                This is an estimate, not a fixed quote
+              </label>
+              <label htmlFor="q-docdisc" className={RAIL_LABEL}>Discount on the whole {docWord.toLowerCase()}</label>
+              <div className="flex gap-1">
+                <input
+                  id="q-docdisc" type="number" min="0" step="any" placeholder="0" disabled={ro} className={RAIL_INPUT}
+                  value={docDiscountValue || ''}
+                  onChange={e => { const v = parseFloat(e.target.value) || 0; setDocDiscountValue(v); if (v > 0 && !docDiscountType) setDocDiscountType('amount') }}
+                />
+                <button
+                  type="button" disabled={ro}
+                  title="Toggle $ / %"
+                  aria-label={`Discount is in ${docDiscountType === 'percent' ? 'percent' : 'dollars'} — switch`}
+                  onClick={() => setDocDiscountType(docDiscountType === 'percent' ? 'amount' : 'percent')}
+                  className="min-w-9 rounded-md border border-gray-300 bg-white px-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  {docDiscountType === 'percent' ? '%' : '$'}
+                </button>
               </div>
-              <div className="flex justify-between text-gray-600"><span>GST</span><span>{formatCurrency(gstAmount)}</span></div>
-              <div className="flex justify-between font-semibold text-gray-900 text-base border-t border-gray-100 pt-2 mt-2">
-                <span>Total</span><span>{formatCurrency(total)}</span>
-              </div>
-            </div>
-            <div className="space-y-2 pt-2">
-              <Button className="w-full" loading={saving} onClick={() => save('draft')}>Save draft</Button>
-              <Button variant="outline" className="w-full" loading={saving} onClick={() => save('sent')}>Save &amp; send</Button>
-              {autosaveStatus === 'saving' && <p className="text-center text-xs text-gray-400">Saving draft…</p>}
-              {autosaveStatus === 'saved' && <p className="text-center text-xs text-gray-400">Draft auto-saved</p>}
-            </div>
-          </CardContent>
-        </Card>
+            </RailCard>
+
+            <RailCard>
+              <label htmlFor="q-notes" className="mb-2.5 block text-sm font-semibold text-gray-900">Internal notes</label>
+              <textarea
+                id="q-notes" rows={4} readOnly={ro}
+                value={meta.notes}
+                onChange={e => updateMeta('notes', e.target.value)}
+                placeholder="Not shown to the customer"
+                className={cn(RAIL_INPUT, 'resize-y leading-normal')}
+              />
+            </RailCard>
+          </InternalRail>
+        </DocumentWorkspace>
       </div>
 
       {/* Price list dialog */}

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
+import { paperCompany } from '@/lib/paper-company'
 import { PurchaseOrderBuilder } from '@/components/forms/purchase-order-builder'
 import { nextDocNumber } from '@/lib/numbering'
 import { redirectIfFreePlan } from '@/lib/billing-guards'
@@ -9,7 +10,7 @@ export default async function NewPurchaseOrderPage({ searchParams }: { searchPar
   const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, email, phone, gst_number, logo_url, default_gst_rate, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
   redirectIfFreePlan(profile?.companies as unknown as BillingCompany | null)
   const companyId = profile!.company_id
 
@@ -34,6 +35,7 @@ export default async function NewPurchaseOrderPage({ searchParams }: { searchPar
         priceItems={priceRes.data ?? []}
         defaultSupplierId={sp.supplierId}
         defaultJobId={sp.jobId}
+        company={paperCompany(profile?.companies)}
       />
     </>
   )

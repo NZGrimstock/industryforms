@@ -36,6 +36,9 @@ import { JobSiteSelector } from '@/components/jobs/job-site-selector'
 import { JobProjectSelector } from '@/components/jobs/job-project-selector'
 import { TimesheetTable } from '@/components/timesheets/timesheet-table'
 import Link from 'next/link'
+import { Paper, PaperHeader, PaperFields, PaperColumns, PaperBlock } from '@/components/documents/paper'
+import { paperCompany } from '@/lib/paper-company'
+import { JobSheetField } from './job-sheet-fields'
 
 export default async function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -355,62 +358,33 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
     <>
       <Header title={`${job.job_number} — ${job.title}`} profile={profile} />
       <div className="p-6 space-y-6 max-w-6xl">
-        {/* Header */}
-        <div className="flex flex-wrap items-start gap-4 justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-lg font-semibold text-gray-900">{job.title}</h2>
-              <StatusBadge status={job.status} />
-            </div>
-            <p className="text-sm text-gray-500">
-              <Link href={`/customers/${job.customer_id}`} className="text-orange-500 hover:underline">
-                {(job.customers as {name: string})?.name}
-              </Link>
-              {job.quotes && <> · From {quoteLabel(jobQuote?.is_estimate).toLowerCase()} <Link href={`/quotes/${job.quote_id}`} className="text-orange-500 hover:underline">{jobQuote?.quote_number}</Link></>}
-            </p>
-            <JobSiteSelector
-              jobId={id}
-              customerId={job.customer_id}
-              currentSiteId={job.site_id ?? null}
-              currentAddress={(job.customer_sites as {address: string} | null)?.address ?? null}
-              customerSites={customerSites ?? []}
-            />
-            {hasProjectsAddon && (
-              <JobProjectSelector
-                jobId={id}
-                currentProjectId={job.project_id ?? null}
-                currentProjectName={currentProjectName}
-                projects={projects}
-              />
-            )}
-            {job.tags && job.tags.length > 0 && (
-              <div className="flex gap-1 mt-2">
-                {job.tags.map((t: string) => <span key={t} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{t}</span>)}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <PrevNextNav prevHref={prevJobHref} nextHref={nextJobHref} />
-            <JobDetailClient
-              job={job}
-              companyId={profile!.company_id}
-              profileId={user!.id}
-              team={teamRes.data ?? []}
-              assignees={normalizedJobAssignees}
-              projectAddress={(job.customer_sites as { address: string } | null)?.address ?? null}
-              sheetData={sheetData}
-              gstRate={gstRate}
-              pricesIncludeTax={pricesIncludeTax}
-              nextInvoiceNumber={nextInvoiceNumber}
-              jobTotal={estimatedSubtotal}
-              quoteId={job.quote_id ?? null}
-              alreadyInvoiced={alreadyInvoiced}
-              existingInvoice={existingInvoice}
-              actualLines={actualLines}
-              actualTotal={actualTotal}
-              jobStatuses={jobStatuses}
-            />
-          </div>
+        {/* Toolbar — the job sheet itself is the paper below */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-600">
+            <Link href="/jobs" className="hover:underline">Jobs</Link> / <b className="font-semibold text-gray-900">{job.job_number}</b>
+          </span>
+          <StatusBadge status={job.status} />
+          <span className="flex-1" />
+          <PrevNextNav prevHref={prevJobHref} nextHref={nextJobHref} />
+          <JobDetailClient
+            job={job}
+            companyId={profile!.company_id}
+            profileId={user!.id}
+            team={teamRes.data ?? []}
+            assignees={normalizedJobAssignees}
+            projectAddress={(job.customer_sites as { address: string } | null)?.address ?? null}
+            sheetData={sheetData}
+            gstRate={gstRate}
+            pricesIncludeTax={pricesIncludeTax}
+            nextInvoiceNumber={nextInvoiceNumber}
+            jobTotal={estimatedSubtotal}
+            quoteId={job.quote_id ?? null}
+            alreadyInvoiced={alreadyInvoiced}
+            existingInvoice={existingInvoice}
+            actualLines={actualLines}
+            actualTotal={actualTotal}
+            jobStatuses={jobStatuses}
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-6 items-start">
@@ -418,13 +392,61 @@ export default async function JobDetailPage({ params }: { params: Promise<{ id: 
 
         <JobLockBanner jobId={id} locked={jobLocked} overridden={job.invoice_lock_override} role={profile!.role} />
 
-        {job.description && (
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{job.description}</p>
-            </CardContent>
-          </Card>
-        )}
+        {/* Job sheet — the top of the printed job sheet, edited in place */}
+        <Paper label={`Job sheet ${job.job_number}`} className="max-w-none">
+          <PaperHeader compact company={paperCompany(co)} docLabel="Job sheet" docNumber={job.job_number} />
+          <PaperFields
+            fields={[
+              { label: 'Created', value: formatDate(job.created_at) },
+              { label: 'Status', value: <StatusBadge status={job.status} /> },
+              {
+                label: `From ${quoteLabel(jobQuote?.is_estimate).toLowerCase()}`,
+                value: job.quotes ? <Link href={`/quotes/${job.quote_id}`} className="hover:underline">{jobQuote?.quote_number}</Link> : '—',
+              },
+            ]}
+          />
+          <JobSheetField key={`title-${job.title}`} jobId={id} field="title" value={job.title} locked={jobLocked} />
+          <PaperColumns>
+            <PaperBlock title="Customer">
+              <Link href={`/customers/${job.customer_id}`} className="hover:underline">{(job.customers as { name: string } | null)?.name}</Link>
+              {(job.customers as { phone: string | null } | null)?.phone ? <div>{(job.customers as { phone: string }).phone}</div> : null}
+              {(job.customers as { email: string | null } | null)?.email ? <div>{(job.customers as { email: string }).email}</div> : null}
+            </PaperBlock>
+            <PaperBlock title="Site / location">
+              <div className="font-sans">
+                <JobSiteSelector
+                  jobId={id}
+                  customerId={job.customer_id}
+                  currentSiteId={job.site_id ?? null}
+                  currentAddress={(job.customer_sites as {address: string} | null)?.address ?? null}
+                  customerSites={customerSites ?? []}
+                />
+                {hasProjectsAddon && (
+                  <JobProjectSelector
+                    jobId={id}
+                    currentProjectId={job.project_id ?? null}
+                    currentProjectName={currentProjectName}
+                    projects={projects}
+                  />
+                )}
+              </div>
+              {normalizedJobAssignees.length > 0 && (
+                <div className="mt-1"><span className="text-gray-600">Assigned to </span>{normalizedJobAssignees.map(a => a.profiles.full_name).join(', ')}</div>
+              )}
+              {job.tags && job.tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1 font-sans">
+                  {job.tags.map((t: string) => <span key={t} className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{t}</span>)}
+                </div>
+              )}
+            </PaperBlock>
+          </PaperColumns>
+          <PaperBlock title="Description of work">
+            <JobSheetField key={`desc-${job.description ?? ''}`} jobId={id} field="description" value={job.description} locked={jobLocked} />
+          </PaperBlock>
+          <p className="mt-4 border-t border-dashed border-gray-300 pt-2.5 font-sans text-xs text-gray-600 print:hidden">
+            The printed job sheet continues with visits, materials, labour and notes from the cards below.
+          </p>
+        </Paper>
 
         {/* Tasks */}
         <JobTasksCard jobId={job.id} companyId={profile!.company_id} />

@@ -3,15 +3,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, Trash2, Package } from 'lucide-react'
+import {
+  DocumentWorkspace, Paper, PaperHeader, PaperFields, PaperColumns, PaperBlock, PaperLines, PaperLinesHead,
+  PaperEditRow, PaperTotals, PaperSignatures, PaperLegend, InternalRail, RailCard,
+  PAPER_INPUT, PAPER_LINE_GRID, PAPER_GHOST_BUTTON, type PaperCompany,
+} from '@/components/documents/paper'
+
+const PAPER_NUM = cn(PAPER_INPUT, 'text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')
 
 type PriceItem = { id: string; name: string; unit: string; cost_price: number }
 type Line = { id: string; description: string; quantity: string; unit: string; unit_cost: string; price_list_item_id: string | null }
@@ -29,9 +31,10 @@ interface Props {
   priceItems: PriceItem[]
   defaultSupplierId?: string
   defaultJobId?: string
+  company: PaperCompany
 }
 
-export function PurchaseOrderBuilder({ companyId, profileId, poNumber, gstRate, suppliers, jobs, priceItems, defaultSupplierId, defaultJobId }: Props) {
+export function PurchaseOrderBuilder({ companyId, profileId, poNumber, gstRate, suppliers, jobs, priceItems, defaultSupplierId, defaultJobId, company }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
@@ -77,76 +80,103 @@ export function PurchaseOrderBuilder({ companyId, profileId, poNumber, gstRate, 
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 p-6">
-      <div className="flex-1 space-y-4">
-        <Card>
-          <CardHeader className="font-semibold text-sm text-gray-900">Details</CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Supplier <span className="text-red-400">*</span></Label>
-              <Select value={meta.supplierId} onChange={e => update('supplierId', e.target.value)} placeholder="Select supplier…" options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
-            </div>
-            <div>
-              <Label>Link to job</Label>
-              <Select value={meta.jobId} onChange={e => update('jobId', e.target.value)} placeholder="No job" options={jobs.map(j => ({ value: j.id, label: `${j.job_number} — ${j.title}` }))} />
-            </div>
-            <div>
-              <Label>Expected delivery</Label>
-              <Input type="date" value={meta.expected} onChange={e => update('expected', e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+    <div className="p-4 sm:p-6">
+      <div className="mx-auto max-w-[1240px]">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-600">New purchase order <b className="font-semibold text-gray-900">{poNumber}</b></span>
+          <span className="flex-1" />
+          <Button size="sm" loading={saving} onClick={save}>Create PO</Button>
+        </div>
+        <PaperLegend who="supplier" />
 
-        <Card>
-          <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-900">Items</div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-xs text-gray-400 border-b border-gray-100">
-                <th className="text-left px-4 py-2 font-medium">Description</th>
-                <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
-                <th className="text-left px-3 py-2 font-medium w-16">Unit</th>
-                <th className="text-right px-3 py-2 font-medium w-28">Unit cost</th>
-                <th className="text-right px-3 py-2 font-medium w-28">Total</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map(l => (
-                <tr key={l.id} className="border-b border-gray-50">
-                  <td className="px-4 py-2"><Input value={l.description} onChange={e => updateLine(l.id, 'description', e.target.value)} className="h-7 text-sm" placeholder="Item…" /></td>
-                  <td className="px-3 py-2"><Input type="number" step="any" value={l.quantity} onChange={e => updateLine(l.id, 'quantity', e.target.value)} className="h-7 text-sm text-right" /></td>
-                  <td className="px-3 py-2"><Input value={l.unit} onChange={e => updateLine(l.id, 'unit', e.target.value)} className="h-7 text-sm" /></td>
-                  <td className="px-3 py-2"><Input type="number" step="0.01" value={l.unit_cost} onChange={e => updateLine(l.id, 'unit_cost', e.target.value)} className="h-7 text-sm text-right" /></td>
-                  <td className="px-3 py-2 text-right font-medium text-gray-700 whitespace-nowrap">{formatCurrency((parseFloat(l.quantity) || 0) * (parseFloat(l.unit_cost) || 0))}</td>
-                  <td className="px-2 py-2"><button onClick={() => removeLine(l.id)} className="text-gray-300 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button></td>
-                </tr>
+        <DocumentWorkspace>
+          <Paper label="Purchase order document">
+            <PaperHeader company={company} docLabel="Purchase order" docNumber={poNumber} />
+            <PaperFields
+              fields={[
+                { label: 'Order date', value: formatDate(new Date()) },
+                { label: 'PO No.', value: poNumber },
+                {
+                  label: 'Expected delivery',
+                  value: <input type="date" aria-label="Expected delivery" value={meta.expected} onChange={e => update('expected', e.target.value)} className={cn(PAPER_INPUT, 'py-0 font-bold')} />,
+                },
+              ]}
+            />
+            <PaperColumns>
+              <PaperBlock title="Supplier">
+                <select aria-label="Supplier" value={meta.supplierId} onChange={e => update('supplierId', e.target.value)} className={cn(PAPER_INPUT, 'cursor-pointer')}>
+                  <option value="">Select supplier…</option>
+                  {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                </select>
+              </PaperBlock>
+              <PaperBlock title="Job">
+                <select aria-label="Job" value={meta.jobId} onChange={e => update('jobId', e.target.value)} className={cn(PAPER_INPUT, 'cursor-pointer')}>
+                  <option value="">No job</option>
+                  {jobs.map(j => <option key={j.id} value={j.id}>{j.job_number} — {j.title}</option>)}
+                </select>
+              </PaperBlock>
+            </PaperColumns>
+
+            <PaperLines>
+              <PaperLinesHead priceLabel="Unit cost" />
+              {lines.map((l, i) => (
+                <div key={l.id} className={cn(PAPER_LINE_GRID, 'group border-b border-gray-100 px-2 py-0.5')}>
+                  <span className="relative text-xs text-gray-500">
+                    <span className="group-focus-within:invisible group-hover:invisible">{i + 1}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove line ${i + 1}`}
+                      onClick={() => removeLine(l.id)}
+                      className="absolute -left-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 opacity-0 hover:text-red-600 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                  <input aria-label="Description" value={l.description} onChange={e => updateLine(l.id, 'description', e.target.value)} className={PAPER_INPUT} placeholder="Item…" />
+                  <span className="flex gap-0.5">
+                    <input type="number" step="any" aria-label="Quantity" value={l.quantity} onChange={e => updateLine(l.id, 'quantity', e.target.value)} className={cn(PAPER_NUM, 'w-[55%]')} />
+                    <input aria-label="Unit" value={l.unit} onChange={e => updateLine(l.id, 'unit', e.target.value)} className={cn(PAPER_INPUT, 'w-[45%]')} />
+                  </span>
+                  <span className="flex items-center">
+                    <span className="text-gray-500">$</span>
+                    <input type="number" step="0.01" aria-label="Unit cost" value={l.unit_cost} onChange={e => updateLine(l.id, 'unit_cost', e.target.value)} className={PAPER_NUM} />
+                  </span>
+                  <span className="whitespace-nowrap pr-1 text-right">{formatCurrency((parseFloat(l.quantity) || 0) * (parseFloat(l.unit_cost) || 0))}</span>
+                </div>
               ))}
-            </tbody>
-          </table>
-          <div className="px-4 py-2 flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setLines(ls => [...ls, newLine()])}><Plus className="h-3.5 w-3.5" /> Add line</Button>
-            {priceItems.length > 0 && <Button variant="ghost" size="sm" onClick={() => setPickOpen(true)}><Package className="h-3.5 w-3.5" /> From price list</Button>}
-          </div>
-        </Card>
+              <PaperEditRow>
+                <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => setLines(ls => [...ls, newLine()])}><Plus className="h-3.5 w-3.5" /> Line</button>
+                {priceItems.length > 0 && <button type="button" className={PAPER_GHOST_BUTTON} onClick={() => setPickOpen(true)}><Package className="h-3.5 w-3.5" /> Price list</button>}
+              </PaperEditRow>
+            </PaperLines>
 
-        <Card>
-          <CardHeader className="font-semibold text-sm text-gray-900">Notes</CardHeader>
-          <CardContent><Textarea value={meta.notes} onChange={e => update('notes', e.target.value)} rows={3} placeholder="Delivery instructions, references…" /></CardContent>
-        </Card>
-      </div>
+            <PaperTotals
+              rows={[{ label: 'Subtotal', value: formatCurrency(subtotal) }, { label: `GST ${Math.round(gstRate * 100)}%`, value: formatCurrency(gst) }]}
+              grand={{ label: 'Total', value: formatCurrency(total) }}
+            />
 
-      <div className="w-full lg:w-72 shrink-0">
-        <Card className="sticky top-20">
-          <CardHeader className="font-semibold text-sm text-gray-900">{poNumber}</CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>GST ({Math.round(gstRate * 100)}%)</span><span>{formatCurrency(gst)}</span></div>
-              <div className="flex justify-between font-semibold text-gray-900 text-base border-t border-gray-100 pt-2 mt-2"><span>Total</span><span>{formatCurrency(total)}</span></div>
+            <div className="mt-7">
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-[.05em] text-gray-600">Delivery instructions / notes</div>
+              <textarea
+                aria-label="Delivery instructions and notes" rows={3}
+                value={meta.notes}
+                onChange={e => update('notes', e.target.value)}
+                placeholder="Delivery instructions, references…"
+                className={cn(PAPER_INPUT, 'block resize-y text-xs leading-[1.55] text-gray-700')}
+              />
             </div>
-            <Button className="w-full" loading={saving} onClick={save}>Create PO</Button>
-          </CardContent>
-        </Card>
+
+            <PaperSignatures left="Authorised by" right="Received by" />
+          </Paper>
+
+          <InternalRail label="Internal — not on the purchase order">
+            <RailCard>
+              <p className="text-[13px] leading-normal text-gray-600">
+                Fill the page in like the paper PO. Items from your price list come in at their cost price. Once created, a draft PO can still be changed on its own page until it&apos;s sent.
+              </p>
+            </RailCard>
+          </InternalRail>
+        </DocumentWorkspace>
       </div>
 
       <Dialog open={pickOpen} onClose={() => setPickOpen(false)} title="Add from price list" className="max-w-xl">

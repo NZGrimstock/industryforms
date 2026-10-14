@@ -56,7 +56,13 @@ const s = StyleSheet.create({
   bottomHeading: { fontSize: 7, color: GREY, textTransform: 'uppercase', fontFamily: 'Helvetica-Bold', marginBottom: 4 },
   bottomText: { fontSize: 7.5, color: GREY, lineHeight: 1.5 },
   watermark: { textAlign: 'center', fontSize: 7, color: GREY, marginTop: 18 },
+  docTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', marginBottom: 10 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: DARK, marginTop: 8 },
+  sectionTitle2: { fontSize: 9, fontFamily: 'Helvetica-Bold' },
+  optTag: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#1d4ed8', textTransform: 'uppercase', marginLeft: 8 },
 })
+
+type PdfLine = { id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number }
 
 function fmt(n: number | null | undefined) {
   return Number(n ?? 0).toLocaleString('en-NZ', { style: 'currency', currency: 'NZD' })
@@ -81,10 +87,28 @@ export interface QuotePdfData {
     customer_message?: string | null
     terms?: string | null
     customers?: { name: string; email?: string | null; billing_address?: string | null } | null
-    lines: Array<{ id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number }>
+    title?: string | null
+    /** Flat, already-ordered lines — used when `sections` is absent. */
+    lines: PdfLine[]
+    /** Sections as shown on the paper screen (lib/quote-sections.ts). When
+     *  present, the PDF prints section headings and Optional tags so the
+     *  printed quote matches the screen. */
+    sections?: Array<{ title: string; is_optional: boolean; lines: PdfLine[] }>
   }
   company: { name: string; email?: string | null; phone?: string | null; gst_number?: string | null; logo_url?: string | null; isFreePlan?: boolean }
   timezone?: string
+}
+
+function lineRow(line: PdfLine, n: number) {
+  return (
+    <View key={line.id} style={[s.tableRow, n % 2 === 0 ? s.tableRowAlt : {}]} wrap={false}>
+      <Text style={[s.td, { width: 20, color: GREY }]}>{n}</Text>
+      <Text style={[s.td, { flex: 1 }]}>{line.description}</Text>
+      <Text style={[s.td, { width: 55, textAlign: 'right' }]}>{line.quantity} {line.unit}</Text>
+      <Text style={[s.td, { width: 80, textAlign: 'right' }]}>{fmt(line.unit_price)}</Text>
+      <Text style={[s.td, { width: 85, textAlign: 'right' }]}>{fmt(line.line_total)}</Text>
+    </View>
+  )
 }
 
 export function QuotePdf({ data }: { data: QuotePdfData }) {
@@ -138,6 +162,8 @@ export function QuotePdf({ data }: { data: QuotePdfData }) {
           </View>
         </View>
 
+        {data.quote.title ? <Text style={s.docTitle}>{data.quote.title}</Text> : null}
+
         <View style={s.tableHead}>
           <Text style={[s.th, { width: 20 }]}>#</Text>
           <Text style={[s.th, { flex: 1 }]}>Description</Text>
@@ -145,15 +171,22 @@ export function QuotePdf({ data }: { data: QuotePdfData }) {
           <Text style={[s.th, { width: 80, textAlign: 'right' }]}>Unit price</Text>
           <Text style={[s.th, { width: 85, textAlign: 'right' }]}>Total</Text>
         </View>
-        {data.quote.lines.map((line, i) => (
-          <View key={line.id} style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
-            <Text style={[s.td, { width: 20, color: GREY }]}>{i + 1}</Text>
-            <Text style={[s.td, { flex: 1 }]}>{line.description}</Text>
-            <Text style={[s.td, { width: 55, textAlign: 'right' }]}>{line.quantity} {line.unit}</Text>
-            <Text style={[s.td, { width: 80, textAlign: 'right' }]}>{fmt(line.unit_price)}</Text>
-            <Text style={[s.td, { width: 85, textAlign: 'right' }]}>{fmt(line.line_total)}</Text>
-          </View>
-        ))}
+        {data.quote.sections && data.quote.sections.length > 0
+          ? (() => {
+              let n = 0
+              return data.quote.sections.map((sec, si) => (
+                <View key={`sec-${si}`}>
+                  {sec.title ? (
+                    <View style={s.sectionRow} wrap={false}>
+                      <Text style={s.sectionTitle2}>{sec.title}</Text>
+                      {sec.is_optional ? <Text style={s.optTag}>Optional</Text> : null}
+                    </View>
+                  ) : null}
+                  {sec.lines.map(line => { n += 1; return lineRow(line, n) })}
+                </View>
+              ))
+            })()
+          : data.quote.lines.map((line, i) => lineRow(line, i + 1))}
 
         <View style={s.totals}>
           <View style={s.totalRow}><Text style={s.totalLabel}>Total before discount</Text><Text style={s.totalValue}>{fmt(data.quote.subtotal)}</Text></View>

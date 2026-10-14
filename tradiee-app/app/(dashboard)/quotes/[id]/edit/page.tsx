@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
+import { paperCompany } from '@/lib/paper-company'
 import { QuoteBuilder } from '@/components/forms/quote-builder'
 import { effectivePlanKey, type BillingCompany } from '@/lib/billing'
 
@@ -8,7 +9,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(default_gst_rate, prices_include_tax, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
+  const { data: profile } = await supabase.from('profiles').select('*, companies!company_id(name, email, phone, gst_number, logo_url, default_gst_rate, prices_include_tax, subscription_status, subscription_plan, trial_ends_at, billing_exempt, comp_plan, comp_until)').eq('id', user!.id).single()
   const isFreePlan = effectivePlanKey(profile?.companies as unknown as BillingCompany) === 'free'
 
   const { data: quote } = await supabase
@@ -21,7 +22,7 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
   if (!quote || quote.status !== 'draft') notFound()
 
   const [customersRes, priceItemsRes, kitsRes, ratesRes, taxRatesRes] = await Promise.all([
-    supabase.from('customers').select('id, name, pricing_group_id, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
+    supabase.from('customers').select('id, name, email, billing_address, pricing_group_id, customer_sites(id, label, address)').eq('company_id', profile!.company_id).order('name'),
     supabase.from('price_list_items').select('*, customer_group_prices(customer_group_id, sell_price)').eq('company_id', profile!.company_id).eq('is_active', true).order('name'),
     supabase.from('kits').select('*, kit_items(*, price_list_items(*, customer_group_prices(customer_group_id, sell_price)))').eq('company_id', profile!.company_id).order('name'),
     supabase.from('billing_rates').select('id, name, rate').eq('company_id', profile!.company_id).order('name'),
@@ -93,6 +94,8 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
         pricesIncludeTax={!!(profile?.companies as { prices_include_tax?: boolean } | null)?.prices_include_tax}
         isFreePlan={isFreePlan}
         editQuote={editQuote}
+        company={paperCompany(profile?.companies)}
+        createdAt={quote.created_at}
       />
     </>
   )

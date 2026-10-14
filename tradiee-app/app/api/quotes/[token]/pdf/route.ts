@@ -15,6 +15,7 @@ import { putObject, presignedDownload, PRIVATE_BUCKET } from '@/lib/r2'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { logoDataUri } from '@/lib/pdf-logo'
 import { effectivePlanKey } from '@/lib/billing'
+import { orderQuoteSections } from '@/lib/quote-sections'
 
 // Segment is named [token] (not [id]) only because Next.js requires every
 // dynamic segment at app/api/quotes/* to share one param name, and the
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
   const { data: quote } = await service
     .from('quotes')
-    .select('*, customers(name, email, billing_address), quote_sections(sort_order, quote_line_items(*)), companies(name, email, phone, gst_number, logo_url, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)')
+    .select('*, customers(name, email, billing_address), quote_sections(title, is_optional, sort_order, quote_line_items(*)), companies(name, email, phone, gst_number, logo_url, subscription_plan, subscription_status, trial_ends_at, billing_exempt, comp_plan, comp_until)')
     .eq('id', id)
     .eq('company_id', auth.companyId)
     .single()
@@ -44,10 +45,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     comp_plan: string | null; comp_until: string | null
   } | null
 
-  type SectionRow = { sort_order: number; quote_line_items: { id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number; sort_order: number }[] }
-  const lines = ((quote.quote_sections ?? []) as SectionRow[])
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .flatMap(sec => [...(sec.quote_line_items ?? [])].sort((a, b) => a.sort_order - b.sort_order))
+  type SectionRow = { title: string; is_optional: boolean; sort_order: number; quote_line_items: { id: string; description: string; quantity: number; unit: string; unit_price: number; line_total: number; sort_order: number }[] }
+  const sections = orderQuoteSections((quote.quote_sections ?? []) as SectionRow[])
+  const lines = sections.flatMap(sec => sec.lines)
 
   const data: QuotePdfData = {
     quote: {
@@ -63,7 +63,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       customer_message: quote.customer_message,
       terms: quote.terms,
       customers: quote.customers,
+      title: quote.title,
       lines,
+      sections,
     },
     company: {
       name: co?.name ?? '',

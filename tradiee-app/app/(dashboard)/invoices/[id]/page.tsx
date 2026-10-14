@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
-import { Card, CardContent } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { InvoiceDetailClient } from './client'
@@ -12,7 +11,14 @@ import type { InvoicePdfData } from '@/components/pdf/invoice-pdf'
 import { DEFAULT_TIMEZONE } from '@/lib/datetime'
 import { PrevNextNav } from '@/components/ui/prev-next-nav'
 import { RevertToJobButton } from '@/components/invoices/revert-to-job-button'
-import { InvoiceLinesProvider, InvoiceLinesCard, type InvoiceLine } from '@/components/invoices/invoice-lines'
+import { InvoiceLinesProvider, type InvoiceLine } from '@/components/invoices/invoice-lines'
+import { InvoicePaperLines } from '@/components/invoices/invoice-paper-lines'
+import { PaperDateInput } from '@/components/documents/paper-date-input'
+import { paperCompany } from '@/lib/paper-company'
+import {
+  DocumentWorkspace, Paper, PaperHeader, PaperFields, PaperColumns, PaperBlock, PaperSignatures, PaperNotes,
+  PaperFootnote, PaperLegend, InternalRail, RailCard, RailRow,
+} from '@/components/documents/paper'
 import { CreditNotesCard } from './credit-notes-card'
 import { effectivePlanKey } from '@/lib/billing'
 import { maxCreditableAmount, maxRefundableAmount, availableCreditBalance } from '@/lib/credit-notes'
@@ -85,6 +91,12 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
     timezone: profile?.timezone ?? DEFAULT_TIMEZONE,
   }
 
+  const isDraft = invoice.status === 'draft'
+  const isFreePlan = effectivePlanKey(co) === 'free'
+  const customer = invoice.customers as { name: string; email: string | null; billing_address: string | null } | null
+  const job = invoice.jobs as { job_number: string; title: string } | null
+  const payments = (invoice.payments ?? []) as { id: string; amount: number; method: string; paid_at: string; notes: string | null }[]
+
   return (
     <>
       <Header title={invoice.invoice_number} profile={profile} />
@@ -100,32 +112,24 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           amount_paid: Number(invoice.amount_paid),
         }}
       >
-      <div className="p-6 space-y-6 max-w-4xl">
-        <div className="flex flex-wrap items-start gap-4 justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-lg font-semibold text-gray-900">{invoice.invoice_number}</h2>
-              <StatusBadge status={invoice.status} />
-              {invoice.emailed_at && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
-                  <Mail className="h-3 w-3" /> Emailed
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-gray-500">
-              <Link href={`/customers/${invoice.customer_id}`} className="text-orange-500 hover:underline">
-                {(invoice.customers as {name: string})?.name}
-              </Link>
-              {invoice.jobs && <> · <Link href={`/jobs/${invoice.job_id}`} className="text-orange-500 hover:underline">{(invoice.jobs as {job_number: string}).job_number}</Link></>}
-            </p>
-            {invoice.invoice_date && <p className="text-sm text-gray-500 mt-0.5">Invoice date: {formatDate(invoice.invoice_date)}</p>}
-            {invoice.due_date && <p className="text-sm text-gray-500 mt-0.5">Due {formatDate(invoice.due_date)}</p>}
-            {invoice.sent_at && <p className="text-xs text-gray-400 mt-1">Sent {formatDateTime(invoice.sent_at)}{invoice.viewed_at && ` · Viewed ${formatDateTime(invoice.viewed_at)}`}</p>}
-            {invoice.emailed_at && <p className="text-xs text-gray-400 mt-0.5">Emailed {formatDateTime(invoice.emailed_at)}</p>}
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
+      <div className="p-4 sm:p-6">
+        <div className="mx-auto max-w-[1240px]">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-600">
+              <Link href="/invoices" className="hover:underline">Invoices</Link> / <b className="font-semibold text-gray-900">{invoice.invoice_number}</b>
+            </span>
+            <StatusBadge status={invoice.status} />
+            {invoice.emailed_at && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                <Mail className="h-3 w-3" /> Emailed
+              </span>
+            )}
+            <span className="flex-1" />
             <PrevNextNav prevHref={prevInvoiceHref} nextHref={nextInvoiceHref} />
             <RevertToJobButton invoiceId={invoice.id} jobId={invoice.job_id} status={invoice.status} amountPaid={Number(invoice.amount_paid)} />
+            <SaveInvoiceTemplateButton invoiceId={invoice.id} defaultName={invoice.reference || invoice.invoice_number} />
+          </div>
+          <div className="mb-3">
             <InvoiceDetailClient
               invoice={{ ...invoice, customer_email: (invoice.customers as {name: string; email: string | null; pricing_group_id?: string | null} | null)?.email, customer_phone: (invoice.customers as {phone: string | null} | null)?.phone, pricing_group_id: (invoice.customers as {pricing_group_id?: string | null} | null)?.pricing_group_id ?? null }}
               companyId={profile!.company_id}
@@ -140,52 +144,97 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               availableCustomerCredit={availableCustomerCredit}
             />
           </div>
-          <SaveInvoiceTemplateButton invoiceId={invoice.id} defaultName={invoice.reference || invoice.invoice_number} />
+          <PaperLegend />
+
+          <DocumentWorkspace>
+            <Paper label={`Invoice ${invoice.invoice_number}`}>
+              <PaperHeader company={paperCompany(co)} docLabel="Invoice" docNumber={invoice.invoice_number} />
+              <PaperFields
+                fields={[
+                  { label: 'Date of invoice', value: <PaperDateInput table="invoices" id={invoice.id} column="invoice_date" value={invoice.invoice_date} editable={isDraft} label="Date of invoice" /> },
+                  { label: 'Invoice No.', value: invoice.invoice_number },
+                  { label: 'Payment due date', value: <PaperDateInput table="invoices" id={invoice.id} column="due_date" value={invoice.due_date} editable={isDraft} label="Payment due date" /> },
+                ]}
+              />
+              <PaperColumns>
+                <PaperBlock title="Client">
+                  <Link href={`/customers/${invoice.customer_id}`} className="hover:underline">{customer?.name}</Link>
+                  {customer?.billing_address ? <div className="whitespace-pre-wrap">{customer.billing_address}</div> : null}
+                  {customer?.email ? <div>{customer.email}</div> : null}
+                </PaperBlock>
+                <PaperBlock title="Job">
+                  {job ? <Link href={`/jobs/${invoice.job_id}`} className="hover:underline">{job.job_number} - {job.title}</Link> : null}
+                </PaperBlock>
+              </PaperColumns>
+
+              <InvoicePaperLines invoiceId={invoice.id} editable={isDraft} gstRate={gstRate} pricesIncludeTax={!!co?.prices_include_tax} />
+
+              <PaperSignatures left="Customer signature" right="Authorised signature" />
+              <PaperNotes
+                blocks={[
+                  ...(co?.payment_instructions ? [{ title: 'Bank account details', content: co.payment_instructions }] : []),
+                  { title: 'Payment terms', content: co?.invoice_footer ?? 'Payment is due by the date marked above. Thank you for your business.' },
+                ]}
+              />
+              <PaperFootnote show={isFreePlan} />
+            </Paper>
+
+            <InternalRail label="Internal — not on the invoice">
+              {!isDraft && invoice.status !== 'void' && (
+                <RailCard tone="info" title="Locked — this invoice has been issued">
+                  <p className="text-[13px] leading-normal text-gray-700">
+                    The page is now the record of what the customer received. To change it, revert it to draft
+                    {Number(invoice.amount_paid) > 0 ? ' (not possible once a payment is recorded)' : ''} or credit it.
+                  </p>
+                </RailCard>
+              )}
+              {isDraft && (
+                <RailCard>
+                  <p className="text-[13px] leading-normal text-gray-600">Click any line on the invoice to change it. Each change saves when you leave the line. Bank details and payment terms come from Settings.</p>
+                </RailCard>
+              )}
+
+              <RailCard title="Payments">
+                {payments.length === 0 ? (
+                  <p className="text-[13px] text-gray-600">No payments yet.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {payments.map(p => (
+                      <li key={p.id} className="flex items-start justify-between gap-3 py-1.5 text-sm">
+                        <span>
+                          <span className="capitalize text-gray-800">{p.method.replace(/_/g, ' ')}</span>
+                          <span className="block text-xs text-gray-500">{formatDate(p.paid_at)}{p.notes ? ` · ${p.notes}` : ''}</span>
+                        </span>
+                        <span className="font-semibold text-green-700">{formatCurrency(p.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-1 border-t border-gray-200 pt-1">
+                  <RailRow label="Outstanding" value={formatCurrency(Number(invoice.total) - Number(invoice.amount_paid))} />
+                </div>
+              </RailCard>
+
+              <CreditNotesCard creditNotes={creditNotesOnThisInvoice ?? []} xeroConnected={xeroConnected} />
+
+              <RecurringInvoiceCard
+                invoiceId={invoice.id}
+                initial={{ isRecurring: !!invoice.is_recurring, rule: invoice.recurrence_rule ?? null, next: invoice.recurrence_next ?? null, end: invoice.recurrence_end ?? null }}
+              />
+
+              <RailCard title="Activity">
+                {invoice.sent_at ? <RailRow label="Sent" value={formatDateTime(invoice.sent_at)} /> : <p className="text-[13px] text-gray-600">Not sent yet.</p>}
+                {invoice.viewed_at && <RailRow label="Viewed" value={formatDateTime(invoice.viewed_at)} />}
+                {invoice.emailed_at && <RailRow label="Emailed" value={formatDateTime(invoice.emailed_at)} />}
+              </RailCard>
+
+              <RailCard title="Customer payment link">
+                <p className="mb-2 text-[13px] text-gray-600">Share with the customer to view and pay online.</p>
+                <a href={`/i/${invoice.public_token}`} target="_blank" className="text-sm font-medium text-orange-700 hover:underline">Open invoice →</a>
+              </RailCard>
+            </InternalRail>
+          </DocumentWorkspace>
         </div>
-
-        {/* Line items */}
-        <InvoiceLinesCard />
-
-        {/* Recurring */}
-        <RecurringInvoiceCard
-          invoiceId={invoice.id}
-          initial={{ isRecurring: !!invoice.is_recurring, rule: invoice.recurrence_rule ?? null, next: invoice.recurrence_next ?? null, end: invoice.recurrence_end ?? null }}
-        />
-
-        {/* Credits — only rendered when there's something to show */}
-        <CreditNotesCard creditNotes={creditNotesOnThisInvoice ?? []} xeroConnected={xeroConnected} />
-
-        {/* Payments */}
-        {(invoice.payments ?? []).length > 0 && (
-          <Card>
-            <div className="px-6 py-4 border-b border-gray-100 text-sm font-semibold text-gray-900">Payments</div>
-            <ul className="divide-y divide-gray-50">
-              {(invoice.payments as {id: string; amount: number; method: string; paid_at: string; notes: string | null}[]).map(p => (
-                <li key={p.id} className="px-6 py-3 flex items-center justify-between text-sm">
-                  <div>
-                    <span className="text-gray-700 capitalize">{p.method.replace(/_/g, ' ')}</span>
-                    {p.notes && <span className="text-gray-400 ml-2 text-xs">· {p.notes}</span>}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-green-600">{formatCurrency(p.amount)}</p>
-                    <p className="text-xs text-gray-400">{formatDate(p.paid_at)}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {/* Customer link */}
-        <Card>
-          <CardContent className="flex items-center justify-between py-4">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Customer payment link</p>
-              <p className="text-xs text-gray-400">Share with customer to view and pay online</p>
-            </div>
-            <a href={`/i/${invoice.public_token}`} target="_blank" className="text-sm text-orange-500 hover:underline">Open invoice →</a>
-          </CardContent>
-        </Card>
       </div>
       </InvoiceLinesProvider>
     </>
